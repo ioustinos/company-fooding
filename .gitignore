@@ -1,0 +1,12 @@
+node_modules
+dist
+.env.local
+.env
+.DS_Store
+
+# Local Netlify folder
+.netlify
+
+# Temporary
+*.log
+.cache
