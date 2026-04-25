@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>orexi — design spec v0.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        bg:      '#FAF7F2',
+        surface: '#FFFFFF',
+        ink:     { DEFAULT: '#1A2E24', soft: '#5A6B63', faint: '#8D9B93' },
+        line:    '#E3DED4',
+        brand:   { DEFAULT: '#2D4F3C', hover: '#244033', soft: '#E8EDE7' },
+        accent:  { DEFAULT: '#D97948', hover: '#C66A3D', soft: '#FBEFE3' },
+        success: '#3E8E5F',
+        warn:    '#E0A443',
+        danger:  '#C54B4B',
+      },
+      fontFamily: {
+        display: ['Fraunces', 'Georgia', 'serif'],
+        sans:    ['Inter', 'system-ui', 'sans-serif'],
+        mono:    ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+      },
+      boxShadow: {
+        sm: '0 1px 2px rgba(26,46,36,0.04)',
+        md: '0 4px 12px rgba(26,46,36,0.06)',
+        lg: '0 8px 24px rgba(26,46,36,0.08)',
+      },
+      borderRadius: { xs: '4px', sm: '6px', DEFAULT: '8px', md: '12px', lg: '16px', xl: '24px' },
+    },
+  },
+};
+</script>
+<style>
+  :root{
+    --bg:#FAF7F2; --surface:#fff; --ink:#1A2E24; --ink-soft:#5A6B63; --ink-faint:#8D9B93;
+    --line:#E3DED4; --brand:#2D4F3C; --brand-hover:#244033; --brand-soft:#E8EDE7;
+    --accent:#D97948; --accent-hover:#C66A3D; --accent-soft:#FBEFE3;
+  }
+  html,body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif}
+  .font-display{font-family:'Fraunces',Georgia,serif;letter-spacing:-.015em;font-variation-settings:"opsz" 144}
+  .num{font-family:'JetBrains Mono',ui-monospace,monospace;font-feature-settings:"tnum"}
+  *:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
+  /* subtle grain on bg to make ivory feel warm */
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.35;
+    background-image:radial-gradient(rgba(45,79,60,0.025) 1px,transparent 1px);background-size:3px 3px;z-index:0}
+  .swatch{box-shadow:inset 0 0 0 1px rgba(26,46,36,.05)}
+  .chevron::after{content:'';display:inline-block;width:6px;height:6px;margin-left:6px;
+    border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);vertical-align:middle;margin-bottom:2px}
+</style>
+</head>
+<body class="min-h-screen">
+<div id="app" class="relative z-10"></div>
+
+<script>
+/* ===================================================================
+   orexi — pixel spec, phase 1
+   vanilla JS, Tailwind CDN, no build step
+   =================================================================== */
+
+const state = {
+  lang: localStorage.getItem('orexi.lang') || 'el',
+  route: (location.hash.slice(1)) || 'overview',
+  persona: 'employee',
+};
+
+/* ---------- strings (all user-facing copy lives here) ---------- */
+const S = {
+  tagline:     { el:'Παροχές διατροφής για επιχειρήσεις', en:'Food benefits for businesses' },
+  phase_pill:  { el:'Προδιαγραφή σχεδίασης · Φάση 1', en:'Design spec · Phase 1' },
+
+  nav_overview:   { el:'Εισαγωγή',  en:'Overview' },
+  nav_system:     { el:'Σύστημα',   en:'System' },
+  nav_tokens:     { el:'Tokens',    en:'Tokens' },
+  nav_components: { el:'Components',en:'Components' },
+  nav_screens:    { el:'Οθόνες',    en:'Screens' },
+  nav_login:      { el:'Σύνδεση',   en:'Login' },
+  nav_emp_home:   { el:'Αρχική εργαζ.', en:'Employee home' },
+
+  persona_super:    { el:'Διαχειριστής πλατφόρμας', en:'Platform admin' },
+  persona_company:  { el:'Διαχειριστής εταιρείας',  en:'Company admin' },
+  persona_employee: { el:'Εργαζόμενος',             en:'Employee' },
+
+  /* overview */
+  ov_title:    { el:'orexi', en:'orexi' },
+  ov_sub:      { el:'by WeCook · working name',      en:'by WeCook · working name' },
+  ov_lede:     { el:'Πλατφόρμα παροχών διατροφής. Οι εταιρείες παρέχουν μηνιαίες πιστώσεις φαγητού στους εργαζόμενους, που εξαργυρώνονται σε συνεργαζόμενα καταστήματα. Η orexi είναι το matchmaking layer ανάμεσά τους.',
+                 en:'Food-benefit SaaS. Companies give employees monthly food credits that are redeemed at partner vendors. orexi is the matchmaking layer between them.' },
+  ov_what:     { el:'Τι περιέχει αυτό το αρχείο', en:"What's in this file" },
+  ov_bullets:  { el:['Tokens — χρώματα, τυπογραφία, spacing, radii',
+                     'Components — buttons, inputs, cards, pills, tables, πίνακας',
+                     'Οθόνες (Φάση 1): Σύνδεση, Αρχική εργαζομένου',
+                     'Επόμενες φάσεις: Company admin, Super admin, auth flow, a11y pass'],
+                 en:['Tokens — colors, type, spacing, radii',
+                     'Components — buttons, inputs, cards, pills, tables',
+                     'Screens (Phase 1): Login, Employee Home',
+                     'Next phases: Company admin, Super admin, auth flows, a11y pass'] },
+
+  /* tokens page */
+  tk_title:    { el:'Design tokens', en:'Design tokens' },
+  tk_colors:   { el:'Χρώματα',      en:'Colors' },
+  tk_type:     { el:'Τυπογραφία',   en:'Typography' },
+  tk_spacing:  { el:'Spacing',      en:'Spacing' },
+  tk_radius:   { el:'Radius',       en:'Radius' },
+  tk_shadow:   { el:'Σκιές',        en:'Shadows' },
+
+  /* components page */
+  cp_title:    { el:'Components', en:'Components' },
+  cp_buttons:  { el:'Κουμπιά', en:'Buttons' },
+  cp_inputs:   { el:'Πεδία', en:'Inputs' },
+  cp_status:   { el:'Κατάσταση (pills)', en:'Status (pills)' },
+  cp_cards:    { el:'Κάρτες', en:'Cards' },
+  cp_table:    { el:'Πίνακας', en:'Table' },
+
+  /* login */
+  lg_welcome:  { el:'Καλώς ήλθατε',  en:'Welcome' },
+  lg_sub:      { el:'Σύνδεση στον λογαριασμό σας orexi.', en:'Sign in to your orexi account.' },
+  lg_email:    { el:'Διεύθυνση email', en:'Email address' },
+  lg_password: { el:'Κωδικός',       en:'Password' },
+  lg_remember: { el:'Θυμήσου με για 30 ημέρες', en:'Remember me for 30 days' },
+  lg_signin:   { el:'Σύνδεση',       en:'Sign in' },
+  lg_forgot:   { el:'Ξεχάσατε τον κωδικό;', en:'Forgot password?' },
+  lg_or:       { el:'ή',             en:'or' },
+  lg_sso:      { el:'Σύνδεση με Microsoft 365', en:'Continue with Microsoft 365' },
+  lg_support:  { el:'Χρειάζεστε βοήθεια; Γράψτε μας στο',
+                 en:'Need help? Email us at' },
+
+  /* employee home */
+  eh_hello:    { el:'Καλημέρα', en:'Good morning' },
+  eh_sub:      { el:'Να τι σας περιμένει σήμερα.',
+                 en:"Here's what's on your plate today." },
+  eh_bal_lbl:  { el:'Διαθέσιμο υπόλοιπο αυτού του μήνα', en:"This month's remaining balance" },
+  eh_used:     { el:'χρησιμοποιήθηκε', en:'used' },
+  eh_of:       { el:'από', en:'of' },
+  eh_renews:   { el:'Ανανεώνεται', en:'Renews' },
+  eh_order:    { el:'Παραγγελία τώρα', en:'Order now' },
+  eh_history:  { el:'Ιστορικό',       en:'Order history' },
+  eh_recent:   { el:'Πρόσφατες παραγγελίες', en:'Recent orders' },
+  eh_nearby:   { el:'Κοντινά καταστήματα',   en:'Nearby vendors' },
+  eh_see_all:  { el:'Δείτε όλα',     en:'See all' },
+  eh_partner:  { el:'Συνεργάτης',    en:'Partner' },
+  eh_paid:     { el:'Πληρώθηκε',     en:'Paid' },
+  eh_covered:  { el:'Καλύφθηκε από παροχή', en:'Covered by benefit' },
+  eh_extra:    { el:'Επιπλέον από εσάς',    en:'You paid extra' },
+};
+
+const t = (k) => (S[k] || {})[state.lang] || (S[k] || {}).en || k;
+
+/* ---------- mock data (schema-shaped) ---------- */
+const mock = {
+  user: { id:'u1', display_name:'Μαρία Παπαδοπούλου', email:'maria.p@acme.gr', initial:'ΜΠ' },
+  company: { id:'c1', name:'Acme Corp', vat:'EL123456789' },
+  benefit: {
+    id:'b1', name_el:'Μηνιαίο γεύμα', name_en:'Monthly meal',
+    type:'monthly_allowance', credit_amount:12000, currency:'EUR',
+    granted:12000, redeemed:7440, cycle_end:'2026-04-30',
+  },
+  orders: [
+    { id:'o1', vendor:'Ταβέρνα Ποσειδών', vendor_en:'Taverna Poseidon',
+      when_el:'Σήμερα, 12:47', when_en:'Today, 12:47',
+      total:1850, benefit:1200, extra:650,
+      items_el:['Γύρος χοιρινός', 'Ελληνική σαλάτα', 'Νερό'],
+      items_en:['Pork gyros', 'Greek salad', 'Water'] },
+    { id:'o2', vendor:'Healthy Bowl Co.', vendor_en:'Healthy Bowl Co.',
+      when_el:'Χθες, 13:15', when_en:'Yesterday, 13:15',
+      total:1200, benefit:1200, extra:0,
+      items_el:['Poke bowl με σολομό'], items_en:['Salmon poke bowl'] },
+    { id:'o3', vendor:'Ζυμώματα', vendor_en:'Zymomata Bakery',
+      when_el:'Τρίτη, 09:02', when_en:'Tue, 09:02',
+      total:550, benefit:550, extra:0,
+      items_el:['Τυρόπιτα', 'Καπουτσίνο'], items_en:['Cheese pie', 'Cappuccino'] },
+    { id:'o4', vendor:'Noodle Bar', vendor_en:'Noodle Bar',
+      when_el:'Δευτέρα, 13:40', when_en:'Mon, 13:40',
+      total:1140, benefit:1140, extra:0,
+      items_el:['Ramen χοιρινό'], items_en:['Pork ramen'] },
+  ],
+  vendors: [
+    { name:'Ταβέρνα Ποσειδών', name_en:'Taverna Poseidon', tags_el:['Μεσογειακό','Ζεστό φαγητό'], tags_en:['Mediterranean','Hot food'], distance:120 },
+    { name:'Healthy Bowl Co.', name_en:'Healthy Bowl Co.', tags_el:['Healthy','Χορτοφαγικό'], tags_en:['Healthy','Vegetarian'], distance:240 },
+    { name:'Ζυμώματα',        name_en:'Zymomata Bakery',  tags_el:['Αρτοποιείο','Καφές'],    tags_en:['Bakery','Coffee'],      distance:310 },
+    { name:'Noodle Bar',      name_en:'Noodle Bar',       tags_el:['Ασιατικό'],              tags_en:['Asian'],                distance:480 },
+  ],
+};
+
+/* ---------- helpers ---------- */
+const money = (cents) => '€' + (cents/100).toFixed(2).replace('.', state.lang==='el' ? ',' : '.');
+const L = (el, en) => state.lang === 'el' ? el : en;
+
+/* ===================================================================
+   SVG icons (thin, ~1.5px strokes, match Inter)
+   =================================================================== */
+const svg = (path, size=20) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+const icons = {
+  home:    svg('<path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-7h-6v7H4a1 1 0 01-1-1z"/>'),
+  wallet:  svg('<path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M16 12h2"/><path d="M3 9h18"/>'),
+  history: svg('<path d="M3 12a9 9 0 109-9"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/>'),
+  shop:    svg('<path d="M4 8l1-4h14l1 4v1a3 3 0 01-6 0 3 3 0 01-6 0 3 3 0 01-6 0z"/><path d="M5 10v10h14V10"/>'),
+  gear:    svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>'),
+  bell:    svg('<path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 004 0"/>'),
+  arrow:   svg('<path d="M5 12h14"/><path d="M13 5l7 7-7 7"/>'),
+  plate: `<svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+    <circle cx="16" cy="16" r="13" stroke="#2D4F3C" stroke-width="2"/>
+    <circle cx="16" cy="16" r="5.5" fill="#D97948"/>
+  </svg>`,
+};
+
+/* ===================================================================
+   Chrome (header, nav, lang toggle)
+   =================================================================== */
+const Logo = (size=28) => `
+  <a href="#overview" class="flex items-center gap-2.5 group">
+    ${icons.plate}
+    <span class="font-display text-[24px] font-semibold text-ink tracking-tight">orexi</span>
+  </a>`;
+
+const LangToggle = () => `
+  <div class="flex items-center bg-bg rounded-sm p-0.5 border border-line" role="tablist">
+    ${['el','en'].map(code => `
+      <button data-lang="${code}"
+        class="px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] rounded-xs transition ${state.lang===code?'bg-surface shadow-sm text-ink':'text-ink-faint hover:text-ink'}">
+        ${code}
+      </button>`).join('')}
+  </div>`;
+
+const Header = (opts = {}) => {
+  const items = [
+    { k:'overview',   label:t('nav_overview'),  group:'' },
+    { k:'tokens',     label:t('nav_tokens'),    group:'system' },
+    { k:'components', label:t('nav_components'),group:'system' },
+    { k:'login',      label:t('nav_login'),     group:'screen' },
+    { k:'emp-home',   label:t('nav_emp_home'),  group:'screen' },
+  ];
+  return `
+  <header class="border-b border-line bg-surface/90 backdrop-blur sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto px-8 h-[64px] flex items-center justify-between gap-6">
+      <div class="flex items-center gap-8">
+        ${Logo()}
+        <nav class="hidden md:flex items-center gap-0.5">
+          ${items.map(i => `
+            <a href="#${i.k}"
+               class="px-2.5 py-1.5 rounded text-[13.5px] font-medium transition ${state.route===i.k?'bg-brand-soft text-brand':'text-ink-soft hover:text-ink hover:bg-brand-soft/50'}">
+              ${i.label}
+            </a>`).join('')}
+        </nav>
+      </div>
+      <div class="flex items-center gap-3">
+        ${LangToggle()}
+        <div class="hidden md:flex items-center gap-2 pl-3 ml-1 border-l border-line">
+          <div class="w-8 h-8 rounded-full bg-brand text-white flex items-center justify-center text-[12px] font-semibold">${mock.user.initial}</div>
+        </div>
+      </div>
+    </div>
+  </header>`;
+};
+
+const Footer = () => `
+  <footer class="border-t border-line mt-20">
+    <div class="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between text-[12px] text-ink-faint font-mono">
+      <span>orexi · design spec v0.1 · phase 1 of 6</span>
+      <span>${new Date().toISOString().slice(0,10)} · WeCook internal</span>
+    </div>
+  </footer>`;
+
+/* ===================================================================
+   PAGE: overview
+   =================================================================== */
+const page_overview = () => `
+  <section class="max-w-5xl mx-auto px-8 pt-14 pb-10">
+    <div class="mb-7">
+      <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-sm text-[11px] font-semibold uppercase tracking-[0.1em] bg-brand-soft text-brand">
+        ${t('phase_pill')}
+      </span>
+    </div>
+    <h1 class="font-display text-[72px] leading-[76px] font-semibold text-ink">
+      orexi <span class="italic font-normal text-ink-soft text-[40px] align-middle">${t('ov_sub')}</span>
+    </h1>
+    <p class="mt-6 text-[19px] leading-[30px] text-ink-soft max-w-3xl">${t('ov_lede')}</p>
+
+    <div class="mt-12 grid md:grid-cols-3 gap-4">
+      ${[
+        { role:'super',    blurb_el:'Διαχείριση εταιρειών, καταστημάτων, συμφωνιών matchmaking, τιμολόγησης.', blurb_en:'Manages companies, vendors, matchmaking agreements, invoicing.' },
+        { role:'company',  blurb_el:'Ρυθμίζει παροχές, αναθέτει σε υπαλλήλους, παρακολουθεί δαπάνες.',       blurb_en:'Configures benefits, assigns to staff, tracks spend.' },
+        { role:'employee', blurb_el:'Βλέπει υπόλοιπο, παραγγέλνει από συνεργάτες, διαχειρίζεται το προφίλ.',  blurb_en:'Sees balance, orders from partners, manages profile.' },
+      ].map(p => `
+        <article class="bg-surface border border-line rounded-md p-5 shadow-sm">
+          <div class="text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold mb-2">${t('persona_'+p.role)}</div>
+          <h3 class="font-display text-[22px] font-semibold mb-2">${p.role==='super'?'Platform':(p.role==='company'?'Company':'Employee')}</h3>
+          <p class="text-[13.5px] text-ink-soft leading-[21px]">${L(p.blurb_el, p.blurb_en)}</p>
+        </article>`).join('')}
+    </div>
+
+    <div class="mt-12 bg-surface border border-line rounded-md p-6 shadow-sm">
+      <h3 class="font-display text-[22px] font-semibold mb-4">${t('ov_what')}</h3>
+      <ul class="space-y-2.5">
+        ${t('ov_bullets').map((b,i) => `
+          <li class="flex gap-3 text-[14.5px] text-ink-soft leading-[22px]">
+            <span class="num text-[12px] text-ink-faint mt-1 w-5 shrink-0">${String(i+1).padStart(2,'0')}</span>
+            <span>${b}</span>
+          </li>`).join('')}
+      </ul>
+    </div>
+
+    <div class="mt-10 flex items-center gap-3 text-[13px] text-ink-soft">
+      <span class="num px-2 py-0.5 bg-brand-soft text-brand rounded-xs font-semibold">TIP</span>
+      ${L('Πατήστε το EL/EN πάνω δεξιά για εναλλαγή γλώσσας σε κάθε οθόνη.',
+          'Click EL/EN top-right to toggle language on every screen.')}
+    </div>
+  </section>`;
+
+/* ===================================================================
+   PAGE: tokens
+   =================================================================== */
+const colorTokens = [
+  { g:'Surface', list:[
+    { name:'bg',          value:'#FAF7F2', note:{el:'Φόντο εφαρμογής',en:'App background'} },
+    { name:'surface',     value:'#FFFFFF', note:{el:'Κάρτες, διάλογοι',en:'Cards, modals'} },
+    { name:'line',        value:'#E3DED4', note:{el:'Περιγράμματα',en:'Borders, dividers'} },
+  ]},
+  { g:'Ink', list:[
+    { name:'ink',         value:'#1A2E24', note:{el:'Κύριο κείμενο',en:'Primary text'} },
+    { name:'ink-soft',    value:'#5A6B63', note:{el:'Δευτερεύον',en:'Secondary text'} },
+    { name:'ink-faint',   value:'#8D9B93', note:{el:'Ετικέτες, μεταδεδομένα',en:'Labels, meta'} },
+  ]},
+  { g:'Brand', list:[
+    { name:'brand',       value:'#2D4F3C', note:{el:'Πρωτεύον',en:'Primary'} },
+    { name:'brand-hover', value:'#244033', note:{el:'Hover πρωτεύοντος',en:'Primary hover'} },
+    { name:'brand-soft',  value:'#E8EDE7', note:{el:'Ήπιο φόντο',en:'Soft background'} },
+  ]},
+  { g:'Accent', list:[
+    { name:'accent',      value:'#D97948', note:{el:'CTA, έμφαση',en:'CTA, emphasis'} },
+    { name:'accent-hover',value:'#C66A3D' },
+    { name:'accent-soft', value:'#FBEFE3' },
+  ]},
+  { g:'Status', list:[
+    { name:'success', value:'#3E8E5F' },
+    { name:'warn',    value:'#E0A443' },
+    { name:'danger',  value:'#C54B4B' },
+  ]},
+];
+
+const typeSpecimens = [
+  { tag:'Display/72', font:'Fraunces', size:72, lh:76, w:600, sample:'Καλή όρεξη' },
+  { tag:'H1/32',      font:'Fraunces', size:32, lh:40, w:600, sample:L('Παροχές αυτού του μήνα','Benefits this month') },
+  { tag:'H2/24',      font:'Inter',    size:24, lh:32, w:600, sample:L('Acme Corp · Αθήνα','Acme Corp · Athens') },
+  { tag:'H3/18',      font:'Inter',    size:18, lh:26, w:600, sample:L('Μηνιαίο γεύμα','Monthly meal') },
+  { tag:'Body/16',    font:'Inter',    size:16, lh:24, w:400, sample:L('Χρησιμοποιήστε το υπόλοιπό σας σε 12 κοντινά καταστήματα.','Use your balance at 12 nearby shops.') },
+  { tag:'Small/14',   font:'Inter',    size:14, lh:20, w:400, sample:L('Ανανεώνεται την 1η κάθε μήνα.','Renews on the 1st of each month.') },
+  { tag:'Caption/12', font:'Inter',    size:12, lh:16, w:600, up:true, sample:'ACTIVE · 3 DAYS LEFT' },
+  { tag:'Mono/13',    font:'JetBrains Mono', size:13, lh:20, w:500, sample:'€42,50 · v12.3 · 2026-04-24' },
+];
+
+const page_tokens = () => `
+  <section class="max-w-6xl mx-auto px-8 pt-10 pb-10 space-y-14">
+    <header>
+      <h1 class="font-display text-[40px] font-semibold">${t('tk_title')}</h1>
+      <p class="text-ink-soft mt-2">${L('Τα θεμέλια. Αλλαγές εδώ αντανακλώνται σε όλο το app.','Foundations. Changes here ripple through the whole app.')}</p>
+    </header>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-5">${t('tk_colors')}</h2>
+      ${colorTokens.map(group => `
+        <div class="mb-6">
+          <div class="text-[12px] uppercase tracking-[0.08em] text-ink-faint font-semibold mb-3">${group.g}</div>
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            ${group.list.map(c => `
+              <div class="border border-line rounded-md bg-surface overflow-hidden">
+                <div class="h-16 swatch" style="background:${c.value}"></div>
+                <div class="p-3">
+                  <div class="text-[12.5px] font-semibold">${c.name}</div>
+                  <div class="num text-[11px] text-ink-soft mt-0.5">${c.value}</div>
+                  ${c.note ? `<div class="text-[11px] text-ink-faint mt-1">${c.note[state.lang]||c.note.en}</div>` : ''}
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-5">${t('tk_type')}</h2>
+      <div class="bg-surface border border-line rounded-md shadow-sm divide-y divide-line">
+        ${typeSpecimens.map(s => `
+          <div class="p-5 flex items-baseline gap-8 flex-wrap">
+            <div class="w-24 text-[11px] font-mono text-ink-faint shrink-0">${s.tag}</div>
+            <div style="font-family:'${s.font}',${s.font==='Fraunces'?'serif':(s.font==='JetBrains Mono'?'monospace':'sans-serif')};font-size:${s.size}px;line-height:${s.lh}px;font-weight:${s.w};${s.up?'text-transform:uppercase;letter-spacing:0.08em':''}">${s.sample}</div>
+            <div class="ml-auto num text-[11px] text-ink-faint shrink-0">${s.font} · ${s.size}/${s.lh} · ${s.w}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-5">${t('tk_spacing')}</h2>
+      <div class="bg-surface border border-line rounded-md shadow-sm p-8">
+        <div class="flex items-end gap-6 flex-wrap">
+          ${[4,8,12,16,24,32,48,64].map(s => `
+            <div class="text-center">
+              <div class="bg-brand mx-auto" style="width:${s}px;height:${s}px"></div>
+              <div class="num text-[11px] text-ink-soft mt-2">${s}</div>
+            </div>`).join('')}
+        </div>
+        <p class="text-[12px] text-ink-faint mt-5">${L('4-pt grid. Χρήση ως padding, gap, margin.','4-pt grid. Use as padding, gap, margin.')}</p>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-5">${t('tk_radius')}</h2>
+      <div class="bg-surface border border-line rounded-md shadow-sm p-8">
+        <div class="flex items-end gap-8 flex-wrap">
+          ${[
+            {n:'xs', px:4,  use_el:'Πεδία',        use_en:'Inputs'},
+            {n:'sm', px:6,  use_el:'Pills, tags',  use_en:'Pills, tags'},
+            {n:'md (default)', px:8, use_el:'Κουμπιά, κάρτες', use_en:'Buttons, cards'},
+            {n:'lg', px:12, use_el:'Διάλογοι',     use_en:'Modals'},
+            {n:'xl', px:16, use_el:'Hero panels',  use_en:'Hero panels'},
+          ].map(r => `
+            <div class="text-center">
+              <div class="w-20 h-20 bg-brand-soft border border-brand/40 mx-auto" style="border-radius:${r.px}px"></div>
+              <div class="text-[13px] font-semibold mt-2">${r.n}</div>
+              <div class="num text-[11px] text-ink-faint">${r.px}px</div>
+              <div class="text-[11px] text-ink-soft mt-1">${state.lang==='el'?r.use_el:r.use_en}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-5">${t('tk_shadow')}</h2>
+      <div class="grid grid-cols-3 gap-4">
+        ${[
+          {n:'sm', cls:'shadow-sm', use:L('Κάρτες σε επιφάνεια','Cards on surface')},
+          {n:'md', cls:'shadow-md', use:L('Dropdowns, tooltips','Dropdowns, tooltips')},
+          {n:'lg', cls:'shadow-lg', use:L('Διάλογοι, popovers','Modals, popovers')},
+        ].map(s => `
+          <div class="bg-surface border border-line rounded-md p-6 ${s.cls}">
+            <div class="text-[13px] font-semibold">${s.n}</div>
+            <div class="text-[11px] text-ink-soft mt-1">${s.use}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </section>`;
+
+/* ===================================================================
+   PAGE: components
+   =================================================================== */
+const Btn = (variant, size, label, extra='') => {
+  const v = {
+    primary:   'bg-brand text-white hover:bg-brand-hover',
+    secondary: 'bg-surface text-ink border border-line hover:border-ink-soft',
+    accent:    'bg-accent text-white hover:bg-accent-hover',
+    ghost:     'text-ink-soft hover:text-ink hover:bg-brand-soft',
+    danger:    'text-danger border border-danger/40 hover:bg-danger/5',
+  };
+  const s = { sm:'h-8 px-3 text-[13px]', md:'h-10 px-4 text-[14px]', lg:'h-12 px-5 text-[15px]' };
+  return `<button class="inline-flex items-center justify-center gap-2 font-medium rounded transition ${v[variant]} ${s[size]} ${extra}">${label}</button>`;
+};
+const Input = ({label, hint, placeholder, type='text', value=''}) => `
+  <label class="block">
+    ${label?`<span class="block text-[13px] font-medium text-ink mb-1.5">${label}</span>`:''}
+    <input type="${type}" value="${value}" placeholder="${placeholder||''}"
+      class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15 transition">
+    ${hint?`<span class="block text-[12px] text-ink-soft mt-1.5">${hint}</span>`:''}
+  </label>`;
+const Pill = (tone, label) => {
+  const t = {
+    neutral:'bg-brand-soft text-brand',
+    accent: 'bg-accent-soft text-accent',
+    success:'bg-[#E5F1EB] text-success',
+    warn:   'bg-[#FBF1DA] text-[#A37620]',
+    danger: 'bg-[#F6E1E1] text-danger',
+  };
+  return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[11px] font-semibold uppercase tracking-[0.08em] ${t[tone]}">${label}</span>`;
+};
+
+const page_components = () => `
+  <section class="max-w-6xl mx-auto px-8 pt-10 pb-10 space-y-12">
+    <header>
+      <h1 class="font-display text-[40px] font-semibold">${t('cp_title')}</h1>
+      <p class="text-ink-soft mt-2">${L('Primitives που συνθέτουν κάθε οθόνη.','The primitives that compose every screen.')}</p>
+    </header>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-4">${t('cp_buttons')}</h2>
+      <div class="bg-surface border border-line rounded-md shadow-sm p-6 space-y-5">
+        <div class="flex items-center gap-3 flex-wrap">
+          ${Btn('primary','md','Primary')}
+          ${Btn('secondary','md','Secondary')}
+          ${Btn('accent','md','Accent')}
+          ${Btn('ghost','md','Ghost')}
+          ${Btn('danger','md','Danger')}
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          ${Btn('primary','sm','Small')}
+          ${Btn('primary','md','Medium')}
+          ${Btn('primary','lg','Large')}
+          <button class="inline-flex items-center gap-2 h-10 px-4 bg-brand text-white rounded text-[14px] font-medium opacity-50 cursor-not-allowed" disabled>Disabled</button>
+        </div>
+        <div class="text-[12px] text-ink-faint pt-3 border-t border-line">
+          ${L('Χρήση: Primary = κύρια ενέργεια ανά οθόνη. Accent = call-to-action με συναίσθημα (π.χ. παραγγελία). Ghost = χαμηλή προτεραιότητα.',
+              'Usage: Primary = main action per screen. Accent = emotional CTA (e.g. place order). Ghost = low priority.')}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-4">${t('cp_inputs')}</h2>
+      <div class="bg-surface border border-line rounded-md shadow-sm p-6">
+        <div class="grid md:grid-cols-2 gap-5">
+          ${Input({label:L('Όνομα εταιρείας','Company name'), placeholder:'Acme Corp'})}
+          ${Input({label:L('Email τιμολόγησης','Billing email'), placeholder:'finance@acme.gr', hint:L('Εδώ αποστέλλονται όλα τα τιμολόγια.','All invoices are delivered here.'), type:'email'})}
+          ${Input({label:L('ΑΦΜ','VAT number'), placeholder:'EL123456789'})}
+          ${Input({label:L('Μηνιαίο ποσό παροχής','Monthly benefit amount'), placeholder:'€120', hint:L('Σε ευρώ, ανά εργαζόμενο.','In euros, per employee.')})}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-4">${t('cp_status')}</h2>
+      <div class="bg-surface border border-line rounded-md shadow-sm p-6">
+        <div class="flex flex-wrap gap-2.5">
+          ${Pill('neutral', L('Προεπιλογή','Default'))}
+          ${Pill('accent',  L('Εκκρεμεί','Pending'))}
+          ${Pill('success', L('Ενεργό','Active'))}
+          ${Pill('warn',    L('Λήγει σύντομα','Expiring'))}
+          ${Pill('danger',  L('Απέτυχε','Failed'))}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-4">${t('cp_cards')}</h2>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-surface border border-line rounded-md shadow-sm p-5">
+          ${Pill('success', L('Ενεργό','Active'))}
+          <h3 class="font-display text-[22px] font-semibold mt-3">${L('Μηνιαίο γεύμα','Monthly meal')}</h3>
+          <p class="text-[14px] text-ink-soft mt-1">${money(12000)} / ${L('μήνα','month')}</p>
+          <div class="mt-5 h-1.5 bg-line rounded-xs overflow-hidden">
+            <div class="h-full bg-brand" style="width:62%"></div>
+          </div>
+          <div class="flex items-center justify-between mt-2 text-[12.5px] text-ink-soft">
+            <span class="num">${money(7440)} ${t('eh_used')}</span>
+            <span class="num">${money(4560)} ${L('υπόλ.','left')}</span>
+          </div>
+        </div>
+        <div class="bg-surface border border-line rounded-md shadow-sm p-5">
+          <div class="text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold mb-2">${L('Σήμερα · 12:47','Today · 12:47')}</div>
+          <div class="text-[15.5px] font-semibold">${L('Ταβέρνα Ποσειδών','Taverna Poseidon')}</div>
+          <div class="text-[13px] text-ink-soft mt-1">${L('Γύρος χοιρινός, Ελληνική σαλάτα, Νερό','Pork gyros, Greek salad, Water')}</div>
+          <div class="flex items-center justify-between mt-4 pt-4 border-t border-line">
+            <span class="text-[13px] text-ink-soft">${L('Σύνολο','Total')}</span>
+            <span class="num font-semibold text-[15px]">${money(1850)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="font-display text-[22px] font-semibold mb-4">${t('cp_table')}</h2>
+      <div class="bg-surface border border-line rounded-md shadow-sm overflow-hidden">
+        <table class="w-full text-[14px]">
+          <thead class="bg-bg border-b border-line">
+            <tr class="text-left text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">
+              <th class="px-4 py-3">${L('Υπάλληλος','Employee')}</th>
+              <th class="px-4 py-3">${L('Παροχή','Benefit')}</th>
+              <th class="px-4 py-3 text-right">${L('Χρήση','Used')}</th>
+              <th class="px-4 py-3 text-right">${L('Υπόλοιπο','Balance')}</th>
+              <th class="px-4 py-3">${L('Κατάσταση','Status')}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-line">
+            ${[
+              ['Μαρία Παπαδοπούλου','Maria Papadopoulou','monthly_meal',12000,7440,4560,'success'],
+              ['Γιώργος Αθανασίου','Giorgos Athanasiou','monthly_meal',12000,12000,0,'warn'],
+              ['Έλενα Νικολαΐδη','Elena Nikolaidi','monthly_meal',12000,3200,8800,'success'],
+              ['Νίκος Παππάς','Nikos Pappas','weekly_credit',3000,0,3000,'accent'],
+            ].map(r => `
+              <tr class="hover:bg-brand-soft/30 transition">
+                <td class="px-4 py-3 font-medium">${L(r[0],r[1])}</td>
+                <td class="px-4 py-3 text-ink-soft">${L('Μηνιαίο γεύμα','Monthly meal')}</td>
+                <td class="px-4 py-3 num text-right">${money(r[3])}</td>
+                <td class="px-4 py-3 num text-right font-medium">${money(r[5])}</td>
+                <td class="px-4 py-3">${Pill(r[6], r[6]==='warn'?L('Εξαντλήθηκε','Depleted'):(r[6]==='accent'?L('Νέο','New'):L('Ενεργό','Active')))}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>`;
+
+/* ===================================================================
+   PAGE: login
+   =================================================================== */
+const page_login = () => `
+  <section class="min-h-[calc(100vh-64px-88px)] grid lg:grid-cols-2">
+    <!-- Left: brand panel -->
+    <div class="hidden lg:flex flex-col justify-between p-12 bg-brand text-white relative overflow-hidden">
+      <!-- decorative plate motif -->
+      <div class="absolute -right-24 -bottom-24 w-[480px] h-[480px] rounded-full border-[32px] border-white/10"></div>
+      <div class="absolute -right-8 -bottom-8 w-[200px] h-[200px] rounded-full bg-accent/90"></div>
+      <div class="relative">
+        <div class="flex items-center gap-2.5">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="13" stroke="white" stroke-width="2"/><circle cx="16" cy="16" r="5.5" fill="#D97948"/></svg>
+          <span class="font-display text-[26px] font-semibold tracking-tight">orexi</span>
+        </div>
+      </div>
+      <div class="relative max-w-md">
+        <div class="font-display italic text-[28px] leading-[36px] mb-5 opacity-90">
+          ${L('"Καλή όρεξη" — ο πιο παλιός B2B τομέας στην Ελλάδα, πια ψηφιακός.',
+              '"Bon appétit" — Greece’s oldest B2B category, finally digital.')}
+        </div>
+        <div class="flex items-center gap-3 text-[12.5px] text-white/70 font-mono">
+          <span>EU-hosted</span><span class="opacity-40">•</span>
+          <span>GDPR-first</span><span class="opacity-40">•</span>
+          <span>GR-invoicing</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: form -->
+    <div class="flex items-center justify-center p-8 lg:p-16">
+      <div class="w-full max-w-[400px]">
+        <h1 class="font-display text-[40px] leading-[48px] font-semibold">${t('lg_welcome')}</h1>
+        <p class="text-ink-soft mt-2 mb-8 text-[15px]">${t('lg_sub')}</p>
+
+        <form class="space-y-5" onsubmit="event.preventDefault()">
+          ${Input({label:t('lg_email'), type:'email', placeholder:'maria@acme.gr', value:'maria.p@acme.gr'})}
+          <div>
+            ${Input({label:t('lg_password'), type:'password', placeholder:'••••••••', value:'12345678'})}
+            <div class="flex items-center justify-between mt-3">
+              <label class="inline-flex items-center gap-2 text-[13px] text-ink-soft cursor-pointer">
+                <input type="checkbox" class="w-4 h-4 rounded-xs border-line accent-brand" checked>
+                ${t('lg_remember')}
+              </label>
+              <a href="#" class="text-[13px] text-brand font-medium hover:underline">${t('lg_forgot')}</a>
+            </div>
+          </div>
+          <button class="w-full h-11 bg-brand text-white rounded font-semibold text-[14.5px] hover:bg-brand-hover transition">
+            ${t('lg_signin')}
+          </button>
+
+          <div class="flex items-center gap-3 my-2">
+            <div class="flex-1 h-px bg-line"></div>
+            <div class="text-[11px] uppercase tracking-[0.12em] text-ink-faint font-semibold">${t('lg_or')}</div>
+            <div class="flex-1 h-px bg-line"></div>
+          </div>
+
+          <button type="button" class="w-full h-11 bg-surface border border-line rounded font-medium text-[14px] hover:border-ink-soft transition flex items-center justify-center gap-3">
+            <svg width="16" height="16" viewBox="0 0 16 16"><rect x="0" y="0" width="7" height="7" fill="#F25022"/><rect x="8" y="0" width="7" height="7" fill="#7FBA00"/><rect x="0" y="8" width="7" height="7" fill="#00A4EF"/><rect x="8" y="8" width="7" height="7" fill="#FFB900"/></svg>
+            ${t('lg_sso')}
+          </button>
+        </form>
+
+        <p class="mt-8 text-[12.5px] text-ink-faint">
+          ${t('lg_support')} <a href="mailto:support@orexi.gr" class="text-brand hover:underline">support@orexi.gr</a>
+        </p>
+      </div>
+    </div>
+  </section>`;
+
+/* ===================================================================
+   PAGE: employee home
+   =================================================================== */
+const page_emp_home = () => {
+  const b = mock.benefit;
+  const pct = Math.round((b.redeemed / b.granted) * 100);
+  const remaining = b.granted - b.redeemed;
+  const daysLeft = Math.max(1, Math.ceil((new Date(b.cycle_end) - new Date()) / 86400000));
+  return `
+  <section class="max-w-5xl mx-auto px-8 pt-10 pb-10 space-y-8">
+    <!-- Greeting -->
+    <div>
+      <h1 class="font-display text-[40px] leading-[48px] font-semibold">
+        ${t('eh_hello')}, <span class="italic text-ink-soft">${mock.user.display_name.split(' ')[0]}</span>
+      </h1>
+      <p class="text-ink-soft mt-2 text-[15px]">${t('eh_sub')}</p>
+    </div>
+
+    <!-- Hero benefit card -->
+    <div class="bg-surface border border-line rounded-lg shadow-md overflow-hidden">
+      <div class="bg-brand text-white p-8 relative overflow-hidden">
+        <div class="absolute -right-20 -top-20 w-[280px] h-[280px] rounded-full border-[24px] border-white/8"></div>
+        <div class="absolute right-6 top-6 w-[60px] h-[60px] rounded-full bg-accent/80"></div>
+        <div class="relative">
+          ${Pill('accent', L(b.name_el, b.name_en))}
+          <div class="text-[12.5px] uppercase tracking-[0.08em] text-white/70 font-semibold mt-5">${t('eh_bal_lbl')}</div>
+          <div class="flex items-baseline gap-3 mt-1">
+            <div class="font-display text-[64px] leading-[64px] font-semibold num">${money(remaining)}</div>
+            <div class="text-white/60 text-[14px] num">${t('eh_of')} ${money(b.granted)}</div>
+          </div>
+          <div class="mt-5 h-2 bg-white/15 rounded-xs overflow-hidden max-w-md">
+            <div class="h-full bg-accent" style="width:${pct}%"></div>
+          </div>
+          <div class="flex items-center justify-between mt-2 max-w-md text-[12.5px] text-white/80">
+            <span class="num">${money(b.redeemed)} ${t('eh_used')}</span>
+            <span>${t('eh_renews')} ${new Date(b.cycle_end).toLocaleDateString(state.lang==='el'?'el-GR':'en-GB',{day:'numeric',month:'short'})} · ${daysLeft} ${L('ημέρες','days')}</span>
+          </div>
+        </div>
+      </div>
+      <div class="p-6 flex flex-wrap gap-3 border-t border-line">
+        ${Btn('accent','lg', `<span>${t('eh_order')}</span> <span class="opacity-70">${icons.arrow}</span>`, 'flex-1 md:flex-initial')}
+        ${Btn('secondary','lg', `<span>${icons.history}</span> <span>${t('eh_history')}</span>`)}
+        ${Btn('ghost','lg', `<span>${icons.shop}</span> <span>${L('Χάρτης καταστημάτων','Vendor map')}</span>`)}
+      </div>
+    </div>
+
+    <!-- Two columns: recent orders + nearby -->
+    <div class="grid lg:grid-cols-[3fr_2fr] gap-6">
+      <!-- Recent orders -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-display text-[22px] font-semibold">${t('eh_recent')}</h2>
+          <a href="#" class="text-[13px] text-brand font-medium hover:underline">${t('eh_see_all')}</a>
+        </div>
+        <div class="bg-surface border border-line rounded-md shadow-sm divide-y divide-line">
+          ${mock.orders.map(o => `
+            <div class="p-4 flex items-start gap-4 hover:bg-brand-soft/20 transition">
+              <div class="w-10 h-10 rounded-sm bg-brand-soft text-brand flex items-center justify-center shrink-0 mt-0.5">${icons.shop}</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-baseline justify-between gap-3">
+                  <div class="font-semibold text-[14.5px] truncate">${L(o.vendor, o.vendor_en)}</div>
+                  <div class="num text-[14px] font-semibold shrink-0">${money(o.total)}</div>
+                </div>
+                <div class="text-[12.5px] text-ink-soft mt-0.5 truncate">${(state.lang==='el'?o.items_el:o.items_en).join(' · ')}</div>
+                <div class="flex items-center gap-2 mt-2 text-[11px]">
+                  <span class="text-ink-faint font-mono">${state.lang==='el'?o.when_el:o.when_en}</span>
+                  ${o.extra===0
+                    ? Pill('success', t('eh_covered'))
+                    : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[11px] font-semibold uppercase tracking-[0.08em] bg-warn/15 text-[#A37620]">
+                         ${t('eh_extra')} · <span class="num normal-case tracking-normal">${money(o.extra)}</span>
+                       </span>`}
+                </div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Nearby vendors -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-display text-[22px] font-semibold">${t('eh_nearby')}</h2>
+          <a href="#" class="text-[13px] text-brand font-medium hover:underline">${L('Χάρτης','Map')}</a>
+        </div>
+        <div class="bg-surface border border-line rounded-md shadow-sm divide-y divide-line">
+          ${mock.vendors.map(v => `
+            <div class="p-4 flex items-center gap-3 hover:bg-brand-soft/20 transition">
+              <div class="w-10 h-10 rounded-sm bg-accent-soft text-accent flex items-center justify-center shrink-0">${icons.shop}</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-[14px] truncate">${L(v.name, v.name_en)}</div>
+                <div class="text-[12px] text-ink-soft mt-0.5 flex flex-wrap gap-x-1.5">
+                  ${(state.lang==='el'?v.tags_el:v.tags_en).map(tag => `<span>${tag}</span>`).join('<span class="text-ink-faint">·</span>')}
+                </div>
+              </div>
+              <div class="num text-[12px] text-ink-soft shrink-0">
+                ${v.distance < 1000 ? `${v.distance} ${t('eh_meters')}` : `${(v.distance/1000).toFixed(1)} ${t('eh_km')}`}
+              </div>
+            </div>`).join('')}
+        </div>
+        <div class="mt-3 text-[12px] text-ink-faint px-1">
+          ${L('Βάσει της προεπιλεγμένης σας διεύθυνσης εργασίας.',
+              'Based on your default office address.')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Partner strip -->
+    <div class="bg-accent-soft border border-accent/20 rounded-md p-5 flex items-start gap-4">
+      <div class="w-10 h-10 rounded-sm bg-accent text-white flex items-center justify-center shrink-0">${icons.bell}</div>
+      <div class="flex-1">
+        <div class="font-semibold text-[14.5px]">${L('Νέο κατάστημα στη λίστα σας: Mezze Athens','New vendor in your list: Mezze Athens')}</div>
+        <div class="text-[13px] text-ink-soft mt-0.5">${L('Μεζεδοπωλείο, 190m από το γραφείο σας. Ενεργή συμφωνία από 01/04.','Mezze-style taverna, 190m from your office. Active as of Apr 1.')}</div>
+      </div>
+      <button class="text-[12px] text-ink-faint hover:text-ink self-start">×</button>
+    </div>
+  </section>`;
+};
+
+/* ===================================================================
+   Router
+   =================================================================== */
+const pages = {
+  'overview':   page_overview,
+  'tokens':     page_tokens,
+  'components': page_components,
+  'login':      page_login,
+  'emp-home':   page_emp_home,
+};
+
+function render() {
+  const route = pages[state.route] ? state.route : 'overview';
+  document.documentElement.lang = state.lang;
+  document.getElementById('app').innerHTML = Header() + pages[route]() + Footer();
+  attach();
+}
+function attach() {
+  document.querySelectorAll('[data-lang]').forEach(b => {
+    b.addEventListener('click', () => {
+      state.lang = b.dataset.lang;
+      localStorage.setItem('orexi.lang', state.lang);
+      render();
+    });
+  });
+}
+window.addEventListener('hashchange', () => {
+  state.route = location.hash.slice(1) || 'overview';
+  render();
+});
+render();
+</script>
+</body>
+</html>

@@ -1,1 +1,5 @@
-/*  /index.html  200
+# spec fallback (any unknown path under /spec/ → the spec's index.html)
+/spec/*    /spec/index.html    200
+
+# SPA fallback (everything else → React app shell)
+/*         /index.html         200

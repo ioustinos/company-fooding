@@ -10,3 +10,6 @@ dist
 # Temporary
 *.log
 .cache
+
+# Drag-drop artifact (use public/spec/ instead)
+design-spec/orexi-deploy/
