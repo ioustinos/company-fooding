@@ -118,6 +118,9 @@ const state = {
   be_time:     '06:00',    /* anchor time HH:MM */
   emp_create_mode: 'one',  /* 'one' | 'csv' — new-employee form mode */
   gr_edit_id:      null,   /* null = creating new group; 'g2' etc. = editing existing */
+  co_reports_tab:  'analytics', /* 'analytics' | 'sales' */
+  mm_sticker_col:  'short_name', /* employee column shown on package sticker — matchmaking creation */
+  ag_sticker_col:  'short_name', /* employee column shown on package sticker — agreement edit */
 };
 
 /* ---------- strings ---------- */
@@ -645,6 +648,109 @@ window.orexiAct = (toast, route, type='success') => {
 };
 window.orexiAsk = (cfg) => orexiConfirm(cfg);
 
+/* ---------- Talking points modal (matchmaking) ----------
+   Two-column modal with copyable bullet lists for the company and vendor sides.
+   MVP1 stand-in for the auto-notify emails (parked behind a Linear ticket). */
+window.orexiTalkingPoints = (cfg) => {
+  const root = document.getElementById('orexi-modal-root');
+  const company = cfg.company || 'Acme Corp';
+  const vendor  = cfg.vendor  || 'Taverna Poseidon';
+  const discount = cfg.discount_pct ?? 8;
+  const window_  = cfg.delivery_window || '12:30 – 13:30';
+  const start    = cfg.start_date || new Date().toISOString().slice(0,10);
+
+  const co_points = [
+    `Νέα συμφωνία με ${vendor} ενεργοποιείται από ${start}.`,
+    `Ώρα παράδοσης: ${window_}. Οι υπάλληλοι παραγγέλνουν μέχρι την προηγούμενη μέρα.`,
+    `Έκπτωση -${discount}% στο ποσό της παροχής — χαμηλώνει το κόστος της εταιρείας.`,
+    `Οι υπάλληλοι θα δουν το νέο κατάστημα στο app μέσα σε λίγα λεπτά.`,
+    `Η τιμολόγηση γίνεται κατευθείαν από τον συνεργάτη προς εσάς (orexi δεν μεσολαβεί).`,
+    `Αναμενόμενος όγκος: ~80 παραγγελίες / μήνα.`,
+    `Για αλλαγές όρων ή παύση της συμφωνίας, μέσω του portal σας στο orexi.`,
+  ];
+  const co_points_en = [
+    `New agreement with ${vendor} activates ${start}.`,
+    `Delivery window: ${window_}. Employees order by end-of-day prior.`,
+    `${discount}% discount applied to benefit amount — reduces your company cost.`,
+    `Employees will see the new vendor in their app within a few minutes.`,
+    `Vendor invoices your company directly (orexi doesn't sit in the middle).`,
+    `Expected volume: ~80 orders/month.`,
+    `To pause or change terms, use your orexi company portal.`,
+  ];
+  const ven_points = [
+    `Νέα συνεργασία με ${company} ξεκινά ${start}.`,
+    `Έχετε δεσμευτεί σε έκπτωση -${discount}% επί του ποσού παροχής.`,
+    `Ώρα παράδοσης που συμφωνήθηκε: ${window_}.`,
+    `Οι παραγγελίες έρχονται μέσω του υπάρχοντος GonnaOrder λογαριασμού σας — καμία αλλαγή στη ροή παραγωγής.`,
+    `Ορατό επί της ετικέτας συσκευασίας: όνομα υπαλλήλου ή # συναλλαγής (ανά συμφωνία).`,
+    `Η τιμολόγηση γίνεται απευθείας από εσάς προς τον ${company}, μηνιαία.`,
+    `Στο portal σας θα δείτε ενεργές παραγγελίες, ιστορικό και αναμενόμενο κύκλο εργασιών.`,
+  ];
+  const ven_points_en = [
+    `New partnership with ${company} starts ${start}.`,
+    `You committed to a ${discount}% discount on the benefit amount.`,
+    `Agreed delivery window: ${window_}.`,
+    `Orders flow through your existing GonnaOrder account — no kitchen workflow change.`,
+    `Sticker label shown to staff: employee name or txn # (per agreement).`,
+    `You invoice ${company} directly, monthly.`,
+    `In your portal you'll see live orders, history, and expected volume.`,
+  ];
+
+  const useEl = state.lang === 'el';
+  const co_list = useEl ? co_points : co_points_en;
+  const ven_list = useEl ? ven_points : ven_points_en;
+
+  const renderCol = (title, points, label) => `
+    <div class="flex-1 min-w-0 flex flex-col">
+      <div class="flex items-center justify-between mb-3">
+        <h4 class="font-display text-[16px] font-semibold">${title}</h4>
+        <button data-copy="${label}" class="orexi-copy-btn inline-flex items-center gap-1.5 h-7 px-2.5 bg-surface text-ink border border-line rounded-xs font-medium text-[11.5px] hover:border-brand hover:text-brand transition">
+          ${L('Αντιγραφή','Copy')}
+        </button>
+      </div>
+      <ul class="space-y-2 text-[13px] leading-[19px] text-ink bg-bg/40 border border-line rounded p-3.5 flex-1">
+        ${points.map(p => `<li class="flex items-start gap-2"><span class="text-brand shrink-0 mt-1">●</span><span>${p}</span></li>`).join('')}
+      </ul>
+      <textarea data-copy-source="${label}" class="sr-only" tabindex="-1" aria-hidden="true">${points.map(p => '• ' + p).join('\n')}</textarea>
+    </div>
+  `;
+
+  root.innerHTML = `
+    <div class="panel" style="max-width:900px;width:90vw">
+      <div class="flex items-start justify-between mb-1">
+        <div>
+          <h3 class="font-display text-[22px] font-semibold">${L('Σημεία συζήτησης','Talking points')}</h3>
+          <p class="text-[13px] text-ink-soft mt-1">${L('Ενημερώστε χειροκίνητα τα δύο μέρη — αντιγράψτε τις παρακάτω λίστες σε email ή message.','Brief both sides manually — copy the bullet lists below into email or chat.')}</p>
+        </div>
+        <button class="orexi-tp-close text-ink-faint hover:text-ink text-[20px] leading-none" aria-label="Close">×</button>
+      </div>
+      <div class="mt-5 flex gap-4 items-stretch">
+        ${renderCol(L('Προς εταιρεία ('+company+')','To company ('+company+')'), co_list, 'co')}
+        ${renderCol(L('Προς συνεργάτη ('+vendor+')','To vendor ('+vendor+')'), ven_list, 'ven')}
+      </div>
+      <div class="mt-5 flex items-center justify-between gap-3">
+        <div class="text-[11.5px] text-ink-faint">${L('Στο μέλλον: αυτόματα emails με templates και customization.','Future: automated templated emails with customization.')}</div>
+        <button class="orexi-tp-done inline-flex items-center justify-center h-10 px-4 bg-brand text-white rounded font-medium text-[14px] hover:bg-brand-hover">${L('Έτοιμο','Done')}</button>
+      </div>
+    </div>`;
+  root.classList.add('open');
+  const close = () => { root.classList.remove('open'); root.innerHTML = ''; };
+  root.querySelector('.orexi-tp-close').addEventListener('click', close);
+  root.querySelector('.orexi-tp-done').addEventListener('click', close);
+  root.querySelectorAll('.orexi-copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const label = btn.getAttribute('data-copy');
+      const ta = root.querySelector('textarea[data-copy-source="'+label+'"]');
+      ta.classList.remove('sr-only');
+      ta.select();
+      try { document.execCommand('copy'); orexiToast(L('Αντιγράφτηκε στο πρόχειρο','Copied to clipboard'), 'success'); }
+      catch (e) { orexiToast(L('Δεν ήταν δυνατή η αντιγραφή','Couldn’t copy'), 'error'); }
+      ta.classList.add('sr-only');
+    });
+  });
+  root.addEventListener('click', (e) => { if (e.target === root) close(); }, { once:true });
+};
+
 /* ---------- Remove a chip from the benefit-editor employee picker ---------- */
 window.orexiUnpick = (id) => {
   state.emp_picker = state.emp_picker.filter(x => x !== id);
@@ -655,19 +761,18 @@ window.orexiUnpick = (id) => {
    Generates a Blob in-memory, triggers a browser download.
    Same pattern Base44 used in their Employees page. */
 window.orexiDownloadEmployeeCSV = () => {
-  const headers = ['display_name','email','employee_id','group_code','office_label','start_date','status'];
+  /* MVP1: 1 company = 1 office, so office_label is dropped from the import. */
+  const headers = ['display_name','email','employee_id','group_code','start_date','status'];
   const rows = [
-    ['Μαρία Παπαδοπούλου',  'maria.p@acme.gr',   'HR-0001', 'ENG',   'Athens HQ',    '2024-12-01', 'active'],
-    ['Γιώργος Αθανασίου',   'giorgos.a@acme.gr', 'HR-0002', 'ENG',   'Athens HQ',    '2024-09-15', 'active'],
-    ['Έλενα Νικολαΐδη',     'elena.n@acme.gr',   'HR-0003', 'SALES', 'Thessaloniki', '2025-02-10', 'active'],
-    ['Νίκος Παππάς',        'nikos.p@acme.gr',   'HR-0042', 'OPS',   'Athens HQ',    '2026-04-01', 'invited'],
+    ['Μαρία Παπαδοπούλου',  'maria.p@acme.gr',   'HR-0001', 'ENG',   '2024-12-01', 'active'],
+    ['Γιώργος Αθανασίου',   'giorgos.a@acme.gr', 'HR-0002', 'ENG',   '2024-09-15', 'active'],
+    ['Έλενα Νικολαΐδη',     'elena.n@acme.gr',   'HR-0003', 'SALES', '2025-02-10', 'active'],
+    ['Νίκος Παππάς',        'nikos.p@acme.gr',   'HR-0042', 'OPS',   '2026-04-01', 'invited'],
   ];
   const groupsList  = mock.groups.filter(g => g.status === 'active').map(g => g.code+' = '+(state.lang==='el'?g.name_el:g.name_en)+' ('+g.people+')').join(' · ');
-  const officesList = ['Athens HQ', 'Thessaloniki', 'Remote'].join(' · ');
   const csv = headers.join(',') + '\n'
     + rows.map(r => r.map(c => /[",\n]/.test(c) ? '"'+c.replace(/"/g,'""')+'"' : c).join(',')).join('\n')
     + '\n\n# Available group_code values: ' + groupsList
-    + '\n# Available office_label values: ' + officesList
     + '\n# status values: active, invited, inactive (defaults to invited)'
     + '\n# Lines starting with # and the trailing block are ignored by the importer.'
     + '\n';
@@ -715,6 +820,28 @@ const tagLabel = (slug) => (TAGS[slug] || {})[state.lang] || slug;
 const tagChip = (slug, small=false) =>
   `<span class="inline-flex items-center px-2 ${small?'py-0 h-[20px] text-[10.5px]':'py-0.5 h-[22px] text-[11.5px]'} rounded-xs bg-bg border border-line text-ink-soft font-medium">${tagLabel(slug)}</span>`;
 const moneyFull = (cents) => '€' + (cents/100).toFixed(2).replace('.', state.lang==='el' ? ',' : '.');
+
+/* Sticker preview — what the printed package label says. The matchmaking user
+   picks which employee column gets used; this just renders the sample. */
+const stickerPreview = (col, company='Acme', txnNum='1234') => {
+  const samples = {
+    full_name:   { el:'Μαρία Παπαδοπούλου', en:'Maria Papadopoulou' },
+    short_name:  { el:'Μαρία Π.',           en:'Maria P.' },
+    first_name:  { el:'Μαρία',              en:'Maria' },
+    employee_id: { el:'ACM-001',            en:'ACM-001' },
+    group:       { el:'ENG',                en:'ENG' },
+    office:      { el:'Athens HQ',          en:'Athens HQ' },
+    email_local: { el:'maria.p',            en:'maria.p' },
+    title:       { el:'Senior Engineer',    en:'Senior Engineer' },
+    anon_id:     { el:'#'+txnNum,           en:'#'+txnNum },
+    company_only:{ el:'',                   en:'' },
+  };
+  const v = (samples[col] || samples.short_name);
+  const value = state.lang==='el' ? v.el : v.en;
+  if (col === 'company_only') return company;
+  if (col === 'anon_id')      return company + ' · ' + value;
+  return (state.lang==='el' ? 'Για ' : 'For ') + value + ' · ' + company;
+};
 
 /* ---------- icons ---------- */
 const svg = (path, size=20) =>
@@ -865,7 +992,7 @@ const coSidebar = () => {
       { id:'co-benefits',  label: t('co_nav_benefits'),  icon: icons.wallet },
       { id:'co-employees', label: t('co_nav_employees'), icon: icons.users },
       { id:'co-vendors',   label: t('co_nav_vendors'),   icon: icons.handshake },
-      { id:'co-offices',   label: t('co_nav_offices'),   icon: icons.office,    soon:true },
+      /* MVP1: 1 company = 1 office. The Offices page is parked behind the route alone — no nav link. */
     ]},
     { label: t('co_group_finance'), items: [
       { id:'co-invoices',  label: t('co_nav_invoices'),  icon: icons.file,   soon:true },
@@ -1598,16 +1725,10 @@ const page_co_benefit_edit = () => {
             <div class="flex items-center gap-2 p-3 bg-bg/40 border-b border-line">
               <div class="flex-1 relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">${icons.search}</span>
-                <input type="search" placeholder="${L('Αναζήτηση ονόματος, email, γραφείου ή ομάδας…','Search name, email, office, or group…')}"
+                <input type="search" placeholder="${L('Αναζήτηση ονόματος, email ή ομάδας…','Search name, email, or group…')}"
                   oninput="orexiFilter(this, 'label[data-emp-row]')"
                   class="w-full h-9 pl-9 pr-3 bg-surface border border-line rounded-xs text-[13px] placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15">
               </div>
-              <select class="h-9 px-2.5 bg-surface border border-line rounded-xs text-[12.5px] text-ink-soft">
-                <option>${L('Όλα τα γραφεία','All offices')}</option>
-                <option>Athens HQ</option>
-                <option>Thessaloniki</option>
-                <option>Remote</option>
-              </select>
               <select class="h-9 px-2.5 bg-surface border border-line rounded-xs text-[12.5px] text-ink-soft">
                 <option>${L('Όλες οι ομάδες','All groups')}</option>
                 <option>ENG</option><option>SALES</option><option>OPS</option><option>HR</option>
@@ -1922,7 +2043,7 @@ const page_co_vendors = () => {
             ${v.tags.map(tag => tagChip(tag)).join('')}
           </div>
 
-          <!-- Discount + stores + orders strip -->
+          <!-- Discount + orders strip (MVP1: 1 vendor = 1 shop, stores count hidden) -->
           <div class="mt-5 pt-4 border-t border-line flex items-center gap-6">
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline gap-2">
@@ -1931,10 +2052,6 @@ const page_co_vendors = () => {
               ${v.discount_pct>0
                 ? `<div class="text-[10.5px] text-ink-faint mt-1 leading-[14px]">${v.discount_applies==='benefit_price'?t('ven_discount_applies_benefit'):t('ven_discount_applies_final')}</div>`
                 : `<div class="text-[10.5px] text-ink-faint mt-1">${L('χωρίς έκπτωση','no discount')}</div>`}
-            </div>
-            <div class="text-right shrink-0">
-              <div class="num text-[14px] font-semibold">${v.stores}</div>
-              <div class="text-[10.5px] text-ink-faint uppercase tracking-[0.06em] font-semibold">${t('ven_stores')}</div>
             </div>
             <div class="text-right shrink-0">
               <div class="num text-[14px] font-semibold ${v.orders_month===0?'text-ink-faint':''}">${v.orders_month||'—'}</div>
@@ -2339,8 +2456,132 @@ const page_co_reports = () => {
       <span>${operatingDays} ${L('εργάσιμες ημέρες','operating days')}</span>
       <span class="text-ink-faint">·</span>
       <span class="text-ink">${totalEmployees} ${L('συνολικοί εργαζόμενοι','employees')}</span>
+      <span class="ml-auto text-[11px] text-ink-faint">${L('Τα φίλτρα ισχύουν και στις δύο καρτέλες','Filters apply to both tabs')}</span>
     </div>
 
+    <!-- Tab switcher (filters above apply to both) -->
+    <div class="flex items-center gap-6 border-b border-line">
+      ${[
+        ['analytics', t('emps_tab_people') /* placeholder unused */, L('Αναλυτικά','Analytics')],
+        ['sales',     t('emps_tab_groups') /* placeholder unused */, L('Συναλλαγές','Sales')],
+      ].map(([id,_,label]) => {
+        const on = state.co_reports_tab === id;
+        return `<button onclick="state.co_reports_tab='${id}'; render()" class="relative py-3 text-[14px] font-medium transition ${on?'text-ink':'text-ink-soft hover:text-ink'}">
+          ${label}
+          ${id==='sales' ? `<span class="ml-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-faint">218</span>` : ''}
+          ${on?'<span class="absolute left-0 right-0 -bottom-px h-0.5 bg-brand rounded-t"></span>':''}
+        </button>`;
+      }).join('')}
+    </div>
+
+    ${state.co_reports_tab === 'sales' ? (() => {
+      /* Build a fuller transaction list by repeating the mock orders */
+      const txns = [];
+      const empByOrderIdx = ['Μαρία Π.','Γιώργος Α.','Έλενα Ν.','Σοφία Ι.','Κωνσταντίνος Δ.','Ειρήνη Λ.','Αθηνά Μ.','Δημήτρης Π.'];
+      const empByOrderIdxEn = ['Maria P.','Giorgos A.','Elena N.','Sofia I.','Konstantinos D.','Eirini L.','Athina M.','Dimitris P.'];
+      const groupByEmp = ['ENG','ENG','SALES','ENG','SALES','HR','OPS','ENG'];
+      mock.orders_full.concat(mock.orders_full).concat(mock.orders_full.slice(0,4)).forEach((o,i) => {
+        txns.push({
+          id: 'TX-2026-04-' + String(1000-i).padStart(4,'0'),
+          when_el: o.when_el, when_en: o.when_en,
+          vendor: o.vendor, vendor_en: o.vendor_en,
+          employee: empByOrderIdx[i % empByOrderIdx.length],
+          employee_en: empByOrderIdxEn[i % empByOrderIdx.length],
+          group: groupByEmp[i % groupByEmp.length],
+          office: ['Athens HQ','Athens HQ','Thessaloniki','Athens HQ'][i % 4],
+          benefit_name_el: o.benefit_name_el, benefit_name_en: o.benefit_name_en,
+          items_el: o.items_el, items_en: o.items_en,
+          benefit: o.benefit, extra: o.extra, total: o.total,
+        });
+      });
+      const totalT = txns.reduce((a,t)=>a+t.total,0);
+      const totalB = txns.reduce((a,t)=>a+t.benefit,0);
+      const totalX = txns.reduce((a,t)=>a+t.extra,0);
+      return `
+      <!-- Sales / transactions tab -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        ${KPI(L('Συναλλαγές','Transactions'), txns.length, {tone:'brand'})}
+        ${KPI(L('Σύνολο','Total'),            moneyFull(totalT), {tone:'success'})}
+        ${KPI(L('Καλύφθηκαν','Benefit-covered'), moneyFull(totalB), {tone:'accent'})}
+        ${KPI(L('Επιπλέον','Extra'),          moneyFull(totalX), {tone:'warn'})}
+      </div>
+
+      <div class="bg-surface border border-line rounded-md shadow-sm overflow-hidden" data-filter-scope data-row-sel="tbody tr[data-search]">
+        <div class="flex items-center gap-3 p-4 border-b border-line flex-wrap">
+          <div class="flex-1 min-w-[220px] max-w-md relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">${icons.search}</span>
+            <input type="search" placeholder="${L('Αναζήτηση υπαλλήλου, καταστήματος, # συναλλαγής…','Search employee, vendor, txn #…')}"
+              oninput="orexiFilter(this, 'tbody tr[data-search]')"
+              class="w-full h-9 pl-9 pr-3 bg-bg border border-line rounded-xs text-[13px]">
+          </div>
+          <select class="h-9 px-2.5 bg-bg border border-line rounded-xs text-[12.5px] text-ink-soft">
+            <option>${L('Όλα τα καταστήματα','All vendors')}</option>
+            ${[...new Set(txns.map(t => L(t.vendor, t.vendor_en)))].map(v => `<option>${v}</option>`).join('')}
+          </select>
+          <select class="h-9 px-2.5 bg-bg border border-line rounded-xs text-[12.5px] text-ink-soft">
+            <option>${L('Όλες οι ομάδες','All groups')}</option>
+            <option>ENG</option><option>SALES</option><option>OPS</option><option>HR</option>
+          </select>
+          <button onclick="orexiToast('${L('Εξαγωγή ' + txns.length + ' συναλλαγών','Exporting ' + txns.length + ' transactions')}','info')" class="inline-flex items-center justify-center gap-2 h-9 px-3 bg-surface text-ink border border-line rounded-xs font-medium text-[12.5px] hover:border-ink-soft">${icons.file}<span>${L('Εξαγωγή CSV','Export CSV')}</span></button>
+        </div>
+        <table class="w-full text-[14px]">
+          <thead class="bg-bg/40 border-b border-line">
+            <tr class="text-left text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">
+              <th class="px-4 py-3">${L('Ημερομηνία','Date')}</th>
+              <th class="px-4 py-3">${L('# Συναλλαγή','Txn #')}</th>
+              <th class="px-4 py-3">${L('Υπάλληλος','Employee')}</th>
+              <th class="px-4 py-3">${L('Κατάστημα','Vendor')}</th>
+              <th class="px-4 py-3">${L('Παροχή','Benefit')}</th>
+              <th class="px-4 py-3 text-right">${L('Καλύφθηκε','Covered')}</th>
+              <th class="px-4 py-3 text-right">${L('Επιπλέον','Extra')}</th>
+              <th class="px-4 py-3 text-right">${L('Σύνολο','Total')}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-line">
+            ${txns.map(t => `
+              <tr data-search="${t.id} ${L(t.employee,t.employee_en)} ${L(t.vendor,t.vendor_en)} ${(state.lang==='el'?t.items_el:t.items_en).join(' ')} ${t.group}" class="hover:bg-brand-soft/30 transition">
+                <td class="px-4 py-3 num text-[12.5px] text-ink-soft whitespace-nowrap">${state.lang==='el'?t.when_el:t.when_en}</td>
+                <td class="px-4 py-3 num text-[12.5px] font-mono text-ink-soft">${t.id}</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full bg-brand-soft text-brand flex items-center justify-center text-[10px] font-semibold shrink-0">${L(t.employee,t.employee_en).split(' ').map(s=>s[0]).join('').slice(0,2)}</div>
+                    <div class="min-w-0">
+                      <div class="font-medium text-[13.5px] truncate">${L(t.employee,t.employee_en)}</div>
+                      <div class="text-[11px] text-ink-faint">
+                        <span class="font-mono">${t.group}</span>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="font-medium text-[13.5px]">${L(t.vendor, t.vendor_en)}</div>
+                  <div class="text-[11.5px] text-ink-soft truncate max-w-[220px]">${(state.lang==='el'?t.items_el:t.items_en).join(' · ')}</div>
+                </td>
+                <td class="px-4 py-3 text-[12.5px] text-ink-soft">${L(t.benefit_name_el, t.benefit_name_en)}</td>
+                <td class="px-4 py-3 num text-right text-brand font-medium">${moneyFull(t.benefit)}</td>
+                <td class="px-4 py-3 num text-right ${t.extra>0?'text-[#A37620]':'text-ink-faint'}">${t.extra>0?moneyFull(t.extra):'—'}</td>
+                <td class="px-4 py-3 num text-right font-semibold">${moneyFull(t.total)}</td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot class="bg-bg/30">
+            <tr class="border-t border-line">
+              <td colspan="5" class="px-4 py-3 text-right text-[12.5px] text-ink-soft font-semibold">${L('Σύνολα περιόδου','Period totals')}</td>
+              <td class="px-4 py-3 num text-right font-semibold text-brand">${moneyFull(totalB)}</td>
+              <td class="px-4 py-3 num text-right font-semibold text-[#A37620]">${moneyFull(totalX)}</td>
+              <td class="px-4 py-3 num text-right font-semibold text-[14px]">${moneyFull(totalT)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        <div class="p-3 border-t border-line text-[12px] text-ink-soft flex items-center justify-between">
+          <span><span class="num font-semibold" data-filter-count>${txns.length}</span> ${L('συναλλαγές','transactions')}</span>
+          <div class="flex items-center gap-2">
+            <button class="h-7 w-7 flex items-center justify-center rounded text-ink-faint hover:text-ink hover:bg-brand-soft/40 cursor-not-allowed" disabled><span class="rotate-180 inline-block">${icons.chevron_r}</span></button>
+            <span class="num text-[11.5px]">1</span>
+            <button class="h-7 w-7 flex items-center justify-center rounded text-ink-faint">${icons.chevron_r}</button>
+          </div>
+        </div>
+      </div>`;
+    })() : `
     <!-- Money KPIs -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
       ${KPI(L('Συνολικές δαπάνες','Total spend'),     moneyFull(totalSpend),   {tone:'brand',   sub:`${moneyFull(Math.round(totalSpend/operatingDays))} ${L('μ.ό./μέρα','avg/day')}`, icon:icons.chart})}
@@ -2454,6 +2695,7 @@ const page_co_reports = () => {
         </div>
       </div>
     </div>
+    `}
   </section>`;
 };
 
@@ -2615,7 +2857,7 @@ const page_emp_vendors = () => `
   <section class="max-w-5xl mx-auto px-8 pt-8 pb-10 space-y-6">
     <div>
       <h1 class="font-display text-[36px] leading-[44px] font-semibold">${L('Πού μπορώ να παραγγείλω','Where can I order')}</h1>
-      <p class="text-ink-soft mt-2 text-[15px]">${L('Συνεργαζόμενα καταστήματα στην περιοχή του γραφείου σας.','Partner vendors near your default office.')}</p>
+      <p class="text-ink-soft mt-2 text-[15px]">${L('Συνεργαζόμενα καταστήματα στην περιοχή της εταιρείας σας.','Partner vendors near your company address.')}</p>
     </div>
 
     <div data-filter-scope>
@@ -2836,7 +3078,7 @@ const vendorSidebar = () => {
     ]},
     { label: L('Σχέσεις','Relationships'), items: [
       { id:'ven-companies', label: L('Εταιρείες','Companies'),   icon: icons.office },
-      { id:'ven-stores',    label: L('Καταστήματα','Stores'),    icon: icons.shop },
+      /* MVP1: 1 vendor = 1 shop. Stores list/detail routes still exist for the schema but not in nav. */
     ]},
     { label: L('Οικονομικά','Finance'), items: [
       { id:'ven-invoices',  label: L('Τιμολόγια','Invoices'),    icon: icons.file },
@@ -2864,7 +3106,7 @@ const vendorSidebar = () => {
           <div class="px-2.5 text-[10.5px] uppercase tracking-[0.09em] text-ink-faint font-semibold mb-1.5">${g.label}</div>
           <div class="space-y-0.5">
             ${g.items.map(i => {
-              const aliases = { 'ven-orders':['ven-order-detail'], 'ven-invoices':['ven-invoice-new','ven-invoice-detail'], 'ven-companies':['ven-company-detail'], 'ven-stores':['ven-store-detail'] };
+              const aliases = { 'ven-orders':['ven-order-detail'], 'ven-invoices':['ven-invoice-new','ven-invoice-detail'], 'ven-companies':['ven-company-detail'] };
               const active = state.route === i.id || (aliases[i.id]||[]).includes(state.route);
               return `
                 <a href="#vendor/${i.id}" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded text-[13.5px] ${active?'bg-brand-soft text-brand font-semibold':'text-ink-soft hover:text-ink hover:bg-brand-soft/40'} transition">
@@ -2889,7 +3131,7 @@ const page_ven_dashboard = () => {
   <section class="p-8 space-y-6 max-w-[1200px]">
     <div>
       <h1 class="font-display text-[36px] leading-[44px] font-semibold">${L('Καλημέρα','Good morning')}, <span class="italic text-ink-soft">${L(ven_mock.profile.name_el, ven_mock.profile.name_en)}</span></h1>
-      <p class="text-ink-soft mt-2 text-[15px]">${L('Τι συμβαίνει σήμερα στα καταστήματά σας.','What\u2019s happening across your stores today.')}</p>
+      <p class="text-ink-soft mt-2 text-[15px]">${L('Τι συμβαίνει σήμερα στο κατάστημά σας.','What\u2019s happening at your shop today.')}</p>
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -2925,17 +3167,17 @@ const page_ven_dashboard = () => {
       </div>
 
       <div class="bg-surface border border-line rounded-md shadow-sm p-5">
-        <h2 class="font-display text-[20px] font-semibold mb-3">${L('Καταστήματα','Stores')}</h2>
+        <h2 class="font-display text-[20px] font-semibold mb-3">${L('Top εταιρείες','Top companies')}</h2>
         <div class="space-y-3">
-          ${ven_mock.stores.map(s => `
-            <a href="#vendor/ven-store-detail" class="flex items-center gap-3 py-2 hover:bg-brand-soft/20 -mx-2 px-2 rounded transition">
-              <div class="w-2 h-2 rounded-full bg-success shrink-0"></div>
+          ${ven_mock.companies.slice(0,6).map(c => `
+            <a href="#vendor/ven-company-detail" class="flex items-center gap-3 py-2 hover:bg-brand-soft/20 -mx-2 px-2 rounded transition">
+              <div class="w-9 h-9 rounded-sm bg-brand-soft text-brand flex items-center justify-center shrink-0">${icons.office}</div>
               <div class="flex-1 min-w-0">
-                <div class="font-semibold text-[14px] truncate">${L(s.name, s.name_en)}</div>
-                <div class="text-[11.5px] text-ink-soft font-mono">${s.go}</div>
+                <div class="font-semibold text-[14px] truncate">${c.name}</div>
+                <div class="text-[11.5px] text-ink-soft">${c.employees||c.people||'—'} ${L('υπάλληλοι','staff')}</div>
               </div>
               <div class="text-right">
-                <div class="num text-[13px] font-semibold">${s.orders_mo}</div>
+                <div class="num text-[13px] font-semibold">${c.orders_mo||'—'}</div>
                 <div class="text-[10.5px] text-ink-faint">${L('παρ./μ.','orders/mo')}</div>
               </div>
             </a>`).join('')}
@@ -3522,7 +3764,7 @@ const page_ven_profile = () => `
           <div class="w-10 h-10 rounded-sm bg-success text-white flex items-center justify-center">${icons.check}</div>
           <div class="flex-1">
             <div class="font-semibold text-[14px]">${L('Συνδεδεμένο με GonnaOrder','Connected to GonnaOrder')}</div>
-            <div class="text-[12.5px] text-ink-soft">${ven_mock.stores.length} ${L('καταστήματα συγχρονίζονται','stores syncing')} · <span class="num">${ven_mock.profile.go_id}</span></div>
+            <div class="text-[12.5px] text-ink-soft">${L('Συγχρονισμένο · GonnaOrder ID','Syncing · GonnaOrder ID')}: <span class="num font-mono">${ven_mock.profile.go_id}</span></div>
           </div>
           ${Btn('secondary','sm', L('Επαναδιαμόρφωση','Reconfigure'))}
         </div>
@@ -3734,7 +3976,6 @@ const page_admin_vendors = () => `
           <tr class="text-left text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">
             <th class="px-5 py-3">${L('Κατάστημα','Vendor')}</th>
             <th class="px-5 py-3">${L('Tags','Tags')}</th>
-            <th class="px-5 py-3 text-right">${L('Shops','Shops')}</th>
             <th class="px-5 py-3 text-right">${L('Συμβόλαια','Contracts')}</th>
             <th class="px-5 py-3">GO ID</th>
             <th class="px-5 py-3">${L('Κατάσταση','Status')}</th>
@@ -3753,7 +3994,6 @@ const page_admin_vendors = () => `
               <td class="px-5 py-3">
                 <div class="flex flex-wrap gap-1">${v.tags.slice(0,3).map(tag => tagChip(tag, true)).join('')}${v.tags.length>3?`<span class="text-[11px] text-ink-faint ml-1">+${v.tags.length-3}</span>`:''}</div>
               </td>
-              <td class="px-5 py-3 num text-right">${v.stores}</td>
               <td class="px-5 py-3 num text-right font-semibold">${v.contracts}</td>
               <td class="px-5 py-3 num text-[12.5px] text-ink-soft">${v.go_id}</td>
               <td class="px-5 py-3">${Pill(v.status==='active'?'success':'warn', v.status)}</td>
@@ -3853,25 +4093,15 @@ const page_admin_vendor_edit = () => {
         </div>
       `)}
 
-      ${FormSection(L('Καταστήματα','Stores'), L('Κάθε store είναι ξεχωριστό GonnaOrder shop id.','Each store is a separate GonnaOrder shop id.'), `
-        <div class="space-y-2">
-          ${stores.map((s,i) => `
-            <div class="flex items-center gap-3 p-3 bg-bg/30 border border-line rounded">
-              <div class="w-8 h-8 rounded-sm bg-accent-soft text-accent flex items-center justify-center shrink-0">${icons.shop}</div>
-              <div class="flex-1 grid grid-cols-[2fr_2fr_1fr_1fr] gap-2 items-center">
-                <input type="text" value="${L(s.area, s.area_en)}" class="h-9 px-2.5 bg-surface border border-line rounded-xs text-[13px]">
-                <input type="text" value="${s.street}" class="h-9 px-2.5 bg-surface border border-line rounded-xs text-[13px]">
-                <input type="text" value="${s.zip}" class="h-9 px-2.5 bg-surface border border-line rounded-xs text-[13px] font-mono">
-                <input type="text" value="${s.go}" class="h-9 px-2.5 bg-surface border border-line rounded-xs text-[13px] font-mono">
-              </div>
-              <label class="inline-flex items-center gap-1.5 cursor-pointer shrink-0 text-[12px]">
-                <input type="checkbox" ${s.active?'checked':''} class="w-4 h-4 accent-brand">
-                ${L('ενεργό','active')}
-              </label>
-              <button class="text-ink-faint hover:text-danger w-8 h-8 flex items-center justify-center">×</button>
-            </div>`).join('')}
-          <button class="mt-2 w-full h-10 border border-dashed border-line rounded text-[13px] text-brand font-medium hover:bg-brand-soft/30 hover:border-brand transition">+ ${L('Προσθήκη καταστήματος','Add store')}</button>
-        </div>
+      ${FormSection(L('Διεύθυνση καταστήματος','Shop address'), L('MVP1: 1 vendor = 1 shop. Πολλαπλά καταστήματα έρχονται μετά (μένει στο schema).','MVP1: 1 vendor = 1 shop. Multi-shop comes later (already in schema).'), `
+        ${stores.slice(0,1).map(s => `
+          <div class="grid md:grid-cols-2 gap-4">
+            ${Field({label:L('Περιοχή / γειτονιά','Area / neighborhood'), children:`<input type="text" value="${L(s.area, s.area_en)}" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">`})}
+            ${Field({label:L('Οδός','Street'),                              children:`<input type="text" value="${s.street}" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">`})}
+            ${Field({label:L('ΤΚ','ZIP'),                                   children:`<input type="text" value="${s.zip}" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+            ${Field({label:L('GonnaOrder shop id','GonnaOrder shop id'),    children:`<input type="text" value="${s.go}" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+          </div>
+        `).join('')}
       `)}
 
       ${FormSection(L('Κατάσταση λογαριασμού','Account status'), L('Προσοχή — επηρεάζει όλες τις εταιρείες που συνεργάζονται με αυτό τον συνεργάτη.','Careful — affects every company with an agreement with this vendor.'), `
@@ -3924,7 +4154,7 @@ const page_admin_vendor_new = () => `
       ${FormSection(L('Σύνδεση GonnaOrder','GonnaOrder link'), L('Ο συνεργάτης πρέπει να έχει ενεργό GonnaOrder λογαριασμό.','Vendor must have an active GonnaOrder account.'), `
         <div class="grid md:grid-cols-2 gap-4">
           ${Field({label:L('Merchant ID','Merchant ID'), children: txtInput('','go-merchant-id')})}
-          ${Field({label:L('Κύριο store id','Primary store id'), hint:L('Επιπλέον καταστήματα μπαίνουν μετά την αποθήκευση.','Additional stores added after save.'), children: txtInput('','store-0001')})}
+          ${Field({label:L('GonnaOrder store id','GonnaOrder store id'), hint:L('Το shop id που έχετε ήδη στο GonnaOrder.','The shop id you already use on GonnaOrder.'), children: txtInput('','store-0001')})}
         </div>
       `)}
       ${FormSection(L('Προεπιλογές','Defaults'), L('Μπορείτε να αλλάξετε ανά εταιρεία στη συμφωνία.','Overridable per-company in each agreement.'), `
@@ -4005,7 +4235,7 @@ const page_co_vendors_discover = () => {
                   <div class="w-10 h-10 rounded bg-accent-soft text-accent flex items-center justify-center shrink-0">${icons.shop}</div>
                   <div class="min-w-0">
                     <h3 class="font-display text-[18px] font-semibold truncate">${L(v.name,v.name_en)}</h3>
-                    <div class="text-[11.5px] text-ink-soft">${v.stores} ${L('καταστήματα','stores')} · ${ordersMo} ${L('παρ./μήνα','orders/mo')}</div>
+                    <div class="text-[11.5px] text-ink-soft">${ordersMo} ${L('παρ./μήνα','orders/mo')}</div>
                   </div>
                 </div>
                 ${matched ? Pill('success', L('ήδη συνεργάτης','already yours')) : ''}
@@ -4069,11 +4299,37 @@ const page_co_agreement_edit = () => {
       ${FormSection(L('Εμφάνιση παραγγελίας','Order visibility'), L('Πώς εμφανίζεται ο υπάλληλος στο κατάστημα και τα σκεύη.','How the employee appears to the vendor, and container policy.'), `
         <div class="space-y-3">
           <div>
-            <span class="block text-[12.5px] font-semibold mb-2">${L('Sticker mode','Sticker mode')}</span>
-            <div class="grid md:grid-cols-2 gap-2">
-              ${radioCard('sticker','name',true,  L('Όνομα υπαλλήλου','Employee name'), L('π.χ. "Για Μαρία Π. · Acme"','e.g. "For Maria P. · Acme"'))}
-              ${radioCard('sticker','anon',false, L('Ανώνυμο','Anonymized'),             L('π.χ. "Acme · #1234"','e.g. "Acme · #1234"'))}
+            <div class="flex items-center justify-between mb-2">
+              <span class="block text-[12.5px] font-semibold">${L('Ετικέτα στη συσκευασία','Package sticker label')}</span>
+              <span class="text-[11px] text-ink-faint">${L('Τι τυπώνεται στο autocollant της παραγγελίας','What gets printed on the order sticker')}</span>
             </div>
+            <select onchange="state.ag_sticker_col=this.value; render()" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
+              <optgroup label="${L('Στήλες υπαλλήλου','Employee columns')}">
+                <option value="full_name"   ${(state.ag_sticker_col||'short_name')==='full_name'?'selected':''}>${L('Πλήρες όνομα','Full name')} — ${L('Μαρία Παπαδοπούλου','Maria Papadopoulou')}</option>
+                <option value="short_name"  ${(state.ag_sticker_col||'short_name')==='short_name'?'selected':''}>${L('Όνομα + αρχικό επώνυμο','First name + last initial')} — ${L('Μαρία Π.','Maria P.')}</option>
+                <option value="first_name"  ${state.ag_sticker_col==='first_name'?'selected':''}>${L('Όνομα μόνο','First name only')} — ${L('Μαρία','Maria')}</option>
+                <option value="employee_id" ${state.ag_sticker_col==='employee_id'?'selected':''}>${L('Κωδικός υπαλλήλου','Employee ID')} — ACM-001</option>
+                <option value="group"       ${state.ag_sticker_col==='group'?'selected':''}>${L('Κωδικός ομάδας','Group code')} — ENG</option>
+                <option value="office"      ${state.ag_sticker_col==='office'?'selected':''}>${L('Γραφείο','Office')} — Athens HQ</option>
+                <option value="email_local" ${state.ag_sticker_col==='email_local'?'selected':''}>${L('Πρόθεμα email','Email prefix')} — maria.p</option>
+                <option value="title"       ${state.ag_sticker_col==='title'?'selected':''}>${L('Τίτλος εργασίας','Job title')} — Senior Engineer</option>
+              </optgroup>
+              <optgroup label="${L('Μη αναγνωρίσιμη','Non-identifying')}">
+                <option value="anon_id"     ${state.ag_sticker_col==='anon_id'?'selected':''}>${L('Ανώνυμο · # συναλλαγής','Anonymized · txn #')} — #1234</option>
+                <option value="company_only"${state.ag_sticker_col==='company_only'?'selected':''}>${L('Μόνο εταιρεία','Company only')} — Acme</option>
+              </optgroup>
+            </select>
+            <div class="mt-3 p-3 bg-bg/40 border border-dashed border-line rounded">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-sm bg-white border-2 border-ink/80 flex items-center justify-center text-[10px] font-mono text-ink-faint shrink-0" title="${L('Δείγμα ετικέτας','Sticker preview')}">${icons.file||'📄'}</div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-[10.5px] uppercase tracking-[0.08em] text-ink-faint font-semibold mb-0.5">${L('Δείγμα','Preview')}</div>
+                  <div class="font-mono text-[13.5px] font-semibold text-ink truncate">${stickerPreview(state.ag_sticker_col || 'short_name', 'Acme')}</div>
+                  <div class="text-[11px] text-ink-soft mt-0.5">${L('Συνεργάτης βλέπει + κουζίνα τυπώνει','Vendor sees + kitchen prints')}</div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-2 text-[11px] text-ink-faint">${L('Συμβουλή: επιλογές χωρίς προσωπικά στοιχεία (ID, ομάδα, ανώνυμο) είναι GDPR-φιλικότερες.','Tip: non-PII options (ID, group, anonymized) are more GDPR-friendly.')}</div>
           </div>
           <div>
             <span class="block text-[12.5px] font-semibold mb-2">${L('Επαναχρησιμοποιούμενα σκεύη','Reusable containers')}</span>
@@ -4086,21 +4342,13 @@ const page_co_agreement_edit = () => {
         </div>
       `)}
 
-      ${FormSection(L('Παράδοση ανά γραφείο','Delivery per office'), L('Ορίστε για κάθε γραφείο χρονικό παράθυρο παράδοσης. Απενεργοποιήστε γραφεία που δεν εξυπηρετούνται.','Set a delivery window per office. Disable offices that aren\u2019t served.'), `
-        <div class="space-y-2">
-          ${offices.map(o => `
-            <div class="flex items-center gap-3 p-3 bg-bg/30 border border-line rounded">
-              <label class="inline-flex items-center gap-2 cursor-pointer min-w-[160px]">
-                <input type="checkbox" ${o.enabled?'checked':''} class="w-4 h-4 accent-brand">
-                <span class="text-[13.5px] font-semibold">${o.name}</span>
-              </label>
-              <div class="flex items-center gap-2 ml-auto">
-                <span class="text-[12px] text-ink-soft">${L('Από','From')}</span>
-                <input type="time" value="${o.delivery_from==='—'?'':o.delivery_from}" ${!o.enabled?'disabled':''} class="h-9 px-2 bg-surface border border-line rounded-xs text-[13px] font-mono ${!o.enabled?'opacity-50':''}">
-                <span class="text-[12px] text-ink-soft">${L('έως','to')}</span>
-                <input type="time" value="${o.delivery_to==='—'?'':o.delivery_to}" ${!o.enabled?'disabled':''} class="h-9 px-2 bg-surface border border-line rounded-xs text-[13px] font-mono ${!o.enabled?'opacity-50':''}">
-              </div>
-            </div>`).join('')}
+      ${FormSection(L('Παράθυρο παράδοσης','Delivery window'), L('Ώρα που το κατάστημα παραδίδει στην εταιρεία.','When the vendor delivers to the company.'), `
+        <div class="flex items-center gap-2 p-3 bg-bg/30 border border-line rounded flex-wrap">
+          <span class="text-[12px] text-ink-soft">${L('Από','From')}</span>
+          <input type="time" value="12:30" class="h-9 px-2 bg-surface border border-line rounded-xs text-[13px] font-mono">
+          <span class="text-[12px] text-ink-soft">${L('έως','to')}</span>
+          <input type="time" value="13:30" class="h-9 px-2 bg-surface border border-line rounded-xs text-[13px] font-mono">
+          <span class="ml-3 text-[11.5px] text-ink-faint">${L('Ισχύει για όλους τους υπαλλήλους.','Applies to all employees.')}</span>
         </div>
       `)}
 
@@ -4228,7 +4476,7 @@ const page_admin_matchmaking_new = () => {
           ${Field({label:L('Κατάστημα','Vendor'), hint:L('Μόνο ενεργοί συνεργάτες πλατφόρμας.','Only active platform vendors.'), children: `
             <select class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
               <option value="" disabled selected>${L('— Επιλέξτε συνεργάτη —','— Pick a vendor —')}</option>
-              ${vendors.map(v => `<option value="${v.id}">${L(v.name, v.name_en)} · ${v.stores} ${L('καταστ.','shops')}</option>`).join('')}
+              ${vendors.map(v => `<option value="${v.id}">${L(v.name, v.name_en)} · ${L('GO:','GO:')} ${v.go_id||'—'}</option>`).join('')}
             </select>`})}
         </div>
       `)}
@@ -4247,11 +4495,37 @@ const page_admin_matchmaking_new = () => {
             </select>`})}
         </div>
         <div class="mt-5">
-          <span class="block text-[12.5px] font-semibold mb-2">${L('Sticker mode','Sticker mode')}</span>
-          <div class="grid md:grid-cols-2 gap-2">
-            ${radioCard('mm-sticker','named',true,  L('Όνομα υπαλλήλου','Employee name'), L('π.χ. "Για Μαρία Π. · Acme"','e.g. "For Maria P. · Acme"'))}
-            ${radioCard('mm-sticker','anon',false,  L('Ανώνυμο','Anonymized'),             L('π.χ. "Acme · #1234"','e.g. "Acme · #1234"'))}
+          <div class="flex items-center justify-between mb-2">
+            <span class="block text-[12.5px] font-semibold">${L('Ετικέτα στη συσκευασία','Package sticker label')}</span>
+            <span class="text-[11px] text-ink-faint">${L('Τι τυπώνεται στο autocollant της παραγγελίας','What gets printed on the order sticker')}</span>
           </div>
+          <select id="mm-sticker-col" onchange="state.mm_sticker_col=this.value; render()" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
+            <optgroup label="${L('Στήλες υπαλλήλου','Employee columns')}">
+              <option value="full_name"   ${(state.mm_sticker_col||'full_name')==='full_name'?'selected':''}>${L('Πλήρες όνομα','Full name')} — ${L('Μαρία Παπαδοπούλου','Maria Papadopoulou')}</option>
+              <option value="short_name"  ${state.mm_sticker_col==='short_name'?'selected':''}>${L('Όνομα + αρχικό επώνυμο','First name + last initial')} — ${L('Μαρία Π.','Maria P.')}</option>
+              <option value="first_name"  ${state.mm_sticker_col==='first_name'?'selected':''}>${L('Όνομα μόνο','First name only')} — ${L('Μαρία','Maria')}</option>
+              <option value="employee_id" ${state.mm_sticker_col==='employee_id'?'selected':''}>${L('Κωδικός υπαλλήλου','Employee ID')} — ACM-001</option>
+              <option value="group"       ${state.mm_sticker_col==='group'?'selected':''}>${L('Κωδικός ομάδας','Group code')} — ENG</option>
+              <option value="office"      ${state.mm_sticker_col==='office'?'selected':''}>${L('Γραφείο','Office')} — Athens HQ</option>
+              <option value="email_local" ${state.mm_sticker_col==='email_local'?'selected':''}>${L('Πρόθεμα email','Email prefix')} — maria.p</option>
+              <option value="title"       ${state.mm_sticker_col==='title'?'selected':''}>${L('Τίτλος εργασίας','Job title')} — Senior Engineer</option>
+            </optgroup>
+            <optgroup label="${L('Μη αναγνωρίσιμη','Non-identifying')}">
+              <option value="anon_id"     ${state.mm_sticker_col==='anon_id'?'selected':''}>${L('Ανώνυμο · # συναλλαγής','Anonymized · txn #')} — #1234</option>
+              <option value="company_only"${state.mm_sticker_col==='company_only'?'selected':''}>${L('Μόνο εταιρεία','Company only')} — Acme</option>
+            </optgroup>
+          </select>
+          <div class="mt-3 p-3 bg-bg/40 border border-dashed border-line rounded">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-sm bg-white border-2 border-ink/80 flex items-center justify-center text-[10px] font-mono text-ink-faint shrink-0" title="${L('Δείγμα ετικέτας','Sticker preview')}">${icons.file||'📄'}</div>
+              <div class="flex-1 min-w-0">
+                <div class="text-[10.5px] uppercase tracking-[0.08em] text-ink-faint font-semibold mb-0.5">${L('Δείγμα','Preview')}</div>
+                <div class="font-mono text-[13.5px] font-semibold text-ink truncate">${stickerPreview(state.mm_sticker_col || 'full_name', 'Acme')}</div>
+                <div class="text-[11px] text-ink-soft mt-0.5">${L('Συνεργάτης βλέπει + κουζίνα τυπώνει','Vendor sees + kitchen prints')}</div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-2 text-[11px] text-ink-faint">${L('Συμβουλή: επιλογές χωρίς προσωπικά στοιχεία (ID, ομάδα, ανώνυμο) είναι GDPR-φιλικότερες.','Tip: non-PII options (ID, group, anonymized) are more GDPR-friendly.')}</div>
         </div>
         <div class="mt-5">
           <span class="block text-[12.5px] font-semibold mb-2">${L('Επαναχρησιμοποιούμενα σκεύη','Reusable containers')}</span>
@@ -4263,40 +4537,13 @@ const page_admin_matchmaking_new = () => {
         </div>
       `)}
 
-      ${FormSection(L('Καλύπτονται γραφεία','Covered offices'), L('Σε ποια γραφεία της εταιρείας θα δουν αυτό το κατάστημα οι υπάλληλοι. Μπορείτε να αλλάξετε ώρες παράδοσης μετά την έγκριση.','Which company offices will see this vendor in their picker. Delivery windows can be tuned after activation.'), `
-        <div class="space-y-2">
-          ${offices.map((o,i) => `
-            <label class="flex items-center gap-3 p-3 bg-bg/30 border border-line rounded cursor-pointer">
-              <input type="checkbox" ${i<2?'checked':''} class="w-4 h-4 accent-brand">
-              <div class="w-9 h-9 rounded bg-brand-soft text-brand flex items-center justify-center">${icons.office}</div>
-              <div class="flex-1">
-                <div class="font-semibold text-[14px]">${o}</div>
-                <div class="text-[11.5px] text-ink-soft">${L('Επιλεγμένη ώρα παράδοσης','Default delivery window')}: 12:30 – 13:30</div>
-              </div>
-              <div class="flex items-center gap-2">
-                <input type="time" value="12:30" class="h-8 px-2 bg-surface border border-line rounded-xs text-[12px] font-mono">
-                <span class="text-[11px] text-ink-soft">→</span>
-                <input type="time" value="13:30" class="h-8 px-2 bg-surface border border-line rounded-xs text-[12px] font-mono">
-              </div>
-            </label>`).join('')}
-        </div>
-      `)}
-
-      ${FormSection(L('Καταστήματα συνεργάτη','Vendor stores'), L('Ποια καταστήματα του συνεργάτη συμμετέχουν. Προεπιλογή: όλα τα ενεργά καταστήματα.','Which vendor stores participate. Default: all active stores.'), `
-        <div class="space-y-2">
-          ${[
-            { area:'Κολωνάκι',   area_en:'Kolonaki',  go:'po-12-01', selected:true },
-            { area:'Γλυφάδα',    area_en:'Glyfada',   go:'po-12-02', selected:true },
-            { area:'Κηφισιά',    area_en:'Kifissia',  go:'po-12-03', selected:false },
-          ].map(s => `
-            <label class="flex items-center gap-3 p-3 bg-bg/30 border border-line rounded cursor-pointer">
-              <input type="checkbox" ${s.selected?'checked':''} class="w-4 h-4 accent-brand">
-              <div class="w-9 h-9 rounded-sm bg-accent-soft text-accent flex items-center justify-center">${icons.shop}</div>
-              <div class="flex-1">
-                <div class="font-semibold text-[14px]">${L('Ταβέρνα Ποσειδών','Taverna Poseidon')} · ${L(s.area, s.area_en)}</div>
-                <div class="text-[11.5px] text-ink-faint font-mono">GO: ${s.go}</div>
-              </div>
-            </label>`).join('')}
+      ${FormSection(L('Παράθυρο παράδοσης','Delivery window'), L('Πότε θα παραδίδει ο συνεργάτης. Ισχύει για όλους τους υπαλλήλους της εταιρείας.','When the vendor delivers. Applies to all employees of the company.'), `
+        <div class="flex items-center gap-2 p-3 bg-bg/30 border border-line rounded flex-wrap">
+          <span class="text-[12px] text-ink-soft">${L('Από','From')}</span>
+          <input type="time" value="12:30" class="h-9 px-2 bg-surface border border-line rounded-xs text-[13px] font-mono">
+          <span class="text-[12px] text-ink-soft">${L('έως','to')}</span>
+          <input type="time" value="13:30" class="h-9 px-2 bg-surface border border-line rounded-xs text-[13px] font-mono">
+          <span class="ml-3 text-[11.5px] text-ink-faint">${L('Μπορεί να αλλάξει μετά την ενεργοποίηση.','Can be tuned after activation.')}</span>
         </div>
       `)}
 
@@ -4313,22 +4560,18 @@ const page_admin_matchmaking_new = () => {
         <textarea rows="3" class="w-full px-3 py-2 bg-surface border border-line rounded-xs text-[14px]" placeholder="${L('π.χ. Διαπραγμάτευση από τον Σ. — επανέλεγχος όρων σε 6 μήνες.','e.g. Negotiated by S. — review terms in 6 months.')}"></textarea>
       `)}
 
-      ${FormSection(L('Ειδοποιήσεις','Notifications'), L('Ποιους ενημερώνουμε με την δημιουργία.','Who gets pinged on creation.'), `
-        <div class="space-y-2">
-          <label class="flex items-start gap-3 p-3.5 border border-line rounded cursor-pointer">
-            <input type="checkbox" checked class="mt-0.5 w-4 h-4 accent-brand">
-            <div>
-              <div class="text-[13.5px] font-semibold">${L('Email στον admin της εταιρείας','Email the company admin')}</div>
-              <div class="text-[12.5px] text-ink-soft mt-0.5">${L('Με τους όρους της συμφωνίας και τα διαθέσιμα καταστήματα.','With agreement terms and the participating stores.')}</div>
-            </div>
-          </label>
-          <label class="flex items-start gap-3 p-3.5 border border-line rounded cursor-pointer">
-            <input type="checkbox" checked class="mt-0.5 w-4 h-4 accent-brand">
-            <div>
-              <div class="text-[13.5px] font-semibold">${L('Email στον συνεργάτη','Email the vendor')}</div>
-              <div class="text-[12.5px] text-ink-soft mt-0.5">${L('Πληροφορίες για την εταιρεία, αναμενόμενος όγκος.','Company details, expected volume.')}</div>
-            </div>
-          </label>
+      ${FormSection(L('Σημεία συζήτησης','Talking points'), L('MVP1: τα μέρη ενημερώνονται χειροκίνητα. Δείτε λίστα bullet points που μπορείτε να αντιγράψετε.','MVP1: both sides are briefed manually. View a copyable bullet-point checklist for each.'), `
+        <div class="flex items-center gap-3 p-4 bg-brand-soft/40 border border-brand/30 rounded">
+          <div class="w-10 h-10 rounded-full bg-brand text-white flex items-center justify-center shrink-0">${icons.check}</div>
+          <div class="flex-1">
+            <div class="text-[13.5px] font-semibold">${L('Τι να πείτε σε καθένα','What to brief each side on')}</div>
+            <div class="text-[12px] text-ink-soft mt-0.5">${L('Έκπτωση, ώρα παράδοσης, ροή GonnaOrder, τιμολόγηση. Αντιγραφή με ένα κλικ.','Discount, delivery window, GonnaOrder flow, billing. One-click copy.')}</div>
+          </div>
+          <button onclick="orexiTalkingPoints({})" class="inline-flex items-center justify-center gap-2 h-10 px-4 bg-surface text-ink border border-line rounded font-medium text-[13.5px] hover:border-brand hover:text-brand">${icons.file}<span>${L('Άνοιγμα checklist','Open checklist')}</span></button>
+        </div>
+        <div class="mt-3 text-[11.5px] text-ink-faint flex items-start gap-2">
+          <span class="text-accent shrink-0 mt-0.5">●</span>
+          <span>${L('Σύντομα: αυτοματοποιημένα email templates με branding και custom variables (Linear: CF email-templating).','Coming soon: automated email templates with branding and custom variables (Linear: CF email-templating).')}</span>
         </div>
       `)}
     </div>
@@ -4551,7 +4794,7 @@ const page_co_vendor_detail = () => `
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      ${KPI(L('Καταστήματα','Stores'), 3, {tone:'brand'})}
+      ${KPI(L('Ενεργοί χρήστες','Active users'), 48, {tone:'brand', sub:L('παραγγελίες >0 / μήνα','>0 orders / mo')})}
       ${KPI(L('Έκπτωση','Discount'), '-8%', {tone:'accent', sub:L('επί της παροχής','on benefit')})}
       ${KPI(L('Παραγγελίες μήνα','Orders/mo'), 142, {tone:'success', sub:L('+18 vs λ. μήνας','+18 vs last mo')})}
       ${KPI(L('Δαπάνες μήνα','Spend/mo'), moneyFull(284000), {tone:'warn'})}
@@ -4560,26 +4803,14 @@ const page_co_vendor_detail = () => `
     <div class="grid lg:grid-cols-[1fr_1fr] gap-6">
       <div class="bg-surface border border-line rounded-md shadow-sm">
         <div class="flex items-center justify-between p-5 border-b border-line">
-          <h2 class="font-display text-[18px] font-semibold">${L('Καταστήματα','Stores')}</h2>
-          <span class="text-[12px] text-ink-faint num">3 ${L('σύνολο','total')}</span>
+          <h2 class="font-display text-[18px] font-semibold">${L('Στοιχεία επικοινωνίας','Contact')}</h2>
         </div>
-        <div class="divide-y divide-line">
-          ${[
-            {area:'Κολωνάκι',   area_en:'Kolonaki', go:'po-12-01', orders:50},
-            {area:'Γλυφάδα',    area_en:'Glyfada',  go:'po-12-02', orders:38},
-            {area:'Κηφισιά',    area_en:'Kifissia', go:'po-12-03', orders:54},
-          ].map(s => `
-            <div class="flex items-center gap-3 p-4">
-              <div class="w-9 h-9 rounded-sm bg-accent-soft text-accent flex items-center justify-center shrink-0">${icons.shop}</div>
-              <div class="flex-1 min-w-0">
-                <div class="font-semibold text-[14px]">Taverna Poseidon · ${L(s.area, s.area_en)}</div>
-                <div class="text-[11.5px] text-ink-soft num">GO: ${s.go}</div>
-              </div>
-              <div class="text-right">
-                <div class="num text-[13px] font-semibold">${s.orders}</div>
-                <div class="text-[10.5px] text-ink-faint">${L('παρ./μήνα','orders/mo')}</div>
-              </div>
-            </div>`).join('')}
+        <div class="p-5 space-y-3 text-[13.5px]">
+          <div class="flex justify-between gap-3"><span class="text-ink-soft">${L('Διεύθυνση','Address')}</span><span class="font-medium text-right">${L('Σκουφά 24, Κολωνάκι 10672','Skoufa 24, Kolonaki 10672')}</span></div>
+          <div class="flex justify-between gap-3"><span class="text-ink-soft">${L('Ώρες','Hours')}</span><span class="font-mono text-[13px]">11:00 – 23:00</span></div>
+          <div class="flex justify-between gap-3"><span class="text-ink-soft">${L('Επικοινωνία','Contact')}</span><span class="font-medium">orders@poseidon.gr</span></div>
+          <div class="flex justify-between gap-3"><span class="text-ink-soft">${L('Τηλέφωνο','Phone')}</span><span class="font-mono text-[13px]">+30 210 360 0000</span></div>
+          <div class="flex justify-between gap-3"><span class="text-ink-soft">GonnaOrder</span><span class="font-mono text-[12.5px] text-ink-soft">po-12-01</span></div>
         </div>
       </div>
 
@@ -4801,7 +5032,6 @@ const page_admin_company_detail = () => `
           ${mock.vendors_matched.slice(0,4).map(v => `
             <tr class="hover:bg-brand-soft/20">
               <td class="px-5 py-3 font-medium">${L(v.name, v.name_en)}</td>
-              <td class="px-5 py-3 text-[13px] text-ink-soft">${v.stores} ${L('κατ.','stores')}</td>
               <td class="px-5 py-3 text-right num text-brand font-semibold">${v.discount_pct>0?`-${v.discount_pct}%`:'—'}</td>
               <td class="px-5 py-3 text-right num text-[13px]">${v.orders_month}/${L('μήνα','mo')}</td>
             </tr>`).join('')}
@@ -4818,7 +5048,7 @@ const page_admin_vendor_detail = () => `
         <div class="w-16 h-16 rounded bg-accent-soft text-accent flex items-center justify-center">${icons.shop}</div>
         <div>
           <h1 class="font-display text-[32px] leading-[40px] font-semibold">Ζυμώματα</h1>
-          <div class="text-[13.5px] text-ink-soft font-mono">GO: zy-11 · ${L('5 καταστήματα','5 stores')} · ${L('ενσωματώθηκε','onboarded')} 10/2025</div>
+          <div class="text-[13.5px] text-ink-soft font-mono">GO: zy-11 · ${L('ενσωματώθηκε','onboarded')} 10/2025</div>
           <div class="flex flex-wrap gap-1 mt-2">${['bakery','coffee','breakfast','snacks','budget-friendly'].map(tt => tagChip(tt)).join('')}</div>
         </div>
       </div>
@@ -4995,21 +5225,15 @@ const page_co_employee_new = () => {
         </div>
       `)}
 
-      ${FormSection(L('Γραφείο & ομάδα','Office & group'), L('Πού εργάζεται και σε ποια ομάδα ανήκει.','Where they work and which group they belong to.'), `
+      ${FormSection(L('Ομάδα & έναρξη','Group & start'), L('Σε ποια ομάδα ανήκει και πότε ξεκινά.','Which group they belong to and when they start.'), `
         <div class="grid md:grid-cols-2 gap-4">
-          ${Field({label:L('Προεπιλεγμένο γραφείο','Default office'), children: `
-            <select class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
-              <option>Athens HQ</option>
-              <option>Thessaloniki</option>
-              <option>Remote</option>
-            </select>`})}
           ${Field({label:L('Ομάδα','Group'), hint:L('Οι παροχές ομάδας θα ανατεθούν αυτόματα.','Group benefits will be assigned automatically.'), children: `
             <select class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
               ${groups.map(g => `<option>${g.code} — ${L(g.name_el, g.name_en)} (${g.people})</option>`).join('')}
             </select>`})}
-        </div>
-        <div class="mt-4 grid md:grid-cols-2 gap-4">
           ${Field({label:L('Ημερομηνία έναρξης','Start date'), children:`<input type="date" value="${new Date().toISOString().slice(0,10)}" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+        </div>
+        <div class="mt-4">
           ${Field({label:L('Τμήμα (προαιρετικό)','Department (optional)'), children: txtInput('','Engineering')})}
         </div>
       `)}
@@ -5137,7 +5361,7 @@ const page_co_group_edit = () => {
         </div>
         <div class="mt-4">
           ${Field({label:L('Περιγραφή (προαιρετικό)','Description (optional)'), hint:L('Φαίνεται μόνο σε admins.','Only visible to admins.'), children: `
-            <textarea rows="2" class="w-full px-3 py-2 bg-surface border border-line rounded-xs text-[14px]" placeholder="${L('π.χ. όλοι οι developers σε όλα τα γραφεία','e.g. all engineers across all offices')}"></textarea>`})}
+            <textarea rows="2" class="w-full px-3 py-2 bg-surface border border-line rounded-xs text-[14px]" placeholder="${L('π.χ. όλοι οι developers της εταιρείας','e.g. all engineers across the company')}"></textarea>`})}
         </div>
       `)}
 
