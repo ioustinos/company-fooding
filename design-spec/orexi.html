@@ -117,6 +117,7 @@ const state = {
   be_dow:      1,          /* ISO day of week 1-7 (for weekly cadence) */
   be_time:     '06:00',    /* anchor time HH:MM */
   emp_create_mode: 'one',  /* 'one' | 'csv' — new-employee form mode */
+  gr_edit_id:      null,   /* null = creating new group; 'g2' etc. = editing existing */
 };
 
 /* ---------- strings ---------- */
@@ -894,7 +895,7 @@ const coSidebar = () => {
           <div class="px-2.5 text-[10.5px] uppercase tracking-[0.09em] text-ink-faint font-semibold mb-1.5">${g.label}</div>
           <div class="space-y-0.5">
             ${g.items.map(i => {
-              const aliases = { 'co-employees': ['co-groups'] };
+              const aliases = { 'co-employees': ['co-groups','co-group-detail','co-group-edit','co-employee-detail','co-employee-new'] };
               const active = state.route === i.id || (aliases[i.id]||[]).includes(state.route);
               return `
                 <a href="#company/${i.id}"
@@ -1803,7 +1804,7 @@ const page_co_groups = () => {
         <p class="text-ink-soft mt-2 text-[15px] max-w-xl">${t('grp_sub')}</p>
       </div>
       <div class="flex items-center gap-2">
-        ${Btn('primary','md', `<span>${icons.plus}</span><span>${t('grp_new')}</span>`)}
+        <button onclick="state.gr_edit_id=null; location.hash='company/co-group-edit'" class="inline-flex items-center justify-center gap-2 font-medium rounded transition bg-brand text-white hover:bg-brand-hover h-10 px-4 text-[14px]"><span>${icons.plus}</span><span>${t('grp_new')}</span></button>
       </div>
     </div>
 
@@ -1832,7 +1833,7 @@ const page_co_groups = () => {
         </thead>
         <tbody class="divide-y divide-line">
           ${all.map(g => `
-            <tr data-search="${L(g.name_el,g.name_en)} ${g.code} ${g.status}" class="hover:bg-brand-soft/30 transition cursor-pointer ${g.status==='archived'?'opacity-60':''}" onclick="location.hash='company/co-group-detail'">
+            <tr data-search="${L(g.name_el,g.name_en)} ${g.code} ${g.status}" class="hover:bg-brand-soft/30 transition cursor-pointer ${g.status==='archived'?'opacity-60':''}" onclick="state.gr_edit_id='${g.id}'; location.hash='company/co-group-detail'">
               <td class="px-5 py-3.5">
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 rounded bg-brand-soft text-brand flex items-center justify-center text-[11.5px] font-semibold num">${g.code}</div>
@@ -4447,6 +4448,7 @@ const page_co_group_detail = () => `
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <a href="#company/co-group-edit">${Btn('primary','md', `<span>${icons.gear}</span><span>${L('Επεξεργασία','Edit')}</span>`)}</a>
         <button onclick="orexiToast('${L('Επιλέξτε μέλη να προσθέσετε','Pick members to add')}','info')" class="inline-flex items-center justify-center gap-2 h-10 px-4 bg-surface text-ink border border-line rounded font-medium text-[14px] hover:border-ink-soft"><span>${icons.plus}</span><span>${L('Προσθήκη μέλους','Add member')}</span></button>
         <button onclick="orexiAsk({title:'${L('Αρχειοθέτηση ομάδας;','Archive group?')}',body:'${L('Τα μέλη παραμένουν, αλλά οι παροχές της ομάδας σταματούν.','Members stay, but group benefits stop.')}',confirmLabel:'${L('Αρχειοθέτηση','Archive')}',danger:true,onConfirm:()=>orexiAct('${L('Ομάδα αρχειοθετήθηκε','Group archived')}','company/co-groups','warn')})" class="inline-flex items-center justify-center h-10 px-4 bg-surface text-danger border border-danger/40 hover:bg-danger/5 rounded font-medium text-[14px]">${L('Αρχειοθέτηση','Archive')}</button>
       </div>
@@ -4894,6 +4896,155 @@ const page_co_employee_new = () => {
   </div>`;
 };
 
+/* ===================================================================
+   PAGE: Company Admin — Group create / edit
+   =================================================================== */
+const page_co_group_edit = () => {
+  const editing = state.gr_edit_id ? mock.groups.find(g => g.id === state.gr_edit_id) : null;
+  const isSystem = editing?.system === true;
+  const title    = editing
+    ? L(`Επεξεργασία ομάδας · ${editing.code}`, `Edit group · ${editing.code}`)
+    : L('Νέα ομάδα','New group');
+
+  /* All employees with mock memberships (so the picker renders something realistic). */
+  const empList = [
+    { id:'e1',  name:'Μαρία Παπαδοπούλου',    name_en:'Maria Papadopoulou',    email:'maria.p@acme.gr',    office:'Athens HQ',    group:'ENG' },
+    { id:'e2',  name:'Γιώργος Αθανασίου',     name_en:'Giorgos Athanasiou',    email:'giorgos.a@acme.gr',  office:'Athens HQ',    group:'ENG' },
+    { id:'e3',  name:'Έλενα Νικολαΐδη',       name_en:'Elena Nikolaidi',       email:'elena.n@acme.gr',    office:'Thessaloniki', group:'SALES' },
+    { id:'e4',  name:'Νίκος Παππάς',          name_en:'Nikos Pappas',          email:'nikos.p@acme.gr',    office:'Athens HQ',    group:'OPS' },
+    { id:'e5',  name:'Σοφία Ιωάννου',         name_en:'Sofia Ioannou',         email:'sofia.i@acme.gr',    office:'Athens HQ',    group:'ENG' },
+    { id:'e6',  name:'Κωνσταντίνος Δ.',       name_en:'Konstantinos D.',       email:'konst.d@acme.gr',    office:'Thessaloniki', group:'SALES' },
+    { id:'e7',  name:'Ειρήνη Λ.',             name_en:'Eirini L.',             email:'eirini.l@acme.gr',   office:'Athens HQ',    group:'HR' },
+    { id:'e8',  name:'Πέτρος Βασιλείου',      name_en:'Petros Vasileiou',      email:'petros.v@acme.gr',   office:'Remote',       group:'ENG' },
+    { id:'e9',  name:'Αθηνά Μ.',              name_en:'Athina M.',             email:'athina.m@acme.gr',   office:'Athens HQ',    group:'OPS' },
+    { id:'e10', name:'Δημήτρης Π.',           name_en:'Dimitris P.',           email:'dimitris.p@acme.gr', office:'Thessaloniki', group:'ENG' },
+  ];
+  const initiallyMember = (e) => editing ? (e.group === editing.code) : false;
+
+  const codeVal  = editing ? editing.code           : '';
+  const elName   = editing ? editing.name_el        : '';
+  const enName   = editing ? editing.name_en        : '';
+  const memberCount = empList.filter(initiallyMember).length;
+
+  return `
+  <section class="p-8 pb-40 max-w-[900px]">
+    <a href="#company/co-groups" class="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink mb-5"><span class="rotate-180">${icons.chevron_r}</span>${L('Ομάδες','Groups')}</a>
+
+    <div class="flex items-start justify-between gap-4 flex-wrap mb-6">
+      <div>
+        <h1 class="font-display text-[36px] leading-[44px] font-semibold">${title}</h1>
+        <p class="text-ink-soft mt-2 text-[15px]">${editing
+          ? L('Αλλάξτε όνομα, περιγραφή ή μέλη. Ο κωδικός ομάδας δεν μπορεί να αλλάξει — επηρεάζει το CSV import.','Edit name, description, or members. The group code is locked — it’s used by CSV imports.')
+          : L('Φτιάξτε μια νέα ομάδα. Ένας σύντομος κωδικός (π.χ. ENG, SALES) χρησιμοποιείται στο CSV import για ταχεία αντιστοίχιση.','Create a new group. A short code (e.g. ENG, SALES) is used by the CSV importer for fast matching.')}</p>
+      </div>
+      ${isSystem ? Pill('neutral', L('σύστημα','system')) : ''}
+    </div>
+
+    ${isSystem ? `
+      <div class="mb-4 bg-bg/50 border border-line rounded p-4 flex items-start gap-3">
+        <div class="w-8 h-8 rounded-sm bg-brand-soft text-brand flex items-center justify-center shrink-0 mt-0.5">${icons.bell}</div>
+        <div class="text-[13px] text-ink-soft leading-[20px]">
+          <b class="text-ink">${L('Ομάδα συστήματος.','System group.')}</b>
+          ${L('Η «ALL» περιέχει αυτόματα κάθε ενεργό υπάλληλο. Δεν αλλάζετε μέλη — μόνο όνομα και περιγραφή.','"ALL" auto-includes every active employee. You can rename it, but you can’t edit its members.')}
+        </div>
+      </div>` : ''}
+
+    <div class="space-y-4">
+      ${FormSection(L('Βασικά','Basics'), L('Όνομα στις δύο γλώσσες και κωδικός για το CSV import.','Names in both languages and a code for CSV import.'), `
+        <div class="grid md:grid-cols-[160px_1fr] gap-4">
+          ${Field({label:L('Κωδικός','Code'), hint:L('Έως 6 χαρακτήρες, λατινικά κεφαλαία ή αριθμοί. Μοναδικός ανά εταιρεία.','Up to 6 chars, A-Z 0-9. Unique per company.'), children: `
+            <input type="text" maxlength="6" value="${codeVal}" placeholder="ENG"
+              ${editing ? 'readonly' : ''}
+              oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
+              class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15 ${editing?'bg-bg/50 cursor-not-allowed':''}">`})}
+          ${Field({label:L('Όνομα','Name'), children: `
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <span class="block text-[10.5px] uppercase tracking-[0.08em] text-ink-faint font-semibold mb-1">EL</span>
+                <input type="text" value="${elName}" placeholder="${L('π.χ. Engineering','e.g. Engineering')}" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
+              </div>
+              <div>
+                <span class="block text-[10.5px] uppercase tracking-[0.08em] text-ink-faint font-semibold mb-1">EN</span>
+                <input type="text" value="${enName}" placeholder="e.g. Engineering" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
+              </div>
+            </div>`})}
+        </div>
+        <div class="mt-4">
+          ${Field({label:L('Περιγραφή (προαιρετικό)','Description (optional)'), hint:L('Φαίνεται μόνο σε admins.','Only visible to admins.'), children: `
+            <textarea rows="2" class="w-full px-3 py-2 bg-surface border border-line rounded-xs text-[14px]" placeholder="${L('π.χ. όλοι οι developers σε όλα τα γραφεία','e.g. all engineers across all offices')}"></textarea>`})}
+        </div>
+      `)}
+
+      ${!isSystem ? FormSection(L('Μέλη','Members'), L('Επιλέξτε ποιοι υπάλληλοι ανήκουν σε αυτή την ομάδα. Μπορείτε επίσης να μαζικά εκχωρήσετε υπαλλήλους από τη λίστα Υπαλλήλων.','Pick which employees are in this group. You can also bulk-assign from the Employees list.'), `
+        <div class="border border-line rounded overflow-hidden" data-filter-scope>
+          <div class="flex items-center justify-between gap-3 p-3 bg-bg/40 border-b border-line">
+            <div class="text-[12.5px] text-ink-soft">
+              <span class="num font-semibold" data-filter-count>${memberCount}</span> ${L('επιλεγμένοι','selected')} · <span class="num">${empList.length}</span> ${L('σύνολο','total')}
+            </div>
+            <div class="max-w-xs flex-1 relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">${icons.search}</span>
+              <input type="search" placeholder="${L('Αναζήτηση…','Search…')}"
+                oninput="orexiFilter(this, 'label[data-emp-row]')"
+                class="w-full h-9 pl-9 pr-3 bg-surface border border-line rounded-xs text-[13px]">
+            </div>
+          </div>
+          <div class="max-h-[340px] overflow-y-auto divide-y divide-line bg-surface">
+            ${empList.map(e => {
+              const on = initiallyMember(e);
+              return `
+                <label data-emp-row data-search="${L(e.name,e.name_en)} ${e.email} ${e.office} ${e.group}" class="flex items-center gap-3 p-3 hover:bg-brand-soft/20 cursor-pointer transition">
+                  <input type="checkbox" ${on?'checked':''} class="w-4 h-4 accent-brand">
+                  <div class="w-8 h-8 rounded-full bg-brand-soft text-brand flex items-center justify-center text-[11px] font-semibold shrink-0">${(state.lang==='el'?e.name:e.name_en).split(' ').map(s=>s[0]).join('').slice(0,2)}</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[13.5px] font-semibold truncate">${L(e.name, e.name_en)}</div>
+                    <div class="text-[11.5px] text-ink-soft truncate">${e.email}</div>
+                  </div>
+                  <span class="text-[10.5px] font-mono bg-bg border border-line text-ink-faint px-1.5 py-0.5 rounded-xs">${e.group}</span>
+                  <span class="text-[11px] text-ink-faint">${e.office}</span>
+                </label>`;
+            }).join('')}
+          </div>
+          <div class="p-3 bg-bg/30 border-t border-line flex items-center justify-between text-[12px]">
+            <span class="text-ink-soft">${L('Εμφάνιση 1–10 από 84','Showing 1–10 of 84')}</span>
+            <div class="flex items-center gap-2">
+              <button class="text-brand hover:underline font-medium">${L('Όλοι','Select all')}</button>
+              <span class="text-ink-faint">·</span>
+              <button class="text-ink-soft hover:text-ink">${L('Καθαρισμός','Clear')}</button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 text-[12px] text-ink-soft flex items-start gap-2">
+          <span class="text-accent shrink-0">●</span>
+          <span>${L('Όταν προσθέτετε υπάλληλο σε ομάδα, οι παροχές της ομάδας ανατίθενται αυτόματα από τον επόμενο κύκλο.','When you add an employee to a group, group benefits auto-assign from the next cycle.')}</span>
+        </div>
+      `) : ''}
+
+      ${editing && !isSystem ? FormSection(L('Κατάσταση','Status'), L('Η αρχειοθέτηση κρατά το ιστορικό αλλά σταματά νέες παροχές μέσω αυτής της ομάδας.','Archiving preserves history but stops new benefits flowing through this group.'), `
+        <div class="grid md:grid-cols-2 gap-2">
+          ${radioCard('grp-status','active',  editing.status==='active',   L('Ενεργή','Active'),   L('παροχές της ομάδας ανατίθενται κανονικά','group benefits assign normally'))}
+          ${radioCard('grp-status','archived',editing.status==='archived', L('Αρχειοθ.','Archived'),L('παύση νέων παροχών της ομάδας','no new group-level benefits assigned'))}
+        </div>
+      `) : ''}
+    </div>
+  </section>
+
+  <div class="sticky bottom-0 bg-surface/95 backdrop-blur border-t border-line">
+    <div class="max-w-[900px] px-8 py-3.5 flex items-center justify-between gap-4">
+      <div class="text-[12.5px] text-ink-soft">${editing
+        ? L('Οι αλλαγές μελών εφαρμόζονται αμέσως. Η ανάθεση παροχών από τον επόμενο κύκλο.','Member changes apply now. Benefit assignments roll over at the next cycle.')
+        : L('Μετά τη δημιουργία μπορείτε να αναθέσετε παροχές απευθείας στην ομάδα.','After creation you can assign benefits directly to this group.')}</div>
+      <div class="flex items-center gap-2">
+        ${editing && !isSystem ? `
+          <button onclick="orexiAsk({title:'${L('Αρχειοθέτηση ομάδας;','Archive group?')}',body:'${L('Τα μέλη παραμένουν, αλλά οι παροχές της ομάδας σταματούν.','Members stay, but group benefits stop.')}',confirmLabel:'${L('Αρχειοθέτηση','Archive')}',danger:true,onConfirm:()=>orexiAct('${L('Ομάδα αρχειοθετήθηκε','Group archived')}','company/co-groups','warn')})" class="inline-flex items-center justify-center h-10 px-4 bg-surface text-danger border border-danger/40 hover:bg-danger/5 rounded font-medium text-[14px]">${L('Αρχειοθέτηση','Archive')}</button>` : ''}
+        <a href="#company/co-groups">${Btn('secondary','md', L('Ακύρωση','Cancel'))}</a>
+        <button onclick="orexiAct('${editing ? L('Ομάδα ενημερώθηκε','Group updated') : L('Ομάδα δημιουργήθηκε','Group created')}','company/co-groups')" class="inline-flex items-center justify-center gap-2 h-10 px-4 bg-brand text-white rounded font-medium text-[14px] hover:bg-brand-hover">
+          <span>${icons.check}</span><span>${editing ? L('Αποθήκευση','Save changes') : L('Δημιουργία ομάδας','Create group')}</span>
+        </button>
+      </div>
+    </div>
+  </div>`;
+};
+
 const page_co_invoice_detail = () => {
   const i = mock2.invoices[0];
   return `
@@ -5046,6 +5197,7 @@ const routes = {
   'company/co-employee-detail': { persona:'company',  render: page_co_employee_detail },
   'company/co-groups':          { persona:'company',  render: page_co_groups },
   'company/co-group-detail':    { persona:'company',  render: page_co_group_detail },
+  'company/co-group-edit':      { persona:'company',  render: page_co_group_edit },
   'company/co-vendors':         { persona:'company',  render: page_co_vendors },
   'company/co-vendor-detail':   { persona:'company',  render: page_co_vendor_detail },
   'company/co-vendors-discover':{ persona:'company',  render: page_co_vendors_discover },
