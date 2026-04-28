@@ -3573,7 +3573,12 @@ const adminSidebar = () => {
           <div class="px-2.5 text-[10.5px] uppercase tracking-[0.09em] text-ink-faint font-semibold mb-1.5">${g.label}</div>
           <div class="space-y-0.5">
             ${g.items.map(i => {
-              const active = state.route === i.id;
+              const aliases = {
+                'admin-companies':  ['admin-company'],
+                'admin-vendors':    ['admin-vendor','admin-vendor-edit','admin-vendor-new'],
+                'admin-matchmaking':['admin-matchmaking-new'],
+              };
+              const active = state.route === i.id || (aliases[i.id]||[]).includes(state.route);
               return `
                 <a href="#admin/${i.id}" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded text-[13.5px] ${active?'bg-brand-soft text-brand font-semibold':'text-ink-soft hover:text-ink hover:bg-brand-soft/40'} transition">
                   <span class="${active?'text-brand':'text-ink-faint'}">${i.icon}</span>
@@ -4135,9 +4140,12 @@ const page_co_agreement_edit = () => {
    =================================================================== */
 const page_admin_matchmaking = () => `
   <section class="p-8 space-y-6 max-w-[1200px]">
-    <div>
-      <h1 class="font-display text-[36px] leading-[44px] font-semibold">Matchmaking</h1>
-      <p class="text-ink-soft mt-2 text-[15px]">${L('Όλες οι ενεργές συμφωνίες εταιρείας ↔ καταστήματος.','Every active company ↔ vendor agreement.')}</p>
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <h1 class="font-display text-[36px] leading-[44px] font-semibold">Matchmaking</h1>
+        <p class="text-ink-soft mt-2 text-[15px]">${L('Όλες οι ενεργές συμφωνίες εταιρείας ↔ καταστήματος.','Every active company ↔ vendor agreement.')}</p>
+      </div>
+      <a href="#admin/admin-matchmaking-new">${Btn('primary','md', `<span>${icons.plus}</span><span>${L('Νέα συμφωνία','New agreement')}</span>`)}</a>
     </div>
 
     <div class="grid grid-cols-3 gap-3 max-w-2xl">
@@ -4146,7 +4154,19 @@ const page_admin_matchmaking = () => `
       ${KPI(L('Παγωμένες','Paused'), 2, {tone:'warn'})}
     </div>
 
-    <div class="bg-surface border border-line rounded-md shadow-sm overflow-hidden">
+    <div class="bg-surface border border-line rounded-md shadow-sm overflow-hidden" data-filter-scope data-row-sel="tbody tr[data-search]">
+      <div class="flex items-center justify-between gap-3 p-4 border-b border-line">
+        <div class="flex items-center gap-0.5 bg-bg border border-line rounded p-0.5 shrink-0">
+          ${['all','active','paused'].map((f,i) => `
+            <button data-tab-btn onclick="orexiTab(this, 'status', '${f}', 'tbody tr[data-search]')" class="px-3 py-1.5 rounded-xs text-[12.5px] font-medium transition ${i===0?'bg-surface shadow-sm text-ink':'text-ink-soft hover:text-ink'}">${L(['Όλες','Ενεργές','Παγωμένες'][i],['All','Active','Paused'][i])}</button>`).join('')}
+        </div>
+        <div class="max-w-xs relative flex-1">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">${icons.search}</span>
+          <input type="search" placeholder="${L('Αναζήτηση εταιρείας ή καταστήματος…','Search company or vendor…')}"
+            oninput="orexiFilter(this, 'tbody tr[data-search]')"
+            class="w-full h-9 pl-9 pr-3 bg-bg border border-line rounded-xs text-[13px]">
+        </div>
+      </div>
       <table class="w-full text-[14px]">
         <thead class="bg-bg/40 border-b border-line">
           <tr class="text-left text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">
@@ -4167,7 +4187,7 @@ const page_admin_matchmaking = () => `
             ['Helios Analytics','Caffè Venti','Caffè Venti',7,'employee_name','2025-09-30','active'],
             ['Makris Logistics','Σπιτικό','Spitiko',12,'anonymized','2026-01-14','paused'],
           ].map(([co,ven,ven_en,disc,sticker,since,status]) => `
-            <tr class="hover:bg-brand-soft/30 transition">
+            <tr data-status="${status}" data-search="${co} ${L(ven,ven_en)}" class="hover:bg-brand-soft/30 transition">
               <td class="px-5 py-3 font-medium">${co}</td>
               <td class="px-5 py-3">${L(ven, ven_en)}</td>
               <td class="px-5 py-3 num text-right ${disc>0?'text-brand font-semibold':'text-ink-faint'}">${disc>0?`-${disc}%`:'—'}</td>
@@ -4179,6 +4199,152 @@ const page_admin_matchmaking = () => `
       </table>
     </div>
   </section>`;
+
+/* ===================================================================
+   PAGE: Platform Admin — Matchmaking new
+   =================================================================== */
+const page_admin_matchmaking_new = () => {
+  const companies = mock2.companies.filter(c => c.status !== 'suspended');
+  const vendors   = mock2.vendors_directory.filter(v => v.status === 'active');
+  const offices   = ['Athens HQ','Thessaloniki','Remote'];
+  return `
+  <section class="p-8 pb-40 max-w-[1000px]">
+    <a href="#admin/admin-matchmaking" class="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink mb-5"><span class="rotate-180">${icons.chevron_r}</span>Matchmaking</a>
+
+    <div class="mb-6">
+      <h1 class="font-display text-[36px] leading-[44px] font-semibold">${L('Νέα συμφωνία matchmaking','New matchmaking agreement')}</h1>
+      <p class="text-ink-soft mt-2 text-[15px]">${L('Δημιουργήστε μια νέα σύνδεση εταιρείας ↔ καταστήματος. Οι υπάλληλοι θα μπορούν να χρησιμοποιούν την παροχή τους σε αυτό το κατάστημα μετά την έγκριση.','Create a new company ↔ vendor connection. Employees can spend their benefits at this vendor once active.')}</p>
+    </div>
+
+    <div class="space-y-4">
+
+      ${FormSection(L('Συμμετέχοντες','Parties'), L('Ποιοι σχετίζονται σε αυτή τη συμφωνία.','Who this agreement is between.'), `
+        <div class="grid md:grid-cols-2 gap-4">
+          ${Field({label:L('Εταιρεία','Company'), hint:L('Μόνο ενεργές. Παύσεις δεν εμφανίζονται.','Only active. Suspended companies are hidden.'), children: `
+            <select class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
+              <option value="" disabled selected>${L('— Επιλέξτε εταιρεία —','— Pick a company —')}</option>
+              ${companies.map(c => `<option value="${c.id}">${c.name} · ${c.employees} ${L('υπ.','emp')}</option>`).join('')}
+            </select>`})}
+          ${Field({label:L('Κατάστημα','Vendor'), hint:L('Μόνο ενεργοί συνεργάτες πλατφόρμας.','Only active platform vendors.'), children: `
+            <select class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
+              <option value="" disabled selected>${L('— Επιλέξτε συνεργάτη —','— Pick a vendor —')}</option>
+              ${vendors.map(v => `<option value="${v.id}">${L(v.name, v.name_en)} · ${v.stores} ${L('καταστ.','shops')}</option>`).join('')}
+            </select>`})}
+        </div>
+      `)}
+
+      ${FormSection(L('Όροι','Terms'), L('Έκπτωση και πώς εμφανίζεται η παραγγελία στον συνεργάτη.','Discount and how the order appears to the vendor.'), `
+        <div class="grid md:grid-cols-2 gap-4">
+          ${Field({label:L('Ποσοστό έκπτωσης','Discount %'), hint:L('Διαπραγμάτευση orexi-style. Προεπιλογή = προεπιλογή του συνεργάτη.','Negotiated by orexi. Default = vendor’s default.'), children: `
+            <div class="relative">
+              <input type="number" value="8" min="0" max="100" step="0.5" class="w-full h-10 pl-3 pr-8 bg-surface border border-line rounded-xs text-[14px] font-mono">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft">%</span>
+            </div>`})}
+          ${Field({label:L('Εφαρμόζεται επί','Applies to'), children: `
+            <select class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px]">
+              <option selected>${L('Ποσού παροχής · η εταιρεία πληρώνει λιγότερα','Benefit amount · company saves')}</option>
+              <option>${L('Τελικής τιμής · ο υπάλληλος πληρώνει λιγότερα','Final price · employee saves')}</option>
+            </select>`})}
+        </div>
+        <div class="mt-5">
+          <span class="block text-[12.5px] font-semibold mb-2">${L('Sticker mode','Sticker mode')}</span>
+          <div class="grid md:grid-cols-2 gap-2">
+            ${radioCard('mm-sticker','named',true,  L('Όνομα υπαλλήλου','Employee name'), L('π.χ. "Για Μαρία Π. · Acme"','e.g. "For Maria P. · Acme"'))}
+            ${radioCard('mm-sticker','anon',false,  L('Ανώνυμο','Anonymized'),             L('π.χ. "Acme · #1234"','e.g. "Acme · #1234"'))}
+          </div>
+        </div>
+        <div class="mt-5">
+          <span class="block text-[12.5px] font-semibold mb-2">${L('Επαναχρησιμοποιούμενα σκεύη','Reusable containers')}</span>
+          <div class="grid md:grid-cols-3 gap-2">
+            ${radioCard('mm-cont','enforced',false, L('Υποχρεωτικά','Enforced'),   L('μόνο σκεύη','containers only'))}
+            ${radioCard('mm-cont','optional',true,  L('Προαιρετικά','Optional'),   L('επιλογή υπαλλήλου','employee choice'))}
+            ${radioCard('mm-cont','disabled',false, L('Χωρίς','Disabled'),         L('ο συνεργάτης δεν τα έχει','vendor doesn’t offer'))}
+          </div>
+        </div>
+      `)}
+
+      ${FormSection(L('Καλύπτονται γραφεία','Covered offices'), L('Σε ποια γραφεία της εταιρείας θα δουν αυτό το κατάστημα οι υπάλληλοι. Μπορείτε να αλλάξετε ώρες παράδοσης μετά την έγκριση.','Which company offices will see this vendor in their picker. Delivery windows can be tuned after activation.'), `
+        <div class="space-y-2">
+          ${offices.map((o,i) => `
+            <label class="flex items-center gap-3 p-3 bg-bg/30 border border-line rounded cursor-pointer">
+              <input type="checkbox" ${i<2?'checked':''} class="w-4 h-4 accent-brand">
+              <div class="w-9 h-9 rounded bg-brand-soft text-brand flex items-center justify-center">${icons.office}</div>
+              <div class="flex-1">
+                <div class="font-semibold text-[14px]">${o}</div>
+                <div class="text-[11.5px] text-ink-soft">${L('Επιλεγμένη ώρα παράδοσης','Default delivery window')}: 12:30 – 13:30</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <input type="time" value="12:30" class="h-8 px-2 bg-surface border border-line rounded-xs text-[12px] font-mono">
+                <span class="text-[11px] text-ink-soft">→</span>
+                <input type="time" value="13:30" class="h-8 px-2 bg-surface border border-line rounded-xs text-[12px] font-mono">
+              </div>
+            </label>`).join('')}
+        </div>
+      `)}
+
+      ${FormSection(L('Καταστήματα συνεργάτη','Vendor stores'), L('Ποια καταστήματα του συνεργάτη συμμετέχουν. Προεπιλογή: όλα τα ενεργά καταστήματα.','Which vendor stores participate. Default: all active stores.'), `
+        <div class="space-y-2">
+          ${[
+            { area:'Κολωνάκι',   area_en:'Kolonaki',  go:'po-12-01', selected:true },
+            { area:'Γλυφάδα',    area_en:'Glyfada',   go:'po-12-02', selected:true },
+            { area:'Κηφισιά',    area_en:'Kifissia',  go:'po-12-03', selected:false },
+          ].map(s => `
+            <label class="flex items-center gap-3 p-3 bg-bg/30 border border-line rounded cursor-pointer">
+              <input type="checkbox" ${s.selected?'checked':''} class="w-4 h-4 accent-brand">
+              <div class="w-9 h-9 rounded-sm bg-accent-soft text-accent flex items-center justify-center">${icons.shop}</div>
+              <div class="flex-1">
+                <div class="font-semibold text-[14px]">${L('Ταβέρνα Ποσειδών','Taverna Poseidon')} · ${L(s.area, s.area_en)}</div>
+                <div class="text-[11.5px] text-ink-faint font-mono">GO: ${s.go}</div>
+              </div>
+            </label>`).join('')}
+        </div>
+      `)}
+
+      ${FormSection(L('Διάρκεια','Validity'), L('Πότε ξεκινά. Λήξη μπορεί να μπει αργότερα.','When it starts. End date can be set later.'), `
+        <div class="grid md:grid-cols-2 gap-4">
+          ${Field({label:L('Ημερομηνία έναρξης','Start date'), hint:L('Ενεργοποιείται αμέσως αν είναι σήμερα.','Activates immediately if today.'), children: `
+            <input type="date" value="${new Date().toISOString().slice(0,10)}" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+          ${Field({label:L('Λήξη (προαιρετικό)','End date (optional)'), children: `
+            <input type="date" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+        </div>
+      `)}
+
+      ${FormSection(L('Σημειώσεις','Notes'), L('Εσωτερικές για το orexi team — δεν τις βλέπει η εταιρεία ή ο συνεργάτης.','Internal — neither company nor vendor sees these.'), `
+        <textarea rows="3" class="w-full px-3 py-2 bg-surface border border-line rounded-xs text-[14px]" placeholder="${L('π.χ. Διαπραγμάτευση από τον Σ. — επανέλεγχος όρων σε 6 μήνες.','e.g. Negotiated by S. — review terms in 6 months.')}"></textarea>
+      `)}
+
+      ${FormSection(L('Ειδοποιήσεις','Notifications'), L('Ποιους ενημερώνουμε με την δημιουργία.','Who gets pinged on creation.'), `
+        <div class="space-y-2">
+          <label class="flex items-start gap-3 p-3.5 border border-line rounded cursor-pointer">
+            <input type="checkbox" checked class="mt-0.5 w-4 h-4 accent-brand">
+            <div>
+              <div class="text-[13.5px] font-semibold">${L('Email στον admin της εταιρείας','Email the company admin')}</div>
+              <div class="text-[12.5px] text-ink-soft mt-0.5">${L('Με τους όρους της συμφωνίας και τα διαθέσιμα καταστήματα.','With agreement terms and the participating stores.')}</div>
+            </div>
+          </label>
+          <label class="flex items-start gap-3 p-3.5 border border-line rounded cursor-pointer">
+            <input type="checkbox" checked class="mt-0.5 w-4 h-4 accent-brand">
+            <div>
+              <div class="text-[13.5px] font-semibold">${L('Email στον συνεργάτη','Email the vendor')}</div>
+              <div class="text-[12.5px] text-ink-soft mt-0.5">${L('Πληροφορίες για την εταιρεία, αναμενόμενος όγκος.','Company details, expected volume.')}</div>
+            </div>
+          </label>
+        </div>
+      `)}
+    </div>
+  </section>
+
+  <div class="sticky bottom-0 bg-surface/95 backdrop-blur border-t border-line">
+    <div class="max-w-[1000px] px-8 py-3.5 flex items-center justify-between gap-4">
+      <div class="text-[12.5px] text-ink-soft">${L('Δημιουργήστε ως πρόχειρο ή ενεργοποιήστε αμέσως.','Create as draft, or activate immediately.')}</div>
+      <div class="flex items-center gap-2">
+        <a href="#admin/admin-matchmaking">${Btn('secondary','md', L('Ακύρωση','Cancel'))}</a>
+        <button onclick="orexiAct('${L('Συμφωνία αποθηκεύτηκε ως πρόχειρο','Agreement saved as draft')}','admin/admin-matchmaking','info')" class="inline-flex items-center justify-center h-10 px-4 bg-surface text-ink border border-line rounded font-medium text-[14px] hover:border-ink-soft">${L('Πρόχειρο','Save as draft')}</button>
+        <button onclick="orexiAsk({title:'${L('Δημιουργία & ενεργοποίηση;','Create & activate?')}',body:'${L('Η εταιρεία και ο συνεργάτης θα ειδοποιηθούν αμέσως. Το κατάστημα θα γίνει διαθέσιμο για παραγγελίες από σήμερα.','Company and vendor are notified immediately. Vendor becomes available for orders today.')}',confirmLabel:'${L('Ενεργοποίηση','Activate')}',onConfirm:()=>orexiAct('${L('Συμφωνία ενεργοποιήθηκε','Agreement activated')}','admin/admin-matchmaking')})" class="inline-flex items-center justify-center gap-2 h-10 px-4 bg-brand text-white rounded font-medium text-[14px] hover:bg-brand-hover"><span>${icons.check}</span><span>${L('Δημιουργία & ενεργοποίηση','Create & activate')}</span></button>
+      </div>
+    </div>
+  </div>`;
+};
 
 /* ===================================================================
    PAGE: Platform Admin — Topup queue
@@ -5230,7 +5396,8 @@ const routes = {
   'admin/admin-vendor':      { persona:'admin',    render: page_admin_vendor_detail },
   'admin/admin-vendor-new':  { persona:'admin',    render: page_admin_vendor_new },
   'admin/admin-vendor-edit': { persona:'admin',    render: page_admin_vendor_edit },
-  'admin/admin-matchmaking': { persona:'admin',    render: page_admin_matchmaking },
+  'admin/admin-matchmaking':     { persona:'admin',    render: page_admin_matchmaking },
+  'admin/admin-matchmaking-new': { persona:'admin',    render: page_admin_matchmaking_new },
   'admin/admin-topups':      { persona:'admin',    render: page_admin_topups },
   'admin/admin-audit':       { persona:'admin',    render: page_admin_audit },
   'admin/admin-settings':    { persona:'admin',    render: page_soon },
