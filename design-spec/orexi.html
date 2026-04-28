@@ -106,11 +106,16 @@ tailwind.config = {
    =================================================================== */
 
 const state = {
-  lang:       localStorage.getItem('orexi.lang') || 'el',
-  persona:    'home',
-  route:      'home',
-  be_assign:  'group', /* 'all' | 'group' | 'pick' — benefit editor assignment mode */
-  emp_picker: ['e1','e3','e5'], /* selected employee ids for 'pick' mode */
+  lang:        localStorage.getItem('orexi.lang') || 'el',
+  persona:     'home',
+  route:       'home',
+  be_assign:   'group', /* 'all' | 'group' | 'pick' — benefit editor assignment mode */
+  emp_picker:  ['e1','e3','e5'], /* selected employee ids for 'pick' mode */
+  be_cadence:  'monthly',  /* 'daily' | 'weekly' | 'monthly' | 'one_time' */
+  be_dom:      1,          /* day of month 1-31 (for monthly cadence) */
+  be_dom_eom:  false,      /* true = last day of month (overrides be_dom) */
+  be_dow:      1,          /* ISO day of week 1-7 (for weekly cadence) */
+  be_time:     '06:00',    /* anchor time HH:MM */
 };
 
 /* ---------- strings ---------- */
@@ -1354,7 +1359,71 @@ const page_co_benefit_edit = () => {
       </div>
     `)}
 
-    ${FormSection(t('be_sec_amount'), t('be_sec_amount_sub'), `
+    ${FormSection(t('be_sec_amount'), t('be_sec_amount_sub'), (() => {
+      const cadenceMap = { monthly:t('bens_cad_monthly'), weekly:t('bens_cad_weekly'), daily:t('bens_cad_daily'), one_time:t('bens_type_one_time') };
+      const cadenceOpt = (v) => `<option value="${v}" ${state.be_cadence===v?'selected':''}>${cadenceMap[v]}</option>`;
+      const dowDays = ['mon','tue','wed','thu','fri','sat','sun'];
+      const previewMonthly = state.be_dom_eom
+        ? L('Τελευταία ημέρα κάθε μήνα στις','Last day of each month at')
+        : L(`Στις ${state.be_dom} κάθε μήνα στις`,`Day ${state.be_dom} of each month at`);
+      const previewWeekly  = L(`Κάθε ${t('be_day_'+dowDays[state.be_dow-1])} στις`,`Every ${t('be_day_'+dowDays[state.be_dow-1])} at`);
+      const previewDaily   = L('Κάθε μέρα στις','Every day at');
+
+      let anchorPanel = '';
+      if (state.be_cadence === 'monthly') {
+        anchorPanel = `
+          <div class="grid md:grid-cols-[1fr_auto_auto] gap-3 items-end">
+            ${Field({label:L('Ημέρα του μήνα','Day of month'), hint:L('1-31 · ή «τελευταία ημέρα»','1-31 · or "last day"'), children: `
+              <div class="flex items-center gap-1.5">
+                <input type="number" min="1" max="31" value="${state.be_dom}"
+                  ${state.be_dom_eom?'disabled':''}
+                  oninput="state.be_dom = Math.max(1,Math.min(31,parseInt(this.value)||1)); render()"
+                  class="w-20 h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15 ${state.be_dom_eom?'opacity-40':''}">
+                <label class="inline-flex items-center gap-1.5 text-[12.5px] text-ink-soft cursor-pointer ml-1">
+                  <input type="checkbox" ${state.be_dom_eom?'checked':''} onchange="state.be_dom_eom = this.checked; render()" class="w-4 h-4 accent-brand">
+                  ${L('Τελευταία ημέρα','Last day')}
+                </label>
+              </div>`})}
+            ${Field({label:L('Ώρα','Time'), hint:L('Europe/Athens','Europe/Athens'), children: `
+              <input type="time" value="${state.be_time}" oninput="state.be_time = this.value; render()" class="w-28 h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+          </div>`;
+      } else if (state.be_cadence === 'weekly') {
+        anchorPanel = `
+          <div>
+            <span class="block text-[12.5px] font-semibold text-ink mb-2">${L('Ημέρα της εβδομάδας','Day of week')}</span>
+            <div class="flex flex-wrap gap-1.5">
+              ${[1,2,3,4,5,6,7].map(d => {
+                const on = state.be_dow === d;
+                return `<button onclick="state.be_dow = ${d}; render()" class="w-12 h-10 border ${on?'border-brand bg-brand text-white':'border-line bg-surface text-ink-soft hover:text-ink'} rounded-xs text-[12.5px] font-semibold transition">${t('be_day_'+dowDays[d-1])}</button>`;
+              }).join('')}
+            </div>
+            <div class="mt-3 max-w-[200px]">
+              ${Field({label:L('Ώρα','Time'), hint:L('Europe/Athens','Europe/Athens'), children: `
+                <input type="time" value="${state.be_time}" oninput="state.be_time = this.value; render()" class="w-28 h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+            </div>
+          </div>`;
+      } else if (state.be_cadence === 'daily') {
+        anchorPanel = `
+          <div class="max-w-[200px]">
+            ${Field({label:L('Ώρα ανανέωσης','Top-up time'), hint:L('Europe/Athens · 3-pass retry στις 05:00 / 08:00 / 12:00 αν αποτύχει','Europe/Athens · retry at 05:00 / 08:00 / 12:00 if it fails'), children: `
+              <input type="time" value="${state.be_time}" oninput="state.be_time = this.value; render()" class="w-28 h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+          </div>`;
+      } else {
+        anchorPanel = `
+          <div class="grid md:grid-cols-2 gap-3 max-w-md">
+            ${Field({label:L('Ημερομηνία','Date'), children: `<input type="date" value="2026-04-15" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+            ${Field({label:L('Ώρα','Time'), children: `<input type="time" value="${state.be_time}" oninput="state.be_time = this.value; render()" class="w-28 h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono">`})}
+          </div>`;
+      }
+
+      const previewLabel = {
+        monthly:  previewMonthly,
+        weekly:   previewWeekly,
+        daily:    previewDaily,
+        one_time: L('Στις','At'),
+      }[state.be_cadence];
+
+      return `
       <div class="grid md:grid-cols-2 gap-4">
         ${Field({label:t('be_amount_label'), hint:t('be_amount_hint'), children: `
           <div class="relative">
@@ -1363,20 +1432,32 @@ const page_co_benefit_edit = () => {
               class="w-full h-10 pl-7 pr-3 bg-surface border border-line rounded-xs text-[14px] font-mono focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15 transition">
           </div>`})}
         ${Field({label:t('be_cadence_label'), children: `
-          <select class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15 transition">
-            <option>${t('bens_cad_monthly')}</option>
-            <option>${t('bens_cad_weekly')}</option>
-            <option>${t('bens_cad_daily')}</option>
+          <select onchange="state.be_cadence = this.value; render()" class="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15 transition">
+            ${cadenceOpt('monthly')}${cadenceOpt('weekly')}${cadenceOpt('daily')}${cadenceOpt('one_time')}
           </select>`})}
       </div>
+
+      <!-- Anchor — when does the top-up actually fire -->
+      <div class="mt-5 bg-bg/50 border border-line rounded p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[12.5px] font-semibold text-ink">${L('Πότε ακριβώς γίνεται η ανανέωση;','When exactly does it top up?')}</span>
+          <span class="text-[11px] text-ink-faint">${L('ωρολογιακή ζώνη Αθήνας','Athens timezone')}</span>
+        </div>
+        ${anchorPanel}
+        <div class="mt-3 pt-3 border-t border-line text-[12.5px] text-ink-soft">
+          <span class="text-ink-faint uppercase tracking-[0.06em] font-semibold text-[10.5px]">${L('Προεπισκόπηση','Preview')}</span>
+          <span class="ml-2 text-ink font-medium">${previewLabel} <span class="num">${state.be_time}</span></span>
+        </div>
+      </div>
+
       <div class="mt-5">
         <span class="block text-[12.5px] font-semibold text-ink mb-2">${t('be_carryover_label')}</span>
         <div class="grid md:grid-cols-2 gap-2">
           ${radioCard('carry','reset',true,  t('be_carryover_reset'),  t('be_carryover_reset_sub'))}
           ${radioCard('carry','accum',false, t('be_carryover_accum'),  t('be_carryover_accum_sub'))}
         </div>
-      </div>
-    `)}
+      </div>`;
+    })())}
 
     ${FormSection(t('be_sec_rules'), t('be_sec_rules_sub'), `
       <div class="grid md:grid-cols-3 gap-4">
