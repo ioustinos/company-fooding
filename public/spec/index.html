@@ -116,6 +116,7 @@ const state = {
   be_dom_eom:  false,      /* true = last day of month (overrides be_dom) */
   be_dow:      1,          /* ISO day of week 1-7 (for weekly cadence) */
   be_time:     '06:00',    /* anchor time HH:MM */
+  emp_create_mode: 'one',  /* 'one' | 'csv' — new-employee form mode */
 };
 
 /* ---------- strings ---------- */
@@ -647,6 +648,37 @@ window.orexiAsk = (cfg) => orexiConfirm(cfg);
 window.orexiUnpick = (id) => {
   state.emp_picker = state.emp_picker.filter(x => x !== id);
   render();
+};
+
+/* ---------- Download a sample employee-import CSV ----------
+   Generates a Blob in-memory, triggers a browser download.
+   Same pattern Base44 used in their Employees page. */
+window.orexiDownloadEmployeeCSV = () => {
+  const headers = ['display_name','email','employee_id','group_code','office_label','start_date','status'];
+  const rows = [
+    ['Μαρία Παπαδοπούλου',  'maria.p@acme.gr',   'HR-0001', 'ENG',   'Athens HQ',    '2024-12-01', 'active'],
+    ['Γιώργος Αθανασίου',   'giorgos.a@acme.gr', 'HR-0002', 'ENG',   'Athens HQ',    '2024-09-15', 'active'],
+    ['Έλενα Νικολαΐδη',     'elena.n@acme.gr',   'HR-0003', 'SALES', 'Thessaloniki', '2025-02-10', 'active'],
+    ['Νίκος Παππάς',        'nikos.p@acme.gr',   'HR-0042', 'OPS',   'Athens HQ',    '2026-04-01', 'invited'],
+  ];
+  const groupsList  = mock.groups.filter(g => g.status === 'active').map(g => g.code+' = '+(state.lang==='el'?g.name_el:g.name_en)+' ('+g.people+')').join(' · ');
+  const officesList = ['Athens HQ', 'Thessaloniki', 'Remote'].join(' · ');
+  const csv = headers.join(',') + '\n'
+    + rows.map(r => r.map(c => /[",\n]/.test(c) ? '"'+c.replace(/"/g,'""')+'"' : c).join(',')).join('\n')
+    + '\n\n# Available group_code values: ' + groupsList
+    + '\n# Available office_label values: ' + officesList
+    + '\n# status values: active, invited, inactive (defaults to invited)'
+    + '\n# Lines starting with # and the trailing block are ignored by the importer.'
+    + '\n';
+  const blob = new Blob(['﻿'+csv], { type:'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'orexi-employees-sample.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 200);
+  orexiToast(L('Δείγμα CSV κατέβηκε','Sample CSV downloaded'), 'info');
 };
 
 /* ---------- tag vocabulary (slug → localized label) ---------- */
@@ -1688,7 +1720,7 @@ const page_co_employees = () => {
         <p class="text-ink-soft mt-2 text-[15px] max-w-xl">${t('emps_sub')}</p>
       </div>
       <div class="flex items-center gap-2">
-        ${Btn('secondary','md', `${t('emps_import')}`)}
+        <button onclick="state.emp_create_mode='csv'; location.hash='company/co-employee-new'" class="inline-flex items-center justify-center gap-2 font-medium rounded transition bg-surface text-ink border border-line hover:border-ink-soft h-10 px-4 text-[14px]"><span>${icons.file}</span><span>${t('emps_import')}</span></button>
         <a href="#company/co-employee-new">${Btn('primary','md', `<span>${icons.plus}</span><span>${t('emps_invite')}</span>`)}</a>
       </div>
     </div>
@@ -4697,10 +4729,91 @@ const page_co_employee_new = () => {
 
     <!-- Mode toggle -->
     <div class="flex items-center gap-0.5 bg-bg border border-line rounded p-0.5 mb-6 w-fit">
-      <button class="px-4 py-1.5 rounded-xs text-[13px] font-medium bg-surface shadow-sm text-ink">${L('Ένα άτομο','One person')}</button>
-      <button class="px-4 py-1.5 rounded-xs text-[13px] font-medium text-ink-soft hover:text-ink">${L('Εισαγωγή CSV','Import CSV')}</button>
+      <button onclick="state.emp_create_mode='one'; render()" class="px-4 py-1.5 rounded-xs text-[13px] font-medium transition ${state.emp_create_mode==='one'?'bg-surface shadow-sm text-ink':'text-ink-soft hover:text-ink'}">${L('Ένα άτομο','One person')}</button>
+      <button onclick="state.emp_create_mode='csv'; render()" class="px-4 py-1.5 rounded-xs text-[13px] font-medium transition ${state.emp_create_mode==='csv'?'bg-surface shadow-sm text-ink':'text-ink-soft hover:text-ink'}">${L('Εισαγωγή CSV','Import CSV')}</button>
     </div>
 
+    ${state.emp_create_mode === 'csv' ? `
+    <!-- CSV import flow -->
+    <div class="space-y-4">
+      ${FormSection(L('Δείγμα CSV','Sample CSV'), L('Κατεβάστε το πρότυπο για να δείτε ακριβώς τις στήλες, τους έγκυρους κωδικούς ομάδας και τα γραφεία της εταιρείας σας.','Download the template to see the exact columns, valid group codes, and your company’s offices.'), `
+        <div class="flex items-center gap-3 flex-wrap">
+          <button onclick="orexiDownloadEmployeeCSV()" class="inline-flex items-center justify-center gap-2 h-10 px-4 bg-brand text-white rounded font-medium text-[14px] hover:bg-brand-hover">
+            ${icons.file}
+            <span>${L('Κατέβασμα δείγματος CSV','Download sample CSV')}</span>
+          </button>
+          <span class="text-[12.5px] text-ink-soft font-mono">orexi-employees-sample.csv · UTF-8</span>
+        </div>
+      `)}
+
+      ${FormSection(L('Μορφή αρχείου','File format'), L('Πρώτη γραμμή = headers. Οι κωδικοί ομάδας/γραφείου πρέπει να αντιστοιχούν σε αυτά που έχετε ήδη ορίσει.','First row = headers. Group codes and office labels must match what you already have.'), `
+        <div class="bg-bg/50 border border-line rounded p-4 text-[12.5px] font-mono leading-[18px] text-ink-soft overflow-x-auto">
+          <div><span class="text-ink font-semibold">display_name</span><span class="text-ink-faint">,</span><span class="text-ink font-semibold">email</span><span class="text-ink-faint">,</span>employee_id<span class="text-ink-faint">,</span>group_code<span class="text-ink-faint">,</span>office_label<span class="text-ink-faint">,</span>start_date<span class="text-ink-faint">,</span>status</div>
+          <div class="mt-1.5 text-ink-faint">Μαρία Παπαδοπούλου,maria.p@acme.gr,HR-0001,ENG,Athens HQ,2024-12-01,active</div>
+          <div class="text-ink-faint">Γιώργος Αθανασίου,giorgos.a@acme.gr,HR-0002,ENG,Athens HQ,2024-09-15,active</div>
+          <div class="text-ink-faint">Νίκος Παππάς,nikos.p@acme.gr,HR-0042,OPS,Athens HQ,2026-04-01,invited</div>
+        </div>
+        <div class="mt-4 grid md:grid-cols-2 gap-4">
+          <div>
+            <div class="text-[11.5px] uppercase tracking-[0.08em] text-ink-faint font-semibold mb-1.5">${L('Υποχρεωτικά','Required')}</div>
+            <ul class="text-[12.5px] text-ink-soft space-y-1 list-disc list-inside">
+              <li><span class="font-mono text-ink">display_name</span></li>
+              <li><span class="font-mono text-ink">email</span> ${L('(πρέπει να είναι μοναδικό)','(must be unique)')}</li>
+            </ul>
+          </div>
+          <div>
+            <div class="text-[11.5px] uppercase tracking-[0.08em] text-ink-faint font-semibold mb-1.5">${L('Προαιρετικά','Optional')}</div>
+            <ul class="text-[12.5px] text-ink-soft space-y-1 list-disc list-inside">
+              <li><span class="font-mono text-ink">employee_id</span> · HR ID</li>
+              <li><span class="font-mono text-ink">group_code</span> · ${L('default','default')} <span class="font-mono">ALL</span></li>
+              <li><span class="font-mono text-ink">office_label</span></li>
+              <li><span class="font-mono text-ink">start_date</span> · YYYY-MM-DD</li>
+              <li><span class="font-mono text-ink">status</span> · ${L('default','default')} <span class="font-mono">invited</span></li>
+            </ul>
+          </div>
+        </div>
+      `)}
+
+      ${FormSection(L('Έγκυροι κωδικοί ομάδας','Valid group codes'), L('Αυτοί που υπάρχουν αυτή τη στιγμή στην εταιρεία σας. Εάν θέλετε νέους, δημιουργήστε τους πρώτα στις Ομάδες.','The codes currently active in your company. To use new ones, create them first under Groups.'), `
+        <div class="flex flex-wrap gap-1.5">
+          ${mock.groups.filter(g => g.status === 'active').map(g => `
+            <span class="inline-flex items-center gap-2 px-2.5 h-8 bg-bg border border-line rounded-sm text-[12.5px]">
+              <span class="num font-semibold">${g.code}</span>
+              <span class="text-ink-soft">${L(g.name_el, g.name_en)}</span>
+              <span class="text-ink-faint">·</span>
+              <span class="num text-[11px] text-ink-faint">${g.people}</span>
+            </span>`).join('')}
+        </div>
+        <div class="mt-3">
+          <a href="#company/co-groups" class="text-[12.5px] text-brand font-medium hover:underline">${L('Διαχείριση ομάδων →','Manage groups →')}</a>
+        </div>
+      `)}
+
+      ${FormSection(L('Ανέβασμα αρχείου','Upload'), L('Σύρετε το αρχείο εδώ ή πατήστε για επιλογή.','Drag a CSV here or click to pick.'), `
+        <label class="block w-full border-2 border-dashed border-line rounded-md p-8 text-center cursor-pointer hover:border-brand hover:bg-brand-soft/30 transition">
+          <input type="file" accept=".csv,text/csv" class="hidden" onchange="orexiToast('${L('Έλεγχος αρχείου…','Validating file…')}','info'); setTimeout(()=>orexiToast('${L('Έγκυρο · 84 γραμμές · 0 σφάλματα','Valid · 84 rows · 0 errors')}','success'),900)">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-brand-soft text-brand mb-3">${icons.file}</div>
+          <div class="font-semibold text-[14px]">${L('Επιλέξτε CSV ή σύρετέ το εδώ','Choose a CSV or drop it here')}</div>
+          <div class="text-[12px] text-ink-soft mt-1">${L('Μέγιστο 5MB · UTF-8 · έως 5.000 γραμμές','Max 5MB · UTF-8 · up to 5,000 rows')}</div>
+        </label>
+        <div class="mt-3 text-[12px] text-ink-soft flex items-start gap-2">
+          <span class="text-accent shrink-0">●</span>
+          <span>${L('Πριν την εισαγωγή θα δείτε προεπισκόπηση: πόσοι θα δημιουργηθούν, πόσοι θα ενημερωθούν, πόσες γραμμές έχουν λάθη.','Before importing you’ll see a preview: how many will be created, updated, or have row-level errors.')}</span>
+        </div>
+      `)}
+
+      ${FormSection(L('Πρόσκληση','Invite on import'), L('Τι συμβαίνει με τους εισαχθέντες υπαλλήλους.','What happens to imported employees.'), `
+        <label class="flex items-start gap-3 p-3.5 border border-line rounded cursor-pointer">
+          <input type="checkbox" checked class="mt-0.5 w-4 h-4 accent-brand">
+          <div>
+            <div class="text-[13.5px] font-semibold">${L('Στείλε email πρόσκλησης σε όλους τους νέους','Send invite to all new employees')}</div>
+            <div class="text-[12.5px] text-ink-soft mt-0.5">${L('Δεν αποστέλλεται σε υπάρχοντες (matching email).','Existing employees are matched by email — no duplicate invites.')}</div>
+          </div>
+        </label>
+      `)}
+    </div>
+    ` : `
+    <!-- One-person flow (existing) -->
     <div class="space-y-4">
       ${FormSection(L('Στοιχεία ατόμου','Person'), L('Όνομα και email απαιτούνται. Τα υπόλοιπα μπορούν να μπουν αργότερα.','Name and email are required. Everything else can be added later.'), `
         <div class="grid md:grid-cols-2 gap-4">
@@ -4765,14 +4878,17 @@ const page_co_employee_new = () => {
         </label>
       `)}
     </div>
+    `}
   </section>
 
   <div class="sticky bottom-0 bg-surface/95 backdrop-blur border-t border-line">
     <div class="max-w-[860px] px-8 py-3.5 flex items-center justify-between gap-4">
-      <div class="text-[12.5px] text-ink-soft">${L('Μπορείτε να επεξεργαστείτε οτιδήποτε αργότερα.','You can change any of this later.')}</div>
+      <div class="text-[12.5px] text-ink-soft">${state.emp_create_mode==='csv' ? L('Έλεγχος πριν την εισαγωγή — δεν δημιουργείται τίποτα ακόμα.','Validation only — nothing is created yet.') : L('Μπορείτε να επεξεργαστείτε οτιδήποτε αργότερα.','You can change any of this later.')}</div>
       <div class="flex items-center gap-2">
         <a href="#company/co-employees">${Btn('secondary','md', L('Ακύρωση','Cancel'))}</a>
-        <button onclick="orexiAct('${L('Πρόσκληση εστάλη','Invitation sent')}','company/co-employees')" class="inline-flex items-center justify-center gap-2 h-10 px-4 bg-brand text-white rounded font-medium text-[14px] hover:bg-brand-hover"><span>${icons.check}</span><span>${L('Δημιουργία & πρόσκληση','Create & invite')}</span></button>
+        ${state.emp_create_mode === 'csv'
+          ? `<button onclick="orexiAct('${L('84 υπάλληλοι εισήχθησαν','Imported 84 employees')}','company/co-employees')" class="inline-flex items-center justify-center gap-2 h-10 px-4 bg-brand text-white rounded font-medium text-[14px] hover:bg-brand-hover"><span>${icons.check}</span><span>${L('Εισαγωγή 84 υπαλλήλων','Import 84 employees')}</span></button>`
+          : `<button onclick="orexiAct('${L('Πρόσκληση εστάλη','Invitation sent')}','company/co-employees')" class="inline-flex items-center justify-center gap-2 h-10 px-4 bg-brand text-white rounded font-medium text-[14px] hover:bg-brand-hover"><span>${icons.check}</span><span>${L('Δημιουργία & πρόσκληση','Create & invite')}</span></button>`}
       </div>
     </div>
   </div>`;
