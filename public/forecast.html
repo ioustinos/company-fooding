@@ -90,7 +90,13 @@
   /* Totals — highlighted */
   table.forecast tr.is-total td { font-weight: 700; font-size: 12.5px; border-top: 2px solid #9ca3af; border-bottom: 2px solid #9ca3af; }
   table.forecast tr.is-total td:first-child { color: #111827; }
+  /* Hero row — Monthly Profit gets the biggest visual emphasis */
+  table.forecast tr.is-hero td { font-weight: 900 !important; font-size: 14.5px !important; padding: 11px 10px !important; border-top: 3px solid #4b5563 !important; border-bottom: 3px solid #4b5563 !important; }
+  table.forecast tr.is-hero td:first-child { color: #111827 !important; text-transform: uppercase; letter-spacing: 0.04em; font-size: 13px !important; }
   table.forecast td.neg { color: #b91c1c; }
+  /* Sticky group-section labels — stay visible at the left edge when scrolling horizontally */
+  table.forecast tr.group td { position: relative; }
+  table.forecast .group-label { position: sticky; left: 12px; display: inline-block; }
   /* % mode toggle */
   .pct-mode-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4b5563; }
   .pct-mode-toggle input { margin: 0; }
@@ -132,6 +138,11 @@
   .model-section h2 { margin: 0 !important; padding: 0 !important; font-size: 17px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: white !important; border: none !important; background: transparent !important; border-radius: 0 !important; }
   .model-section .desc { font-size: 13px; opacity: 0.92; margin-top: 6px; font-weight: 400; }
   .model-section.acquisition { background: linear-gradient(to right, #7c3aed, #db2777); box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25); }
+  .model-section.forecast-table { background: linear-gradient(to right, #0f766e, #0e7490); box-shadow: 0 2px 8px rgba(15, 118, 110, 0.25); }
+  /* % toggle when it lives inside the table banner */
+  .pct-mode-toggle.table-banner-toggle { color: white; background: rgba(255,255,255,0.18); padding: 7px 13px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+  .pct-mode-toggle.table-banner-toggle:hover { background: rgba(255,255,255,0.28); }
+  .pct-mode-toggle.table-banner-toggle input { accent-color: white; }
 
   /* Events panel */
   .events-panel { background: white; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 20px; padding: 14px 16px; }
@@ -143,29 +154,28 @@
   .events-header button.primary { background: #2563eb; color: white; border-color: #2563eb; }
   .events-header button:hover { background: #f3f4f6; }
   .events-header button.primary:hover { background: #1e40af; }
-  .events-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-  .event { border: 1px solid #e5e7eb; border-radius: 8px; background: white; position: relative; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; min-width: 0; }
+  .events-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .event { border: 1px solid #e5e7eb; border-radius: 10px; background: white; position: relative; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; min-width: 0; }
   .event.disabled { opacity: 0.55; }
-  .event-header { display: flex; align-items: center; gap: 8px; padding: 11px 13px; background: #fafafa; border-bottom: 1px solid #f3f4f6; min-width: 0; }
-  .event-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
-  .event-section { min-width: 0; }
-  .event-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; font-weight: 700; margin-bottom: 4px; }
-  .event-line { display: flex; align-items: center; gap: 6px; font-size: 13px; flex-wrap: wrap; min-width: 0; }
+  .event-header { display: flex; align-items: center; gap: 9px; padding: 13px 15px; background: #fafafa; border-bottom: 1px solid #f3f4f6; min-width: 0; }
+  .event-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .event-section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: #6b7280; font-weight: 700; }
+  .event-line { display: flex; align-items: center; gap: 7px; font-size: 14px; flex-wrap: wrap; min-width: 0; }
   .event-line label { color: #6b7280; font-size: 12px; }
-  .event input[type=text] { flex: 1 1 0; min-width: 0; padding: 6px 9px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; font-weight: 600; background: white; }
-  .event input[type=number] { padding: 5px 7px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; width: 56px; background: white; }
-  .event textarea { width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 48px; line-height: 1.45; color: #4b5563; background: #fafafa; }
-  .event textarea:focus { background: white; border-color: #d1d5db; outline: none; }
-  .event select { padding: 5px 7px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white; max-width: 100%; }
+  .event input[type=text] { flex: 1 1 0; min-width: 0; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 5px; font-size: 15px; font-weight: 600; background: white; }
+  .event input[type=number] { padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 5px; font-size: 14px; width: 60px; background: white; }
+  .event textarea { width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 5px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 90px; line-height: 1.5; color: #4b5563; background: #fafafa; }
+  .event textarea:focus { background: white; border-color: #9ca3af; outline: none; }
+  .event select { padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 5px; font-size: 14px; background: white; max-width: 100%; }
   .event select.metric { flex: 1 1 0; min-width: 0; }
-  .event-toggle { padding: 5px 11px; background: #ecfdf5; border: 1px solid #86efac; cursor: pointer; border-radius: 4px; font-size: 12px; font-weight: 700; color: #166534; }
+  .event-toggle { padding: 6px 13px; background: #ecfdf5; border: 1px solid #86efac; cursor: pointer; border-radius: 5px; font-size: 13px; font-weight: 700; color: #166534; }
   .event-toggle.off { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
-  .event-color-swatch { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #d1d5db; cursor: pointer; padding: 0; flex-shrink: 0; }
-  .event-delete { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; cursor: pointer; font-size: 15px; line-height: 1; flex-shrink: 0; }
+  .event-color-swatch { width: 28px; height: 28px; border-radius: 5px; border: 1px solid #d1d5db; cursor: pointer; padding: 0; flex-shrink: 0; }
+  .event-delete { width: 28px; height: 28px; border-radius: 5px; border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; cursor: pointer; font-size: 16px; line-height: 1; flex-shrink: 0; }
   .event-delete:hover { background: #fee2e2; }
-  .event-status { font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; white-space: nowrap; }
-  .event-viz-toggle { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
-  .events-empty { color: #9ca3af; font-size: 13px; font-style: italic; padding: 22px; text-align: center; grid-column: 1 / -1; }
+  .event-status { font-size: 12px; padding: 4px 9px; border-radius: 5px; font-weight: 600; white-space: nowrap; }
+  .event-viz-toggle { font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
+  .events-empty { color: #9ca3af; font-size: 14px; font-style: italic; padding: 24px; text-align: center; grid-column: 1 / -1; }
 
   /* Modal for import */
   .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 100; }
@@ -220,7 +230,7 @@
       <div class="chart-box"><h3>A · Effective close-rate (after ramp + saturation)</h3><div class="event-strip" id="strip-effclose"></div><div class="chart-wrap"><canvas id="chart-effclose"></canvas></div></div>
       <div class="chart-box"><h3>B · Lead generation (paid + referrals stacked)</h3><div class="event-strip" id="strip-leads"></div><div class="chart-wrap"><canvas id="chart-leads"></canvas></div></div>
       <div class="chart-box"><h3>C · CAC — Customer Acquisition Cost (€)</h3><div class="event-strip" id="strip-cac"></div><div class="chart-wrap"><canvas id="chart-cac"></canvas></div></div>
-      <div class="chart-box"><h3>D · LTV : CAC ratio (rule of thumb: ≥ 3)</h3><div class="event-strip" id="strip-ltvcac"></div><div class="chart-wrap"><canvas id="chart-ltvcac"></canvas></div></div>
+      <div class="chart-box"><h3>D · LTV : CAC ratio — margin-based (rule of thumb: ≥ 3)</h3><div class="event-strip" id="strip-ltvcac"></div><div class="chart-wrap"><canvas id="chart-ltvcac"></canvas></div></div>
       <div class="chart-box"><h3>E · Effective churn rate (blended early + steady)</h3><div class="event-strip" id="strip-churn"></div><div class="chart-wrap"><canvas id="chart-churn"></canvas></div></div>
       <div class="chart-box"><h3>F · Penetration of SAM (employees)</h3><div class="event-strip" id="strip-penetration"></div><div class="chart-wrap"><canvas id="chart-penetration"></canvas></div></div>
     </div>
@@ -241,12 +251,14 @@
       <div class="chart-box"><h3>9 · Company valuation</h3><div class="event-strip" id="strip-valuation"></div><div class="chart-wrap"><canvas id="chart-valuation"></canvas></div></div>
     </div>
 
-    <div class="table-wrap">
-      <div style="display:flex;align-items:center;padding:0 14px;gap:14px">
-        <h3 style="margin:14px 0 8px">Monthly forecast table — drag horizontally to scroll</h3>
-        <span style="flex:1"></span>
-        <label class="pct-mode-toggle"><input type="checkbox" id="table-pct-mode" onchange="togglePctMode(this.checked)"> show monetary values as % of monthly revenue</label>
+    <div class="model-section forecast-table">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <h2 style="flex:0 0 auto">Monthly forecast table</h2>
+        <label class="pct-mode-toggle table-banner-toggle"><input type="checkbox" id="table-pct-mode" onchange="togglePctMode(this.checked)"> show monetary values as % of monthly revenue</label>
       </div>
+      <div class="desc">Drag horizontally to scroll. Click any ⓘ icon for the formula and reasoning behind a row. Section labels stick to the left so you always know which block you're reading.</div>
+    </div>
+    <div class="table-wrap">
       <table class="forecast" id="forecast-table"></table>
     </div>
   </main>
@@ -282,9 +294,10 @@ const knobs = {
 
   // ---------- Market ----------
   startingCompanies: { group: 'Market', label: 'Starting companies (seed at M1)', min: 0, max: 100, step: 1, value: 6, fmt: 'int', overridable: false },
+  startingVendors: { group: 'Market', label: 'Starting vendors (floor at M1)', min: 0, max: 50, step: 1, value: 1, fmt: 'int', overridable: false },
   SAMEmployees: { group: 'Market', label: 'SAM — employees (growth cap)', min: 50000, max: 700000, step: 10000, value: 460000, fmt: 'int', overridable: false },
   avgCompanySize: { group: 'Market', label: 'Avg company size (employees)', min: 5, max: 60, step: 1, value: 20, fmt: 'int', overridable: true },
-  daysPerYear: { group: 'Market', label: 'Applicable days/year', min: 150, max: 250, step: 5, value: 220, fmt: 'int', overridable: false },
+  daysPerYear: { group: 'Market', label: 'Applicable days/year', min: 150, max: 250, step: 5, value: 230, fmt: 'int', overridable: false },
   participation: { group: 'Market', label: 'Participation (3/5 = 60%)', min: 0.30, max: 0.85, step: 0.05, value: 0.60, fmt: 'pct', overridable: true },
   mealValue: { group: 'Market', label: 'Avg meal value (€)', min: 5, max: 12, step: 0.5, value: 9, fmt: 'eur', overridable: true },
   extrasPerDay: { group: 'Market', label: 'Extras per employee per day (€)', min: 0, max: 5, step: 0.25, value: 1.25, fmt: 'eur2', overridable: true },
@@ -292,15 +305,15 @@ const knobs = {
 
   // ---------- Pricing ----------
   companyBaseSub: { group: 'Pricing', label: 'Company base subscription (€/mo)', min: 0, max: 300, step: 10, value: 100, fmt: 'eur', overridable: true },
-  companyPerEmployee: { group: 'Pricing', label: 'Per-employee fee (€/mo)', min: 0, max: 10, step: 0.25, value: 4, fmt: 'eur2', overridable: true },
+  companyPerEmployee: { group: 'Pricing', label: 'Per-employee fee (€/mo)', min: 0, max: 10, step: 0.25, value: 1, fmt: 'eur2', overridable: true },
   vendorSub: { group: 'Pricing', label: 'Vendor subscription (€/mo)', min: 0, max: 200, step: 5, value: 50, fmt: 'eur', overridable: true },
-  commissionRate: { group: 'Pricing', label: 'Vendor commission (% of GMV)', min: 0, max: 0.10, step: 0.005, value: 0.045, fmt: 'pct', overridable: true },
-  serviceFee: { group: 'Pricing', label: 'Service fee per order (€)', min: 0, max: 0.50, step: 0.05, value: 0.20, fmt: 'eur2', overridable: true },
+  commissionRate: { group: 'Pricing', label: 'Vendor commission (% of GMV)', min: 0, max: 0.10, step: 0.005, value: 0.055, fmt: 'pct', overridable: true },
+  serviceFee: { group: 'Pricing', label: 'Service fee per order (€)', min: 0, max: 0.50, step: 0.05, value: 0.25, fmt: 'eur2', overridable: true },
 
   // ---------- Delivery ----------
-  deliveryShare: { group: 'Delivery', label: 'Share of companies using delivery (1 drop/day each)', min: 0, max: 1, step: 0.05, value: 0.90, fmt: 'pct', overridable: true },
-  deliveryCharge: { group: 'Delivery', label: 'Delivery charge per drop (€, passed to customer)', min: 0, max: 10, step: 0.25, value: 4, fmt: 'eur2', overridable: true },
-  deliveryCost: { group: 'Delivery', label: 'Delivery cost per drop (€, courier outsourced)', min: 0, max: 10, step: 0.25, value: 4, fmt: 'eur2', overridable: true },
+  deliveryShare: { group: 'Delivery', label: 'Share of companies using delivery (1 drop/day each)', min: 0, max: 1, step: 0.05, value: 0.80, fmt: 'pct', overridable: true },
+  deliveryCharge: { group: 'Delivery', label: 'Delivery charge per drop (€, passed to customer)', min: 0, max: 10, step: 0.25, value: 7, fmt: 'eur2', overridable: true },
+  deliveryCost: { group: 'Delivery', label: 'Delivery cost per drop (€, courier outsourced)', min: 0, max: 10, step: 0.25, value: 6, fmt: 'eur2', overridable: true },
 
   // ---------- Sales engine ----------
   startMarketing: { group: 'Sales engine', label: 'Starting monthly marketing (€)', min: 0, max: 30000, step: 250, value: 3000, fmt: 'eur', overridable: true },
@@ -319,21 +332,21 @@ const knobs = {
   vendorGmvCapacity: { group: 'Operations', label: 'GMV per vendor / mo at capacity (€)', min: 5000, max: 50000, step: 1000, value: 20000, fmt: 'eur', overridable: true },
 
   // ---------- Churn — now in Growth and LTV Realism ----------
-  monthlyChurn: { group: 'Growth and LTV Realism', label: 'Monthly churn rate (steady-state)', min: 0, max: 0.10, step: 0.005, value: 0.02, fmt: 'pct', overridable: true },
-  churnHoneymoon: { group: 'Growth and LTV Realism', label: 'Honeymoon (months with no churn)', min: 0, max: 12, step: 1, value: 3, fmt: 'int', overridable: false },
+  monthlyChurn: { group: 'Growth and LTV Realism', label: 'Monthly churn rate (steady-state)', min: 0, max: 0.10, step: 0.005, value: 0.025, fmt: 'pct', overridable: true },
+  churnHoneymoon: { group: 'Growth and LTV Realism', label: 'Honeymoon (months with no churn)', min: 0, max: 12, step: 1, value: 6, fmt: 'int', overridable: false },
 
   // ---------- Fixed overhead — moved to Operations ----------
   founderCost: { group: 'Operations', label: 'Founders salaries (€/mo)', min: 0, max: 30000, step: 500, value: 0, fmt: 'eur', overridable: true },
   overheadPct: { group: 'Operations', label: 'Other overhead (% of revenue)', min: 0, max: 0.30, step: 0.005, value: 0.06, fmt: 'pct', overridable: true },
 
   // ---------- Valuation ----------
-  valuationMode: { group: 'Valuation', label: 'Mode (0 = profit ×, 1 = revenue ×)', min: 0, max: 1, step: 1, value: 0, fmt: 'mode', overridable: false },
+  valuationMode: { group: 'Valuation', label: 'Mode (0 = profit ×, 1 = revenue ×)', min: 0, max: 1, step: 1, value: 1, fmt: 'mode', overridable: false },
   valuationProfitMultiple: { group: 'Valuation', label: 'Profit multiple (×)', min: 0, max: 30, step: 0.5, value: 5, fmt: 'multiple', overridable: false },
-  valuationRevenueMultiple: { group: 'Valuation', label: 'Revenue multiple (×)', min: 0, max: 12, step: 0.5, value: 3, fmt: 'multiple', overridable: false },
+  valuationRevenueMultiple: { group: 'Valuation', label: 'Revenue multiple (×)', min: 0, max: 12, step: 0.5, value: 5, fmt: 'multiple', overridable: false },
 
   // ---------- Growth realism (acquisition model) ----------
-  coldStartMonths: { group: 'Growth and LTV Realism', label: 'Cold-start ramp (months to full close-rate)', min: 0, max: 18, step: 1, value: 0, fmt: 'int', overridable: true },
-  saturationStrength: { group: 'Growth and LTV Realism', label: 'Saturation strength β (0 = off)', min: 0, max: 20, step: 0.5, value: 0, fmt: 'float', overridable: true },
+  coldStartMonths: { group: 'Growth and LTV Realism', label: 'Cold-start ramp (months to full close-rate)', min: 0, max: 18, step: 1, value: 5, fmt: 'int', overridable: true },
+  saturationStrength: { group: 'Growth and LTV Realism', label: 'Saturation strength β (0 = off)', min: 0, max: 20, step: 0.5, value: 13, fmt: 'float', overridable: true },
   seasonalityEnabled: { group: 'Growth and LTV Realism', label: 'Greek calendar seasonality', min: 0, max: 1, step: 1, value: 0, fmt: 'onoff', overridable: true },
   referralCoefficient: { group: 'Growth and LTV Realism', label: 'Referral leads per active customer/mo', min: 0, max: 0.20, step: 0.005, value: 0, fmt: 'pct', overridable: true },
   earlyChurnMultiplier: { group: 'Growth and LTV Realism', label: 'Early-churn multiplier (1st N mo after honeymoon)', min: 1, max: 5, step: 0.25, value: 1, fmt: 'multiple', overridable: true },
@@ -342,6 +355,67 @@ const knobs = {
 
 // Explicit sidebar group order — overrides knob-definition order
 const GROUP_ORDER = ['Horizon', 'Market', 'Pricing', 'Delivery', 'Growth and LTV Realism', 'Sales engine', 'Operations', 'Valuation'];
+
+// Per-knob descriptions shown in a click-popup next to each slider label.
+// Each entry: brief explanation + which downstream metrics it touches + formula where relevant.
+const KNOB_DESCRIPTIONS = {
+  // Horizon
+  monthsHorizon: 'Total length of the forecast (months). Drives every chart x-axis and the table column count. No effect on per-month math.',
+  calendarStart: 'Calendar month corresponding to M1 in the simulation (1=Jan … 12=Dec). Affects: (a) seasonality timing when seasonality is on, (b) the calendar-mode x-axis labels.',
+  calendarStartYear: 'Starting year for the calendar-mode x-axis labels. Display only — has no effect on math.',
+  xAxisMode: 'Switches all chart x-axes and table column headers between "M1, M2, …" (relative) and "Jan \'26, Feb \'26, …" (calendar). Pure display.',
+  // Market
+  startingCompanies: 'Companies already onboarded at M1 (seed). Skips honeymoon — full churn applies from M1. Drives starting active employees, GMV, vendors needed.',
+  startingVendors: 'Minimum vendor count from M1. Vendors active = max(this, GMV ÷ vendor capacity). Useful when you have vendors signed up before customer volume justifies them; floors GMV-per-vendor utilisation in early months.',
+  SAMEmployees: 'Serviceable Addressable Market in employees. Caps total growth (active employees can\'t exceed this). Feeds: penetration % = active emps ÷ SAM, saturation multiplier = 1 ÷ (1 + β × penetration × 10).',
+  avgCompanySize: 'Mean employee count per active company. Used in: active employees = active companies × avg size; SAM companies = SAM employees ÷ avg size; ops FTE = companies ÷ companies-per-ops.',
+  daysPerYear: 'Applicable work days per year — feeds monthly day count via ÷ 12. Used in: monthly orders = active emps × participation × (days ÷ 12); GMV extras/catering = emps × days × €/day.',
+  participation: 'Share of work days an enrolled employee places a meal order. 60% ≈ "3 out of 5 days". Used only for MEAL GMV — extras and catering are independent of participation.',
+  mealValue: 'Average price of a meal (€). Drives: GMV meals = monthly orders × meal value; Commission — meals = meals GMV × commission rate.',
+  extrasPerDay: 'Daily per-employee spend on extras (coffee, snacks). Independent of participation — treated as a flat company budget. GMV extras = active emps × days/mo × €/day.',
+  cateringPerDay: 'Daily per-employee spend on catered events. Same logic as extras. GMV catering = active emps × days/mo × €/day. Defaults to €0 until the "Catering launches" event fires at M6.',
+  // Pricing
+  companyBaseSub: 'Fixed monthly subscription per active company. Revenue: company subs = active cos × (base + per-employee × avg size).',
+  companyPerEmployee: 'Per-active-employee monthly fee, on top of the base subscription.',
+  vendorSub: 'Fixed monthly subscription per active vendor. Revenue: vendor subs = active vendors × this.',
+  commissionRate: '% of GMV CF takes from vendors. Revenue: commission = GMV × rate. Split across meals / extras / catering in the breakdown.',
+  serviceFee: 'Flat per-order fee at checkout (paid by employee or company). Revenue: service fees = monthly orders × this.',
+  // Delivery
+  deliveryShare: '% of active companies that use the delivery service (the rest are canteen pickup). Deliveries/mo = active cos × this × days/mo (one drop per delivering company per work day).',
+  deliveryCharge: 'Charged to customer per delivery. Pass-through — not CF margin.',
+  deliveryCost: 'Paid to outsourced courier per delivery. Should ≈ charge so the net delivery margin sits near zero.',
+  // Sales engine
+  startMarketing: 'Starting monthly marketing spend at M1. Compounds at growth rate. Drives: paid leads = (spend × seasonality) ÷ CPL.',
+  marketingGrowth: 'Compound monthly growth in marketing budget. Spend(t) = start × (1 + growth)^(t−1). Event overrides apply on top.',
+  boostMonth: 'A specific month to spike marketing spend (0 = no boost). Combined with Boost amount.',
+  boostAmount: '€ added to marketing spend in the Boost month. Use for one-off campaigns. Otherwise events are the better mechanism.',
+  costPerLead: 'Marketing efficiency (€ per qualified lead). Paid leads = marketing ÷ CPL. Lower CPL → more leads at the same spend.',
+  leadCloseRate: 'Base lead → closed-deal conversion. Modulated by cold-start ramp & saturation. Effective close-rate = base × ramp × saturation.',
+  salesCycleMonths: 'Months from lead generated to deal closed. Closes in month (t + cycle). Doesn\'t affect total deals — only when they land.',
+  salesRepCapacity: 'Leads/month one sales rep can handle. Reps needed (half-step) = ceil(leads ÷ capacity × 2) ÷ 2.',
+  salesRepSalary: 'Loaded monthly cost per sales rep FTE (incl. employer contributions). Sales cost = reps × salary.',
+  // Operations
+  companiesPerOps: 'Companies one ops FTE can support. Drives ops headcount need (combined with vendors).',
+  vendorsPerOps: 'Vendors one ops FTE can support. Single role covers both vendor + company support in the model.',
+  opsSalary: 'Loaded monthly cost per ops FTE. Ops cost = half-step ops FTE × salary.',
+  techPerOrder: 'Per-order tech infra cost — Supabase, GonnaOrder, payment processing, etc. Tech cost = monthly orders × this.',
+  vendorGmvCapacity: 'Monthly GMV one vendor can fulfil at capacity. Vendors active = max(Starting vendors, GMV ÷ this). Drives GMV-per-vendor utilisation.',
+  founderCost: 'Founders\' monthly salary (lump sum). Defaults to 0; the "Founders salaries kick in" conditional event raises this once profit clears its threshold.',
+  overheadPct: '% of total revenue allocated to other overhead (legal, accounting, office, software). Overhead = revenue × this.',
+  // Growth and LTV Realism
+  monthlyChurn: 'Steady-state monthly churn rate (after honeymoon and early-churn period). Drives: churn count = active × rate; customer lifetime = 1 ÷ rate.',
+  churnHoneymoon: 'First N months of a customer\'s life with NO churn. New customers don\'t leave immediately. Honeymoon ends, then the early-churn band starts (if multiplier > 1×).',
+  coldStartMonths: 'Months to linearly ramp effective close-rate from 0% to base. Models Year-1 selling difficulty (no proof points, no brand). 0 = off.',
+  saturationStrength: 'β in the saturation formula. Effective close-rate × 1 ÷ (1 + β × penetration × 10). β = 0 disables; β = 13 means strong decay as you fill SAM — at 5% penetration you cut conversion to ~13% of base.',
+  seasonalityEnabled: 'When ON, paid leads × monthly multiplier (Jan 1.2×, Aug 0.4×, Sep 1.3×, Dec 0.5×, others ~1×). Models Greek B2B calendar.',
+  referralCoefficient: 'Free leads per active customer per month. Referral leads = active cos × coefficient. Compounds as the base grows; doesn\'t cost marketing money.',
+  earlyChurnMultiplier: 'Multiplier on churn rate for first N months past honeymoon. 1× disables; 2× doubles early churn (models bad-fit shake-out).',
+  earlyChurnMonths: 'Duration (months past honeymoon) over which the early-churn multiplier applies.',
+  // Valuation
+  valuationMode: 'Which valuation method drives the headline card + chart. Profit × multiplier OR Revenue × multiplier.',
+  valuationProfitMultiple: 'Multiplier on annualised profit (capped at zero on the low side). Profit valuation = max(0, profit × 12) × multiple. Typical B2B SaaS: 5–15×.',
+  valuationRevenueMultiple: 'Multiplier on annualised revenue. Revenue valuation = (revenue × 12) × multiple. Typical B2B SaaS / marketplace: 3–8×.',
+};
 
 // Greek B2B seasonality (multiplier on lead generation per calendar month)
 const SEASONALITY = { 1: 1.20, 2: 1.10, 3: 1.00, 4: 1.00, 5: 1.00, 6: 0.90, 7: 0.70, 8: 0.40, 9: 1.30, 10: 1.10, 11: 1.00, 12: 0.50 };
@@ -403,9 +477,9 @@ function seedDefaultEvents() {
     metric: 'founderCost', duration: 'permanent', valueType: 'absolute', value: 5000 });
   events.push({ id: nextEventId++, title: 'Marketing burst (pilot)', ...defaultEventFields(),
     color: '#8b5cf6',
-    description: 'Three-month aggressive marketing push during the pilot phase to validate demand. Spend drops back to base afterwards.',
+    description: 'Six-month sustained marketing push during the pilot phase to validate demand. Spend drops back to base afterwards.',
     triggerType: 'month', startMonth: 3,
-    metric: 'startMarketing', duration: 'months', durationMonths: 3, valueType: 'absolute', value: 12000 });
+    metric: 'startMarketing', duration: 'months', durationMonths: 6, valueType: 'absolute', value: 6000 });
   events.push({ id: nextEventId++, title: 'Churn improves at scale', ...defaultEventFields(),
     color: '#0ea5e9', enabled: false,
     description: 'Assumption: by Year 2 vendor diversity + product maturity drop monthly churn from 2% to 1.5%. Toggle on to test sensitivity.',
@@ -547,6 +621,8 @@ function buildSidebar() {
       const wrap = document.createElement('div');
       wrap.className = 'knob';
       wrap.dataset.group = groupSlug;
+      const desc = KNOB_DESCRIPTIONS[key];
+      const infoIcon = desc ? `<span class="info-icon" data-info-label="${escapeHtml(k.label)}" data-info-calc="${escapeHtml(desc)}">i</span>` : '';
       // Boolean / discrete-choice knobs render as a real select, not a slider
       if (k.fmt === 'onoff' || k.fmt === 'mode' || k.fmt === 'xaxis') {
         let options = '';
@@ -558,14 +634,14 @@ function buildSidebar() {
           options = `<option value="0" ${k.value === 0 ? 'selected' : ''}>M1, M2, M3, …</option><option value="1" ${k.value === 1 ? 'selected' : ''}>Jan '26, Feb '26, …</option>`;
         }
         wrap.innerHTML = `
-          <label><span>${k.label}</span></label>
+          <label><span>${k.label}${infoIcon}</span></label>
           <select id="${key}" style="width:100%;padding:5px 7px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;background:white">${options}</select>
         `;
         root.appendChild(wrap);
         wrap.querySelector('select').addEventListener('change', () => recompute());
       } else {
         wrap.innerHTML = `
-          <label><span>${k.label}</span><span class="value" id="val-${key}">${fmt(k.value, k.fmt)}</span></label>
+          <label><span>${k.label}${infoIcon}</span><span class="value" id="val-${key}">${fmt(k.value, k.fmt)}</span></label>
           <input type="range" id="${key}" min="${k.min}" max="${k.max}" step="${k.step}" value="${k.value}">
         `;
         root.appendChild(wrap);
@@ -605,16 +681,18 @@ function buildEventsPanel() {
   list.innerHTML = events.map(ev => {
     const statusBadge = ev.triggerType === 'condition'
       ? ((lastTriggerMap[ev.id] != null)
-          ? `<span class="event-status" style="background:#dcfce7;color:#166534">✓ M${lastTriggerMap[ev.id]}</span>`
-          : `<span class="event-status" style="background:#fef3c7;color:#92400e">⏳ pending</span>`)
-      : `<span class="event-status" style="background:#dbeafe;color:#1e40af">📅 M${ev.startMonth}</span>`;
+          ? `<span class="event-status" style="background:#dcfce7;color:#166534">✓ fired at M${lastTriggerMap[ev.id]}</span>`
+          : `<span class="event-status" style="background:#fef3c7;color:#92400e">⏳ pending condition</span>`)
+      : `<span class="event-status" style="background:#dbeafe;color:#1e40af">📅 fires at M${ev.startMonth}</span>`;
     const condUI = ev.triggerType === 'condition' ? `
       <div class="event-line">
+        <label>When</label>
         <select data-field="condAggregation">
-          <option value="last" ${ev.condAggregation === 'last' ? 'selected' : ''}>last</option>
+          <option value="last" ${ev.condAggregation === 'last' ? 'selected' : ''}>last value</option>
           <option value="sumLastN" ${ev.condAggregation === 'sumLastN' ? 'selected' : ''}>sum last</option>
         </select>
-        ${ev.condAggregation === 'sumLastN' ? `<input type="number" data-field="condLastN" value="${ev.condLastN}" min="1" max="36" style="width:34px">` : ''}
+        ${ev.condAggregation === 'sumLastN' ? `<input type="number" data-field="condLastN" value="${ev.condLastN}" min="1" max="36" style="width:42px"><span style="color:#6b7280;font-size:12px">mo</span>` : ''}
+        <span style="color:#6b7280;font-size:12px">of</span>
         <select data-field="condMetric" style="flex:1 1 0;min-width:0">
           <option value="profit" ${ev.condMetric === 'profit' ? 'selected' : ''}>profit</option>
           <option value="cumProfit" ${ev.condMetric === 'cumProfit' ? 'selected' : ''}>cum profit</option>
@@ -627,7 +705,7 @@ function buildEventsPanel() {
           <option value="gte" ${ev.condComparator === 'gte' ? 'selected' : ''}>≥</option>
           <option value="lte" ${ev.condComparator === 'lte' ? 'selected' : ''}>≤</option>
         </select>
-        <input type="number" step="any" data-field="condThreshold" value="${ev.condThreshold}" style="flex:1 1 0;min-width:40px">
+        <input type="number" step="any" data-field="condThreshold" value="${ev.condThreshold}" style="flex:1 1 0;min-width:60px">
       </div>` : '';
     return `
     <div class="event ${ev.enabled ? '' : 'disabled'}" data-id="${ev.id}">
@@ -641,33 +719,43 @@ function buildEventsPanel() {
         <div class="event-line">
           ${statusBadge}
           <span style="flex:1"></span>
-          <label class="event-viz-toggle"><input type="checkbox" data-field="showInViz" ${ev.showInViz !== false ? 'checked' : ''}> viz</label>
+          <label class="event-viz-toggle"><input type="checkbox" data-field="showInViz" ${ev.showInViz !== false ? 'checked' : ''}> show in charts &amp; table</label>
         </div>
-        <textarea data-field="description" rows="2" placeholder="Description / rationale">${escapeHtml(ev.description || '')}</textarea>
-        <div class="event-line">
-          <select data-field="triggerType">
-            <option value="month" ${ev.triggerType === 'month' ? 'selected' : ''}>by month</option>
-            <option value="condition" ${ev.triggerType === 'condition' ? 'selected' : ''}>by cond</option>
-          </select>
-          ${ev.triggerType !== 'condition' ? `<label>M</label><input type="number" data-field="startMonth" value="${ev.startMonth}" min="1" max="60" style="width:42px">` : ''}
+        <div>
+          <div class="event-section-label">Description</div>
+          <textarea data-field="description" rows="3" placeholder="What this event represents, rationale, source — anything useful">${escapeHtml(ev.description || '')}</textarea>
         </div>
-        ${condUI}
-        <div class="event-line">
-          <label>Override</label>
-          <select class="metric" data-field="metric">${metricOptionsHtml(ev.metric)}</select>
+        <div>
+          <div class="event-section-label">Trigger at</div>
+          <div class="event-line">
+            <select data-field="triggerType">
+              <option value="month" ${ev.triggerType === 'month' ? 'selected' : ''}>by month</option>
+              <option value="condition" ${ev.triggerType === 'condition' ? 'selected' : ''}>by condition</option>
+            </select>
+            ${ev.triggerType !== 'condition' ? `<label>month</label><input type="number" data-field="startMonth" value="${ev.startMonth}" min="1" max="60" style="width:48px">` : ''}
+          </div>
+          ${condUI}
         </div>
-        <div class="event-line">
-          <select data-field="duration">
-            <option value="oneoff" ${ev.duration === 'oneoff' ? 'selected' : ''}>1mo</option>
-            <option value="permanent" ${ev.duration === 'permanent' ? 'selected' : ''}>perm</option>
-            <option value="months" ${ev.duration === 'months' ? 'selected' : ''}>N mo</option>
-          </select>
-          ${ev.duration === 'months' ? `<input type="number" data-field="durationMonths" value="${ev.durationMonths}" min="1" max="60" style="width:38px">` : ''}
-          <select data-field="valueType">
-            <option value="absolute" ${ev.valueType === 'absolute' ? 'selected' : ''}>=</option>
-            <option value="factor" ${ev.valueType === 'factor' ? 'selected' : ''}>×prev</option>
-          </select>
-          <input type="number" step="any" data-field="value" value="${ev.value}" style="flex:1 1 0;min-width:50px">
+        <div>
+          <div class="event-section-label">Override</div>
+          <div class="event-line">
+            <select class="metric" data-field="metric">${metricOptionsHtml(ev.metric)}</select>
+          </div>
+          <div class="event-line" style="margin-top:6px">
+            <label>For</label>
+            <select data-field="duration">
+              <option value="oneoff" ${ev.duration === 'oneoff' ? 'selected' : ''}>1 month</option>
+              <option value="permanent" ${ev.duration === 'permanent' ? 'selected' : ''}>permanent</option>
+              <option value="months" ${ev.duration === 'months' ? 'selected' : ''}>N months</option>
+            </select>
+            ${ev.duration === 'months' ? `<input type="number" data-field="durationMonths" value="${ev.durationMonths}" min="1" max="60" style="width:48px"><span style="color:#6b7280;font-size:12px">mo</span>` : ''}
+            <label style="margin-left:6px">Value</label>
+            <select data-field="valueType">
+              <option value="absolute" ${ev.valueType === 'absolute' ? 'selected' : ''}>=</option>
+              <option value="factor" ${ev.valueType === 'factor' ? 'selected' : ''}>×prev</option>
+            </select>
+            <input type="number" step="any" data-field="value" value="${ev.value}" style="flex:1 1 0;min-width:60px">
+          </div>
         </div>
       </div>
     </div>
@@ -894,8 +982,13 @@ function computeForecast() {
     const gmvCatering = employeeWorkDays * cateringPerDay;
     const monthlyGMV = gmvMeals + gmvExtras + gmvCatering;
 
-    // Vendors needed
-    const vendorsActive = vendorGmvCap > 0 ? monthlyGMV / vendorGmvCap : 0;
+    // Vendors needed (floored by the seed of starting vendors at M1)
+    const startingVendorsFloor = Math.round(getKnob('startingVendors'));
+    const vendorsByDemand = vendorGmvCap > 0 ? monthlyGMV / vendorGmvCap : 0;
+    const vendorsActive = Math.max(startingVendorsFloor, vendorsByDemand);
+    // Per-unit ratios used downstream
+    const gmvPerCompany = activeCompanies > 0 ? monthlyGMV / activeCompanies : 0;
+    const gmvPerVendor = vendorsActive > 0 ? monthlyGMV / vendorsActive : 0;
 
     // Delivery — ISOLATED from P&L. Outsourced, pass-through, ~zero margin by design.
     // One consolidated drop per delivering-company per work day.
@@ -934,9 +1027,19 @@ function computeForecast() {
 
     // Acquisition unit economics
     const cac = newCompanies > 0.01 ? marketing / newCompanies : 0;
-    const arpcMonthly = activeCompanies > 0 ? totalRevenue / activeCompanies : 0; // avg revenue per customer/mo
+    const arpcMonthly = activeCompanies > 0 ? totalRevenue / activeCompanies : 0; // GROSS revenue per customer / mo
+
+    // Variable cost-to-serve per customer = allocable monthly variable cost ÷ active companies
+    // - opsCost covers BOTH company-ops AND vendor-ops headcount (since both scale with the customer base)
+    // - techCost is purely transactional (tech per order)
+    // We deliberately EXCLUDE: salesCost (acquisition, sits in CAC), marketing (CAC), founderCost (fixed),
+    // overheadCost (% of revenue, partly fixed/partly variable — we keep margin conservative by excluding).
+    const variableCostPerCo = activeCompanies > 0 ? (opsCost + techCost) / activeCompanies : 0;
+    const contributionMarginPerCo = arpcMonthly - variableCostPerCo;
+
     const customerLifetimeMo = churn > 0 ? Math.min(120, 1 / churn) : 120;
-    const ltv = arpcMonthly * customerLifetimeMo;
+    const ltvGross = arpcMonthly * customerLifetimeMo;            // revenue × lifetime
+    const ltv = contributionMarginPerCo * customerLifetimeMo;     // margin × lifetime — the meaningful one
     const ltvToCac = cac > 0 ? ltv / cac : 0;
 
     // Company valuation — both methods computed; chosen mode picked downstream
@@ -954,11 +1057,13 @@ function computeForecast() {
       // Acquisition model
       marketing, leads, paidLeads, referralLeads, repsNeeded,
       coldStartMult, saturationMult, seasonalityMult, effectiveCloseRate,
-      effectiveChurnRate, cac, arpcMonthly, customerLifetimeMo, ltv, ltvToCac,
+      effectiveChurnRate, cac, arpcMonthly, customerLifetimeMo,
+      variableCostPerCo, contributionMarginPerCo, ltv, ltvGross, ltvToCac,
       // Marketplace
       newCompanies, churned: totalChurned,
       activeCompanies, activeEmployees,
       vendorsActive, monthlyOrders,
+      gmvPerCompany, gmvPerVendor,
       deliveriesCount, revDelivery, deliveryCostTotal, deliveryMargin,
       gmvMeals, gmvExtras, gmvCatering, monthlyGMV,
       // P&L
@@ -1274,8 +1379,14 @@ function renderCharts(result) {
     },
   });
   makeChart('chart-revenue-cost', 'line', [
-    { label: 'Revenue', data: months.map(m => m.totalRevenue), borderColor: green, tension: 0.25 },
-    { label: 'Cost', data: months.map(m => m.totalCost), borderColor: red, tension: 0.25 },
+    { label: 'Company subs', data: months.map(m => m.revCompanySubs), borderColor: blue, tension: 0.25, borderWidth: 1.5 },
+    { label: 'Vendor subs', data: months.map(m => m.revVendorSubs), borderColor: cyan, tension: 0.25, borderWidth: 1.5 },
+    { label: 'Commission — meals', data: months.map(m => m.revCommissionMeals), borderColor: teal, tension: 0.25, borderWidth: 1.5 },
+    { label: 'Commission — extras', data: months.map(m => m.revCommissionExtras), borderColor: amber, tension: 0.25, borderWidth: 1.5 },
+    { label: 'Commission — catering', data: months.map(m => m.revCommissionCatering), borderColor: pink, tension: 0.25, borderWidth: 1.5 },
+    { label: 'Service fees', data: months.map(m => m.revServiceFee), borderColor: violet, tension: 0.25, borderWidth: 1.5 },
+    { label: 'Total revenue', data: months.map(m => m.totalRevenue), borderColor: green, tension: 0.25, borderWidth: 3 },
+    { label: 'Total cost', data: months.map(m => m.totalCost), borderColor: red, tension: 0.25, borderWidth: 3, borderDash: [6, 4] },
   ], labels);
   makeChart('chart-profit', 'bar', [
     { label: 'Monthly profit', data: months.map(m => m.profit), backgroundColor: months.map(m => m.profit >= 0 ? '#10b981' : '#ef4444') },
@@ -1334,17 +1445,22 @@ function renderTable(result) {
     { label: 'New companies closed', cat: 'funnel', calc: 'Total leads × Effective close-rate, delivered after Sales cycle lag (months).', metrics: ['leadCloseRate', 'salesCycleMonths'], get: m => m.newCompanies, fmt: 'float', kind: 'count' },
     { label: 'Churned companies', cat: 'funnel', calc: 'Cohort-by-cohort: early-multiplier × base churn for the first N months past honeymoon, then base churn.', metrics: ['monthlyChurn', 'earlyChurnMultiplier'], get: m => m.churned, fmt: 'float', kind: 'count' },
     { label: 'Effective churn rate', cat: 'funnel', calc: 'Churned ÷ Active companies — the blended rate after early-cohort & honeymoon mix.', get: m => m.effectiveChurnRate, fmt: 'pct', kind: 'pct' },
-    { label: 'CAC (€ per new customer)', cat: 'funnel', calc: 'Marketing spend ÷ New companies closed. Approximate — conflates marketing-now with closes-now.', get: m => m.cac, fmt: 'eur', kind: 'monetary', noPct: true },
-    { label: 'ARPC (€/customer/month)', cat: 'funnel', calc: 'Total revenue ÷ Active companies. Average revenue per customer per month.', get: m => m.arpcMonthly, fmt: 'eur', kind: 'monetary', noPct: true },
-    { label: 'Customer lifetime (months)', cat: 'funnel', calc: '1 ÷ Steady-state monthly churn rate. Capped at 120 months.', get: m => m.customerLifetimeMo, fmt: 'float', kind: 'count' },
-    { label: 'LTV (€)', cat: 'funnel', calc: 'ARPC × Customer lifetime. Lifetime gross revenue from a customer.', get: m => m.ltv, fmt: 'eur', kind: 'monetary', noPct: true },
-    { label: 'LTV : CAC ratio', cat: 'funnel', calc: 'LTV ÷ CAC. Rule of thumb for a healthy B2B SaaS is ≥ 3. Below 1 is structurally bad.', get: m => m.ltvToCac, fmt: 'float', kind: 'count', isTotal: true },
+    { label: 'CAC (€ per new customer)', cat: 'funnel', calc: 'Marketing spend ÷ New companies closed. Approximate — conflates marketing-now with closes-now (which were driven by marketing N months ago). Use trend, not absolute level.', get: m => m.cac, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'ARPC (€/customer/month)', cat: 'funnel', calc: 'Total CF platform revenue ÷ Active companies. GROSS REVENUE per customer — includes company subs + vendor subs + commissions + service fees, divided by company count.', get: m => m.arpcMonthly, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'Variable cost-to-serve per customer/mo (€)', cat: 'funnel', calc: 'Per-customer share of variable retention costs = (Ops salaries + Tech infra) ÷ Active companies. Ops covers both company-side AND vendor-side support (one role does both). Tech is per-order infra cost. EXCLUDES sales/marketing (those are in CAC) and founder/overhead (fixed).', get: m => m.variableCostPerCo, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'Contribution margin per customer/mo (€)', cat: 'funnel', calc: 'ARPC − Variable cost-to-serve per customer. The actual margin we keep per customer per month after paying for the people + infra that exist because of them. This × lifetime = the LTV that matters.', get: m => m.contributionMarginPerCo, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'Customer lifetime (months)', cat: 'funnel', calc: '1 ÷ steady-state monthly churn rate (the knob value, ignoring honeymoon + early-churn nuance). With 2.5% churn → 40-month avg lifetime. Capped at 120 months when churn is tiny.', get: m => m.customerLifetimeMo, fmt: 'float', kind: 'count' },
+    { label: 'LTV (€) — gross revenue', cat: 'funnel', calc: 'ARPC × Customer lifetime. Lifetime gross revenue from a customer (ignoring cost-to-serve). Kept for comparison; LTV:CAC below uses the margin version, not this.', get: m => m.ltvGross, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'LTV (€) — contribution margin', cat: 'funnel', calc: 'Contribution margin per customer × Customer lifetime. This is the LTV that meaningfully compares to CAC — what we actually pocket from a customer over their stay.', get: m => m.ltv, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'LTV : CAC ratio', cat: 'funnel', calc: 'Margin-LTV ÷ CAC. Uses contribution-margin LTV (not gross), so it\'s the more conservative ratio. Rule of thumb ≥ 3 is healthy for B2B SaaS; < 1 is structurally bad. If margin is negative this ratio goes negative — sign matters.', get: m => m.ltvToCac, fmt: 'float', kind: 'count', isTotal: true },
 
     { group: true, label: 'Marketplace', cat: 'marketplace' },
     { label: 'Active companies', cat: 'marketplace', calc: 'Previous-month active + new closed − churned, capped at SAM headroom.', get: m => m.activeCompanies, fmt: 'float', kind: 'count' },
     { label: 'Active employees', cat: 'marketplace', calc: 'Active companies × Avg company size.', metrics: ['avgCompanySize'], get: m => m.activeEmployees, fmt: 'int', kind: 'count' },
     { label: 'Penetration of SAM (employees)', cat: 'marketplace', calc: 'Active employees ÷ SAM (employees). SAM is the growth ceiling.', get: m => SAMEmp > 0 ? (m.activeEmployees / SAMEmp) : 0, fmt: 'pct', kind: 'pct' },
-    { label: 'Vendors active', cat: 'marketplace', calc: 'Monthly GMV ÷ GMV-per-vendor capacity. Vendors auto-scale with food volume.', metrics: ['vendorGmvCapacity'], get: m => m.vendorsActive, fmt: 'float', kind: 'count' },
+    { label: 'Vendors active', cat: 'marketplace', calc: 'max(Starting vendors, Monthly GMV ÷ GMV-per-vendor capacity). Vendors auto-scale with food volume but never drop below the starting seed.', metrics: ['vendorGmvCapacity'], get: m => m.vendorsActive, fmt: 'float', kind: 'count' },
+    { label: 'GMV per company / mo (€)', cat: 'marketplace', calc: 'Monthly GMV ÷ Active companies. Shows the average food spend each customer company drives through the platform per month.', get: m => m.gmvPerCompany, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'GMV per vendor / mo (€)', cat: 'marketplace', calc: 'Monthly GMV ÷ Active vendors. Shows realised throughput per vendor. Equal to the capacity knob when vendors are at 100% utilisation; LOWER than capacity when starting-vendor floor is binding (early months).', get: m => m.gmvPerVendor, fmt: 'eur', kind: 'monetary', noPct: true },
     { label: 'Monthly orders', cat: 'marketplace', calc: 'Active employees × Participation × Days/month. (Participation = 3/5 days by default.)', metrics: ['participation'], get: m => m.monthlyOrders, fmt: 'int', kind: 'count' },
     { label: 'GMV — meals', cat: 'marketplace', calc: 'Monthly orders × Avg meal value (€).', metrics: ['mealValue', 'participation'], get: m => m.gmvMeals, fmt: 'eur', kind: 'monetary', noPct: true },
     { label: 'GMV — extras', cat: 'marketplace', calc: 'Active employees × Days/month × Extras €/emp/day. Independent of participation — this is the company\'s flat budget for coffee/snacks.', metrics: ['extrasPerDay'], get: m => m.gmvExtras, fmt: 'eur', kind: 'monetary', noPct: true },
@@ -1373,7 +1489,8 @@ function renderTable(result) {
     { label: 'Total cost', cat: 'costs', calc: 'Sum of all operating costs. EXCLUDES delivery cost (pass-through).', get: m => m.totalCost, fmt: 'eur', kind: 'monetary', isTotal: true },
 
     { group: true, label: 'Bottom line', cat: 'bottom' },
-    { label: 'Monthly profit', cat: 'bottom', calc: 'Total revenue − Total cost. Excludes delivery on both sides (it nets ~0 by design).', get: m => m.profit, fmt: 'eur', kind: 'monetary', isTotal: true },
+    { label: 'Monthly profit', cat: 'bottom', calc: 'Total revenue − Total cost. Excludes delivery on both sides (it nets ~0 by design).', get: m => m.profit, fmt: 'eur', kind: 'monetary', isTotal: true, isHero: true },
+    { label: 'Net profit margin', cat: 'bottom', calc: 'Monthly profit ÷ Total revenue. Sign tracks profitability; near zero is breakeven; > 20% is a healthy mature SaaS-marketplace.', get: m => m.totalRevenue > 0 ? m.profit / m.totalRevenue : 0, fmt: 'pct', kind: 'pct' },
     { label: 'Cumulative profit / cash', cat: 'bottom', calc: 'Running sum of monthly profits from M1. The low point of this line is your peak funding need.', get: m => m.cumProfit, fmt: 'eur', kind: 'monetary', noPct: true },
 
     { group: true, label: 'Deliveries (isolated, pass-through)', cat: 'deliveries' },
@@ -1409,10 +1526,10 @@ function renderTable(result) {
   let html = '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
   for (const r of rows) {
     if (r.group) {
-      html += `<tr class="group" data-cat="${r.cat || ''}"><td colspan="${headers.length}">${r.label}</td></tr>`;
+      html += `<tr class="group" data-cat="${r.cat || ''}"><td colspan="${headers.length}"><span class="group-label">${r.label}</span></td></tr>`;
       continue;
     }
-    const rowClass = [r.cat ? '' : '', r.isTotal ? 'is-total' : ''].filter(Boolean).join(' ');
+    const rowClass = [r.cat ? '' : '', r.isTotal ? 'is-total' : '', r.isHero ? 'is-hero' : ''].filter(Boolean).join(' ');
     const infoIcon = r.calc ? `<span class="info-icon" data-info-label="${escapeHtml(r.label)}" data-info-calc="${escapeHtml(r.calc)}" title="${escapeHtml(r.label)} — click for full info">i</span>` : '';
     html += `<tr data-cat="${r.cat || ''}" class="${rowClass}"><td>${r.label}${infoIcon}</td>`;
     for (let i = 0; i < months.length; i++) {
