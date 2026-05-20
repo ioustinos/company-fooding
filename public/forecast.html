@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Company Fooding — Forecast Simulator</title>
+<title>CF — Forecast Simulator 📊</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='8' y='50' width='18' height='42' rx='3' fill='%23f59e0b'/%3E%3Crect x='30' y='32' width='18' height='60' rx='3' fill='%237c3aed'/%3E%3Crect x='52' y='12' width='18' height='80' rx='3' fill='%2310b981'/%3E%3Crect x='74' y='38' width='18' height='54' rx='3' fill='%230ea5e9'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
 <style>
@@ -177,6 +178,40 @@
   .event-viz-toggle { font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
   .events-empty { color: #9ca3af; font-size: 14px; font-style: italic; padding: 24px; text-align: center; grid-column: 1 / -1; }
 
+  /* Chat agent — bottom-right floating panel */
+  .chat-fab { position: fixed; bottom: 22px; right: 22px; width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, #7c3aed, #db2777); color: white; border: none; cursor: pointer; box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4); font-size: 24px; z-index: 100; display: flex; align-items: center; justify-content: center; transition: transform 0.15s; }
+  .chat-fab:hover { transform: scale(1.06); }
+  .chat-fab.open { background: #374151; box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
+  .chat-panel { position: fixed; bottom: 92px; right: 22px; width: 440px; max-width: calc(100vw - 44px); height: 600px; max-height: calc(100vh - 130px); background: white; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.18); z-index: 99; display: none; flex-direction: column; overflow: hidden; }
+  .chat-panel.open { display: flex; }
+  .chat-header { padding: 14px 16px; background: linear-gradient(135deg, #7c3aed, #db2777); color: white; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .chat-header h3 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: 0.03em; flex: 1; }
+  .chat-header .chat-sub { font-size: 11px; opacity: 0.85; font-weight: 400; }
+  .chat-header button { background: rgba(255,255,255,0.18); color: white; border: none; cursor: pointer; padding: 4px 9px; border-radius: 5px; font-size: 12px; }
+  .chat-header button:hover { background: rgba(255,255,255,0.28); }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; background: #fafafa; }
+  .chat-msg { display: flex; flex-direction: column; gap: 4px; max-width: 88%; }
+  .chat-msg.user { align-self: flex-end; }
+  .chat-msg.assistant { align-self: flex-start; }
+  .chat-msg .who { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; font-weight: 700; }
+  .chat-msg.user .who { text-align: right; color: #6b21a8; }
+  .chat-msg.assistant .who { color: #be185d; }
+  .chat-msg .bubble { padding: 9px 13px; border-radius: 10px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+  .chat-msg.user .bubble { background: #ede9fe; color: #4c1d95; border: 1px solid #ddd6fe; }
+  .chat-msg.assistant .bubble { background: white; color: #1f2937; border: 1px solid #e5e7eb; }
+  .chat-msg.error .bubble { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  .chat-msg.thinking .bubble { background: white; color: #6b7280; font-style: italic; border: 1px solid #e5e7eb; }
+  .chat-input-row { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid #e5e7eb; background: white; flex-shrink: 0; }
+  .chat-input-row textarea { flex: 1; padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; font-family: inherit; resize: none; min-height: 38px; max-height: 120px; line-height: 1.45; }
+  .chat-input-row textarea:focus { outline: none; border-color: #7c3aed; }
+  .chat-input-row button { padding: 0 18px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .chat-input-row button:disabled { background: #d1d5db; cursor: not-allowed; }
+  .chat-input-row button:hover:not(:disabled) { background: #6d28d9; }
+  .chat-suggestions { padding: 0 14px 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chat-suggestions .suggestion { font-size: 11px; padding: 5px 10px; background: white; border: 1px solid #e5e7eb; border-radius: 14px; cursor: pointer; color: #4b5563; }
+  .chat-suggestions .suggestion:hover { background: #f5f3ff; border-color: #c4b5fd; color: #6d28d9; }
+  .chat-empty { color: #9ca3af; font-size: 13px; text-align: center; padding: 24px 16px; font-style: italic; line-height: 1.5; }
+
   /* Modal for import */
   .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 100; }
   .modal-bg.open { display: flex; }
@@ -264,6 +299,33 @@
   </main>
 </div>
 
+<!-- Chat agent (in-page Claude) -->
+<button id="chat-fab" class="chat-fab" onclick="toggleChat()" title="Ask Claude about the model">💬</button>
+<div id="chat-panel" class="chat-panel">
+  <div class="chat-header">
+    <div>
+      <h3>Ask Claude about the model</h3>
+      <div class="chat-sub">Anything on this page — formulas, patterns, sensitivities, what-ifs.</div>
+    </div>
+    <button onclick="toggleChat()">×</button>
+  </div>
+  <div id="chat-messages" class="chat-messages">
+    <div class="chat-empty">
+      Ask anything about your current scenario — Claude has access to your live knobs, events, and computed monthly results.
+    </div>
+  </div>
+  <div class="chat-suggestions" id="chat-suggestions">
+    <span class="suggestion" onclick="askSuggestion(this.textContent)">Why is the effective churn rate U-shaped?</span>
+    <span class="suggestion" onclick="askSuggestion(this.textContent)">What knob would most improve LTV:CAC?</span>
+    <span class="suggestion" onclick="askSuggestion(this.textContent)">When do we hit breakeven and what drives it?</span>
+    <span class="suggestion" onclick="askSuggestion(this.textContent)">Explain my saturation curve at M36</span>
+  </div>
+  <div class="chat-input-row">
+    <textarea id="chat-input" placeholder="Ask anything about the model…" onkeydown="chatKeydown(event)"></textarea>
+    <button id="chat-send" onclick="sendChat()">Send</button>
+  </div>
+</div>
+
 <div class="event-popup" id="event-popup">
   <button class="closer" onclick="hideEventPopup()">×</button>
   <div id="event-popup-body"></div>
@@ -317,7 +379,7 @@ const knobs = {
 
   // ---------- Sales engine ----------
   startMarketing: { group: 'Sales engine', label: 'Starting monthly marketing (€)', min: 0, max: 30000, step: 250, value: 3000, fmt: 'eur', overridable: true },
-  marketingGrowth: { group: 'Sales engine', label: 'Marketing organic growth (% per month)', min: 0, max: 0.20, step: 0.005, value: 0.03, fmt: 'pct', overridable: true },
+  marketingGrowth: { group: 'Sales engine', label: 'Marketing budget growth (% per month)', min: 0, max: 0.20, step: 0.005, value: 0.03, fmt: 'pct', overridable: true },
   costPerLead: { group: 'Sales engine', label: 'Cost per qualified lead (€)', min: 30, max: 500, step: 5, value: 120, fmt: 'eur', overridable: true },
   leadCloseRate: { group: 'Sales engine', label: 'Lead → close conversion', min: 0.02, max: 0.50, step: 0.01, value: 0.15, fmt: 'pct', overridable: true },
   salesCycleMonths: { group: 'Sales engine', label: 'Sales cycle (months from lead to close)', min: 0, max: 6, step: 1, value: 2, fmt: 'int', overridable: true },
@@ -386,7 +448,7 @@ const KNOB_DESCRIPTIONS = {
   deliveryCost: 'Paid to outsourced courier per delivery. Should ≈ charge so the net delivery margin sits near zero.',
   // Sales engine
   startMarketing: 'Starting monthly marketing spend at M1. Compounds at growth rate. Drives: paid leads = (spend × seasonality) ÷ CPL.',
-  marketingGrowth: 'Compound monthly growth in marketing budget. Spend(t) = start × (1 + growth)^(t−1). Event overrides apply on top.',
+  marketingGrowth: 'Compound monthly growth of your MARKETING BUDGET — not organic growth of leads or customers. Just an automatic month-over-month increase in spend: Spend(t) = start × (1 + growth)^(t−1). Set to 0 for flat budget. Event overrides apply on top.',
   boostMonth: 'A specific month to spike marketing spend (0 = no boost). Combined with Boost amount.',
   boostAmount: '€ added to marketing spend in the Boost month. Use for one-off campaigns. Otherwise events are the better mechanism.',
   costPerLead: 'Marketing efficiency (€ per qualified lead). Paid leads = marketing ÷ CPL. Lower CPL → more leads at the same spend.',
@@ -726,7 +788,7 @@ function buildEventsPanel() {
           <textarea data-field="description" rows="3" placeholder="What this event represents, rationale, source — anything useful">${escapeHtml(ev.description || '')}</textarea>
         </div>
         <div>
-          <div class="event-section-label">Trigger at</div>
+          <div class="event-section-label">Trigger At</div>
           <div class="event-line">
             <select data-field="triggerType">
               <option value="month" ${ev.triggerType === 'month' ? 'selected' : ''}>by month</option>
@@ -737,11 +799,14 @@ function buildEventsPanel() {
           ${condUI}
         </div>
         <div>
-          <div class="event-section-label">Override</div>
+          <div class="event-section-label">Override Metric</div>
           <div class="event-line">
             <select class="metric" data-field="metric">${metricOptionsHtml(ev.metric)}</select>
           </div>
-          <div class="event-line" style="margin-top:6px">
+        </div>
+        <div>
+          <div class="event-section-label">Override Period / Effect</div>
+          <div class="event-line">
             <label>For</label>
             <select data-field="duration">
               <option value="oneoff" ${ev.duration === 'oneoff' ? 'selected' : ''}>1 month</option>
@@ -1628,6 +1693,113 @@ function recompute() {
   renderCards(result);
   renderCharts(result);
   renderTable(result);
+}
+
+// =============================================================================
+// CHAT AGENT — in-page Claude
+// =============================================================================
+
+const CHAT_ENDPOINT = '/api/cf-explain'; // proxied by public/_redirects to /.netlify/functions/cf-explain
+let chatHistory = []; // [{role: 'user'|'assistant'|'error', content: string}]
+let chatBusy = false;
+
+function toggleChat() {
+  const panel = document.getElementById('chat-panel');
+  const fab = document.getElementById('chat-fab');
+  const isOpen = panel.classList.toggle('open');
+  fab.classList.toggle('open', isOpen);
+  fab.textContent = isOpen ? '×' : '💬';
+  if (isOpen) {
+    setTimeout(() => document.getElementById('chat-input').focus(), 100);
+  }
+}
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+}
+
+function askSuggestion(text) {
+  const input = document.getElementById('chat-input');
+  input.value = text;
+  sendChat();
+}
+
+function captureSimulatorState() {
+  // Build the same {knobs, events} bundle as Export config, plus the months[] result
+  const knobValues = {};
+  for (const k of Object.keys(knobs)) knobValues[k] = getKnob(k);
+  const result = computeForecast();
+  return { knobs: knobValues, events, months: result.months };
+}
+
+function renderChatMessages() {
+  const box = document.getElementById('chat-messages');
+  if (chatHistory.length === 0) {
+    box.innerHTML = '<div class="chat-empty">Ask anything about your current scenario — Claude has access to your live knobs, events, and computed monthly results.</div>';
+    return;
+  }
+  box.innerHTML = chatHistory.map(m => {
+    const who = m.role === 'user' ? 'You'
+              : m.role === 'error' ? 'Error'
+              : m.role === 'thinking' ? 'Claude'
+              : 'Claude';
+    const cls = m.role === 'thinking' ? 'assistant thinking'
+              : m.role;
+    return `<div class="chat-msg ${cls}"><div class="who">${who}</div><div class="bubble">${escapeHtml(m.content)}</div></div>`;
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendChat() {
+  if (chatBusy) return;
+  const input = document.getElementById('chat-input');
+  const question = input.value.trim();
+  if (!question) return;
+
+  // UI: append user message + a thinking placeholder
+  chatHistory.push({ role: 'user', content: question });
+  chatHistory.push({ role: 'thinking', content: 'Thinking…' });
+  renderChatMessages();
+  input.value = '';
+  chatBusy = true;
+  document.getElementById('chat-send').disabled = true;
+
+  // Hide the suggestions chip-row after the first message
+  const sugg = document.getElementById('chat-suggestions');
+  if (sugg) sugg.style.display = 'none';
+
+  try {
+    const state = captureSimulatorState();
+    const res = await fetch(CHAT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, state }),
+    });
+
+    // Remove the thinking placeholder
+    chatHistory.pop();
+
+    if (!res.ok) {
+      const errText = await res.text();
+      let detail = errText;
+      try { detail = JSON.parse(errText).error || JSON.parse(errText).detail || errText; } catch {}
+      chatHistory.push({ role: 'error', content: `${res.status} — ${detail}` });
+    } else {
+      const data = await res.json();
+      const answer = (data.answer || '(empty response)').trim();
+      chatHistory.push({ role: 'assistant', content: answer });
+    }
+  } catch (e) {
+    chatHistory.pop(); // remove thinking
+    chatHistory.push({ role: 'error', content: 'Network error: ' + (e.message || e) });
+  } finally {
+    chatBusy = false;
+    document.getElementById('chat-send').disabled = false;
+    renderChatMessages();
+  }
 }
 
 // =============================================================================
