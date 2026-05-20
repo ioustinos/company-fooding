@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Company Fooding — Forecast Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f3f4f6; color: #111827; font-size: 14px; }
+  .layout { display: grid; grid-template-columns: 380px 1fr; min-height: 100vh; }
+  .sidebar { background: #ffffff; padding: 20px 18px; overflow-y: auto; border-right: 1px solid #e5e7eb; max-height: 100vh; position: sticky; top: 0; }
+  .main { padding: 24px; overflow-y: auto; }
+  h1 { font-size: 18px; margin: 0 0 4px; color: #111827; }
+  .sub-title { font-size: 12px; color: #6b7280; margin: 0 0 18px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 800; margin: 20px -10px 10px -10px; padding: 7px 10px 7px 12px; border-left: 5px solid #d1d5db; background: #f9fafb; color: #4b5563; border-radius: 0 5px 5px 0; }
+  /* Group color theming — picked for max distinction around the colour wheel */
+  h2[data-group="horizon"]                 { border-left-color: #475569; background: #f1f5f9;  color: #334155; }   /* slate */
+  h2[data-group="market"]                  { border-left-color: #10b981; background: #ecfdf5;  color: #047857; }   /* emerald */
+  h2[data-group="pricing"]                 { border-left-color: #0ea5e9; background: #f0f9ff;  color: #0369a1; }   /* sky */
+  h2[data-group="delivery"]                { border-left-color: #eab308; background: #fefce8;  color: #854d0e; }   /* yellow */
+  h2[data-group="growth-and-ltv-realism"]  { border-left-color: #7c3aed; background: #f5f3ff;  color: #6d28d9; }   /* violet */
+  h2[data-group="sales-engine"]            { border-left-color: #f97316; background: #fff7ed;  color: #c2410c; }   /* orange */
+  h2[data-group="operations"]              { border-left-color: #e11d48; background: #fff1f2;  color: #be123c; }   /* rose */
+  h2[data-group="valuation"]               { border-left-color: #3b82f6; background: #eff6ff;  color: #1d4ed8; }   /* indigo-blue */
+  .knob { margin-bottom: 9px; }
+  .knob label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; color: #374151; }
+  .knob label .value { color: #2563eb; font-weight: 600; }
+  .knob input[type=range] { width: 100%; height: 16px; accent-color: #6b7280; }
+  /* Slider bar color matches its group's sidebar accent */
+  .knob[data-group="horizon"] input[type=range]                 { accent-color: #475569; }
+  .knob[data-group="horizon"] label .value                       { color: #334155; }
+  .knob[data-group="market"] input[type=range]                  { accent-color: #10b981; }
+  .knob[data-group="market"] label .value                        { color: #047857; }
+  .knob[data-group="pricing"] input[type=range]                 { accent-color: #0ea5e9; }
+  .knob[data-group="pricing"] label .value                       { color: #0369a1; }
+  .knob[data-group="delivery"] input[type=range]                { accent-color: #eab308; }
+  .knob[data-group="delivery"] label .value                      { color: #854d0e; }
+  .knob[data-group="growth-and-ltv-realism"] input[type=range]  { accent-color: #7c3aed; }
+  .knob[data-group="growth-and-ltv-realism"] label .value        { color: #6d28d9; }
+  .knob[data-group="sales-engine"] input[type=range]            { accent-color: #f97316; }
+  .knob[data-group="sales-engine"] label .value                  { color: #c2410c; }
+  .knob[data-group="operations"] input[type=range]              { accent-color: #e11d48; }
+  .knob[data-group="operations"] label .value                    { color: #be123c; }
+  .knob[data-group="valuation"] input[type=range]               { accent-color: #3b82f6; }
+  .knob[data-group="valuation"] label .value                     { color: #1d4ed8; }
+  .scenario-bar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+  .scenario-bar button { padding: 7px 13px; border: 1px solid #d1d5db; background: white; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 500; }
+  .scenario-bar button:hover { background: #f3f4f6; border-color: #9ca3af; }
+  .scenario-bar button.active { background: #2563eb; color: white; border-color: #2563eb; }
+  .scenario-bar .spacer { flex: 1; }
+  .scenario-bar .util-btn { background: #f3f4f6; border-color: #d1d5db; font-size: 12px; padding: 6px 10px; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .card { background: white; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 6px; }
+  .card .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+  .card .value { font-size: 22px; font-weight: 700; margin-top: 4px; color: #111827; }
+  .card .sub { font-size: 11px; color: #6b7280; margin-top: 3px; }
+  .card.positive .value { color: #047857; }
+  .card.negative .value { color: #b91c1c; }
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .chart-box { background: white; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 6px; }
+  .chart-box h3 { font-size: 12px; margin: 0 0 8px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+  .chart-wrap { position: relative; height: 220px; }
+  .table-wrap { background: white; border: 1px solid #e5e7eb; border-radius: 6px; overflow-x: auto; margin-bottom: 24px; }
+  .table-wrap > h3 { font-size: 12px; margin: 14px 14px 8px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+  table.forecast { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.forecast th, table.forecast td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; text-align: right; white-space: nowrap; }
+  table.forecast th { background: #f9fafb; font-weight: 600; color: #374151; position: sticky; top: 0; font-size: 11px; }
+  table.forecast th:first-child, table.forecast td:first-child { text-align: left; position: sticky; left: 0; font-weight: 500; min-width: 240px; border-right: 1px solid #e5e7eb; z-index: 1; }
+  /* Category coloring */
+  table.forecast tr.group td { background: #f3f4f6 !important; color: #111827; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px; }
+  table.forecast tr.group td:first-child { background: #f3f4f6 !important; }
+  table.forecast tr[data-cat="funnel"] td { background: #fff7ed; }
+  table.forecast tr[data-cat="funnel"] td:first-child { background: #ffedd5; }
+  table.forecast tr[data-cat="marketplace"] td { background: #f0fdf4; }
+  table.forecast tr[data-cat="marketplace"] td:first-child { background: #dcfce7; }
+  table.forecast tr[data-cat="revenue"] td { background: #ecfeff; }
+  table.forecast tr[data-cat="revenue"] td:first-child { background: #cffafe; }
+  table.forecast tr[data-cat="costs"] td { background: #fef2f2; }
+  table.forecast tr[data-cat="costs"] td:first-child { background: #fee2e2; }
+  table.forecast tr[data-cat="bottom"] td { background: #faf5ff; }
+  table.forecast tr[data-cat="bottom"] td:first-child { background: #f3e8ff; }
+  table.forecast tr[data-cat="valuation"] td { background: #eff6ff; }
+  table.forecast tr[data-cat="valuation"] td:first-child { background: #dbeafe; }
+  table.forecast tr[data-cat="deliveries"] td { background: #fefce8; }
+  table.forecast tr[data-cat="deliveries"] td:first-child { background: #fef9c3; }
+  /* Info icon next to row labels — shows calculation tooltip */
+  .info-icon { display: inline-block; width: 14px; height: 14px; line-height: 14px; text-align: center; border-radius: 50%; background: #d1d5db; color: #4b5563; font-size: 9px; font-weight: 700; cursor: help; margin-left: 6px; font-style: normal; transition: background 0.1s; }
+  .info-icon:hover { background: #9ca3af; color: white; }
+  /* Totals — highlighted */
+  table.forecast tr.is-total td { font-weight: 700; font-size: 12.5px; border-top: 2px solid #9ca3af; border-bottom: 2px solid #9ca3af; }
+  table.forecast tr.is-total td:first-child { color: #111827; }
+  table.forecast td.neg { color: #b91c1c; }
+  /* % mode toggle */
+  .pct-mode-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4b5563; }
+  .pct-mode-toggle input { margin: 0; }
+  .event-marker { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: middle; cursor: help; box-shadow: 0 0 0 1px white; }
+  .event-color-swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid #d1d5db; cursor: pointer; padding: 0; }
+  .event-color-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+  .event-color-swatch::-webkit-color-swatch { border: none; border-radius: 3px; }
+  .event-status { font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+  .event-status.fired { background: #dcfce7; color: #166534; }
+  .event-status.pending { background: #fef3c7; color: #92400e; }
+  .event-viz-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; }
+  /* Event indicator strip above each chart */
+  .event-strip { position: relative; height: 16px; margin-bottom: 4px; }
+  .event-strip .event-dot {
+    position: absolute; top: 2px; width: 12px; height: 12px; border-radius: 50%;
+    cursor: pointer; transform: translateX(-50%); transition: transform 0.1s;
+    box-shadow: 0 0 0 2px white, 0 1px 4px rgba(0,0,0,0.2); z-index: 5;
+  }
+  .event-strip .event-dot:hover { transform: translateX(-50%) scale(1.35); }
+  /* Event marker in table cells — clickable */
+  .event-marker { cursor: pointer; }
+  .event-marker:hover { transform: scale(1.4); }
+  /* Click-popup for event info (shared by dots + table markers) */
+  .event-popup {
+    position: fixed; display: none; background: white; border: 2px solid #f59e0b;
+    border-radius: 6px; padding: 12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    z-index: 1000; max-width: 340px; font-size: 12px; line-height: 1.55;
+  }
+  .event-popup.open { display: block; }
+  .event-popup .title { font-weight: 600; margin-bottom: 8px; font-size: 13px; }
+  .event-popup .row { margin: 3px 0; }
+  .event-popup .row .label { color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 6px; }
+  .event-popup .closer { position: absolute; top: 6px; right: 8px; background: none; border: none; cursor: pointer; color: #9ca3af; font-size: 16px; line-height: 1; }
+  .event-popup .closer:hover { color: #111827; }
+  .info { background: #eff6ff; border-left: 3px solid #2563eb; padding: 10px 12px; font-size: 12px; color: #1e40af; border-radius: 0 4px 4px 0; margin-bottom: 16px; }
+  .info b { color: #1e3a8a; }
+  /* Section divider — semantically separates "acquisition model" from "forecast" */
+  .model-section { margin: 28px 0 14px; padding: 16px 20px; background: linear-gradient(to right, #1e3a8a, #4338ca); border-radius: 8px; color: white; box-shadow: 0 2px 8px rgba(67, 56, 202, 0.25); }
+  .model-section h2 { margin: 0 !important; padding: 0 !important; font-size: 17px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: white !important; border: none !important; background: transparent !important; border-radius: 0 !important; }
+  .model-section .desc { font-size: 13px; opacity: 0.92; margin-top: 6px; font-weight: 400; }
+  .model-section.acquisition { background: linear-gradient(to right, #7c3aed, #db2777); box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25); }
+
+  /* Events panel */
+  .events-panel { background: white; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 20px; padding: 14px 16px; }
+  .events-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .events-header h2 { margin: 0; border: none; padding: 0; font-size: 12px; }
+  .events-header .count { font-size: 11px; color: #6b7280; }
+  .events-header .spacer { flex: 1; }
+  .events-header button { padding: 5px 10px; border: 1px solid #d1d5db; background: white; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .events-header button.primary { background: #2563eb; color: white; border-color: #2563eb; }
+  .events-header button:hover { background: #f3f4f6; }
+  .events-header button.primary:hover { background: #1e40af; }
+  .events-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .event { border: 1px solid #e5e7eb; border-radius: 8px; background: white; position: relative; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; min-width: 0; }
+  .event.disabled { opacity: 0.55; }
+  .event-header { display: flex; align-items: center; gap: 8px; padding: 11px 13px; background: #fafafa; border-bottom: 1px solid #f3f4f6; min-width: 0; }
+  .event-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
+  .event-section { min-width: 0; }
+  .event-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; font-weight: 700; margin-bottom: 4px; }
+  .event-line { display: flex; align-items: center; gap: 6px; font-size: 13px; flex-wrap: wrap; min-width: 0; }
+  .event-line label { color: #6b7280; font-size: 12px; }
+  .event input[type=text] { flex: 1 1 0; min-width: 0; padding: 6px 9px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; font-weight: 600; background: white; }
+  .event input[type=number] { padding: 5px 7px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; width: 56px; background: white; }
+  .event textarea { width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 48px; line-height: 1.45; color: #4b5563; background: #fafafa; }
+  .event textarea:focus { background: white; border-color: #d1d5db; outline: none; }
+  .event select { padding: 5px 7px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; background: white; max-width: 100%; }
+  .event select.metric { flex: 1 1 0; min-width: 0; }
+  .event-toggle { padding: 5px 11px; background: #ecfdf5; border: 1px solid #86efac; cursor: pointer; border-radius: 4px; font-size: 12px; font-weight: 700; color: #166534; }
+  .event-toggle.off { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
+  .event-color-swatch { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #d1d5db; cursor: pointer; padding: 0; flex-shrink: 0; }
+  .event-delete { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; cursor: pointer; font-size: 15px; line-height: 1; flex-shrink: 0; }
+  .event-delete:hover { background: #fee2e2; }
+  .event-status { font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; white-space: nowrap; }
+  .event-viz-toggle { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+  .events-empty { color: #9ca3af; font-size: 13px; font-style: italic; padding: 22px; text-align: center; grid-column: 1 / -1; }
+
+  /* Modal for import */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal-bg.open { display: flex; }
+  .modal { background: white; padding: 20px; border-radius: 8px; width: 600px; max-width: 90vw; }
+  .modal h3 { margin: 0 0 12px; }
+  .modal textarea { width: 100%; height: 220px; font-family: monospace; font-size: 11px; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; }
+  .modal-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-end; }
+  .modal-actions button { padding: 7px 14px; border: 1px solid #d1d5db; background: white; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  .modal-actions button.primary { background: #2563eb; color: white; border-color: #2563eb; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <h1>CF Forecast Simulator</h1>
+    <div class="sub-title">Month-by-month projection. Move any knob — everything recomputes.</div>
+    <div id="sidebar-content"></div>
+  </aside>
+  <main class="main">
+    <div class="scenario-bar">
+      <button id="btn-conservative" onclick="loadScenario('conservative')">Conservative</button>
+      <button id="btn-realistic" onclick="loadScenario('realistic')" class="active">Realistic</button>
+      <button id="btn-aggressive" onclick="loadScenario('aggressive')">Aggressive</button>
+      <span class="spacer"></span>
+      <button class="util-btn" onclick="exportConfig()">Export config (JSON)</button>
+      <button class="util-btn" onclick="openImport()">Import config</button>
+    </div>
+
+    <div class="info">
+      <b>Sales engine:</b> Marketing spend in month <i>t</i> → leads (€ / cost-per-lead) → handled by sales reps → deals closed <i>sales-cycle</i> months later → new active companies. Churn applies cohort-by-cohort after honeymoon. Ops headcount auto-scales with company + vendor counts. <b>Events override knobs at specific months.</b>
+    </div>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="events-panel">
+      <div class="events-header">
+        <h2>EVENTS / INTERVENTIONS</h2>
+        <span class="count" id="events-count"></span>
+        <span class="spacer"></span>
+        <button class="primary" onclick="addEvent()">+ Add event</button>
+        <button onclick="clearEvents()">Clear all</button>
+      </div>
+      <div class="events-list" id="events-list"></div>
+    </div>
+
+    <div class="model-section acquisition">
+      <h2>Acquisition model — how we ramp up customers</h2>
+      <div class="desc">The model of the model. Every chart here drives the financial forecast below. Tweak the "Growth realism" knobs in the sidebar to shape these curves.</div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-box"><h3>A · Effective close-rate (after ramp + saturation)</h3><div class="event-strip" id="strip-effclose"></div><div class="chart-wrap"><canvas id="chart-effclose"></canvas></div></div>
+      <div class="chart-box"><h3>B · Lead generation (paid + referrals stacked)</h3><div class="event-strip" id="strip-leads"></div><div class="chart-wrap"><canvas id="chart-leads"></canvas></div></div>
+      <div class="chart-box"><h3>C · CAC — Customer Acquisition Cost (€)</h3><div class="event-strip" id="strip-cac"></div><div class="chart-wrap"><canvas id="chart-cac"></canvas></div></div>
+      <div class="chart-box"><h3>D · LTV : CAC ratio (rule of thumb: ≥ 3)</h3><div class="event-strip" id="strip-ltvcac"></div><div class="chart-wrap"><canvas id="chart-ltvcac"></canvas></div></div>
+      <div class="chart-box"><h3>E · Effective churn rate (blended early + steady)</h3><div class="event-strip" id="strip-churn"></div><div class="chart-wrap"><canvas id="chart-churn"></canvas></div></div>
+      <div class="chart-box"><h3>F · Penetration of SAM (employees)</h3><div class="event-strip" id="strip-penetration"></div><div class="chart-wrap"><canvas id="chart-penetration"></canvas></div></div>
+    </div>
+
+    <div class="model-section">
+      <h2>Forecast — financial outcomes</h2>
+      <div class="desc">P&amp;L, GMV, headcount, and valuation that fall out of the acquisition model above.</div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-box"><h3>1 · Sales funnel</h3><div class="event-strip" id="strip-funnel"></div><div class="chart-wrap"><canvas id="chart-funnel"></canvas></div></div>
+      <div class="chart-box"><h3>2 · Marketing spend by month</h3><div class="event-strip" id="strip-marketing"></div><div class="chart-wrap"><canvas id="chart-marketing"></canvas></div></div>
+      <div class="chart-box"><h3>3 · Active companies & employees</h3><div class="event-strip" id="strip-companies"></div><div class="chart-wrap"><canvas id="chart-companies"></canvas></div></div>
+      <div class="chart-box"><h3>4 · Monthly GMV (stacked: meals · extras · catering)</h3><div class="event-strip" id="strip-gmv"></div><div class="chart-wrap"><canvas id="chart-gmv"></canvas></div></div>
+      <div class="chart-box"><h3>5 · Headcount</h3><div class="event-strip" id="strip-headcount"></div><div class="chart-wrap"><canvas id="chart-headcount"></canvas></div></div>
+      <div class="chart-box"><h3>6 · Monthly revenue vs costs</h3><div class="event-strip" id="strip-revenue-cost"></div><div class="chart-wrap"><canvas id="chart-revenue-cost"></canvas></div></div>
+      <div class="chart-box"><h3>7 · Monthly profit (€)</h3><div class="event-strip" id="strip-profit"></div><div class="chart-wrap"><canvas id="chart-profit"></canvas></div></div>
+      <div class="chart-box"><h3>8 · Cumulative profit / cash</h3><div class="event-strip" id="strip-cum-profit"></div><div class="chart-wrap"><canvas id="chart-cum-profit"></canvas></div></div>
+      <div class="chart-box"><h3>9 · Company valuation</h3><div class="event-strip" id="strip-valuation"></div><div class="chart-wrap"><canvas id="chart-valuation"></canvas></div></div>
+    </div>
+
+    <div class="table-wrap">
+      <div style="display:flex;align-items:center;padding:0 14px;gap:14px">
+        <h3 style="margin:14px 0 8px">Monthly forecast table — drag horizontally to scroll</h3>
+        <span style="flex:1"></span>
+        <label class="pct-mode-toggle"><input type="checkbox" id="table-pct-mode" onchange="togglePctMode(this.checked)"> show monetary values as % of monthly revenue</label>
+      </div>
+      <table class="forecast" id="forecast-table"></table>
+    </div>
+  </main>
+</div>
+
+<div class="event-popup" id="event-popup">
+  <button class="closer" onclick="hideEventPopup()">×</button>
+  <div id="event-popup-body"></div>
+</div>
+
+<div class="modal-bg" id="import-modal">
+  <div class="modal">
+    <h3>Import configuration (paste JSON)</h3>
+    <textarea id="import-text" placeholder='{"knobs":{...},"events":[...]}'></textarea>
+    <div class="modal-actions">
+      <button onclick="closeImport()">Cancel</button>
+      <button class="primary" onclick="applyImport()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+// KNOB DEFINITIONS
+// =============================================================================
+
+const knobs = {
+  // ---------- Horizon ----------
+  monthsHorizon: { group: 'Horizon', label: 'Forecast horizon (months)', min: 12, max: 60, step: 1, value: 36, fmt: 'int', overridable: false },
+  calendarStart: { group: 'Horizon', label: 'Sim starts in calendar month (1=Jan)', min: 1, max: 12, step: 1, value: 1, fmt: 'int', overridable: false },
+  calendarStartYear: { group: 'Horizon', label: 'Starting calendar year', min: 2024, max: 2035, step: 1, value: 2026, fmt: 'int', overridable: false },
+  xAxisMode: { group: 'Horizon', label: 'X-axis labels', min: 0, max: 1, step: 1, value: 0, fmt: 'xaxis', overridable: false },
+
+  // ---------- Market ----------
+  startingCompanies: { group: 'Market', label: 'Starting companies (seed at M1)', min: 0, max: 100, step: 1, value: 6, fmt: 'int', overridable: false },
+  SAMEmployees: { group: 'Market', label: 'SAM — employees (growth cap)', min: 50000, max: 700000, step: 10000, value: 460000, fmt: 'int', overridable: false },
+  avgCompanySize: { group: 'Market', label: 'Avg company size (employees)', min: 5, max: 60, step: 1, value: 20, fmt: 'int', overridable: true },
+  daysPerYear: { group: 'Market', label: 'Applicable days/year', min: 150, max: 250, step: 5, value: 220, fmt: 'int', overridable: false },
+  participation: { group: 'Market', label: 'Participation (3/5 = 60%)', min: 0.30, max: 0.85, step: 0.05, value: 0.60, fmt: 'pct', overridable: true },
+  mealValue: { group: 'Market', label: 'Avg meal value (€)', min: 5, max: 12, step: 0.5, value: 9, fmt: 'eur', overridable: true },
+  extrasPerDay: { group: 'Market', label: 'Extras per employee per day (€)', min: 0, max: 5, step: 0.25, value: 1.25, fmt: 'eur2', overridable: true },
+  cateringPerDay: { group: 'Market', label: 'Catering per employee per day (€)', min: 0, max: 5, step: 0.25, value: 0, fmt: 'eur2', overridable: true },
+
+  // ---------- Pricing ----------
+  companyBaseSub: { group: 'Pricing', label: 'Company base subscription (€/mo)', min: 0, max: 300, step: 10, value: 100, fmt: 'eur', overridable: true },
+  companyPerEmployee: { group: 'Pricing', label: 'Per-employee fee (€/mo)', min: 0, max: 10, step: 0.25, value: 4, fmt: 'eur2', overridable: true },
+  vendorSub: { group: 'Pricing', label: 'Vendor subscription (€/mo)', min: 0, max: 200, step: 5, value: 50, fmt: 'eur', overridable: true },
+  commissionRate: { group: 'Pricing', label: 'Vendor commission (% of GMV)', min: 0, max: 0.10, step: 0.005, value: 0.045, fmt: 'pct', overridable: true },
+  serviceFee: { group: 'Pricing', label: 'Service fee per order (€)', min: 0, max: 0.50, step: 0.05, value: 0.20, fmt: 'eur2', overridable: true },
+
+  // ---------- Delivery ----------
+  deliveryShare: { group: 'Delivery', label: 'Share of companies using delivery (1 drop/day each)', min: 0, max: 1, step: 0.05, value: 0.90, fmt: 'pct', overridable: true },
+  deliveryCharge: { group: 'Delivery', label: 'Delivery charge per drop (€, passed to customer)', min: 0, max: 10, step: 0.25, value: 4, fmt: 'eur2', overridable: true },
+  deliveryCost: { group: 'Delivery', label: 'Delivery cost per drop (€, courier outsourced)', min: 0, max: 10, step: 0.25, value: 4, fmt: 'eur2', overridable: true },
+
+  // ---------- Sales engine ----------
+  startMarketing: { group: 'Sales engine', label: 'Starting monthly marketing (€)', min: 0, max: 30000, step: 250, value: 3000, fmt: 'eur', overridable: true },
+  marketingGrowth: { group: 'Sales engine', label: 'Marketing organic growth (% per month)', min: 0, max: 0.20, step: 0.005, value: 0.03, fmt: 'pct', overridable: true },
+  costPerLead: { group: 'Sales engine', label: 'Cost per qualified lead (€)', min: 30, max: 500, step: 5, value: 120, fmt: 'eur', overridable: true },
+  leadCloseRate: { group: 'Sales engine', label: 'Lead → close conversion', min: 0.02, max: 0.50, step: 0.01, value: 0.15, fmt: 'pct', overridable: true },
+  salesCycleMonths: { group: 'Sales engine', label: 'Sales cycle (months from lead to close)', min: 0, max: 6, step: 1, value: 2, fmt: 'int', overridable: true },
+  salesRepCapacity: { group: 'Sales engine', label: 'Leads per sales rep per month', min: 10, max: 100, step: 5, value: 30, fmt: 'int', overridable: true },
+  salesRepSalary: { group: 'Sales engine', label: 'Sales rep loaded salary (€/mo)', min: 1500, max: 6000, step: 100, value: 2800, fmt: 'eur', overridable: true },
+
+  // ---------- Operations ----------
+  companiesPerOps: { group: 'Operations', label: 'Companies per ops FTE', min: 20, max: 150, step: 5, value: 60, fmt: 'int', overridable: true },
+  vendorsPerOps: { group: 'Operations', label: 'Vendors per ops FTE', min: 10, max: 60, step: 5, value: 25, fmt: 'int', overridable: true },
+  opsSalary: { group: 'Operations', label: 'Ops loaded salary (€/mo)', min: 1500, max: 5000, step: 100, value: 2500, fmt: 'eur', overridable: true },
+  techPerOrder: { group: 'Operations', label: 'Tech cost per order (€)', min: 0.02, max: 0.50, step: 0.01, value: 0.17, fmt: 'eur2', overridable: true },
+  vendorGmvCapacity: { group: 'Operations', label: 'GMV per vendor / mo at capacity (€)', min: 5000, max: 50000, step: 1000, value: 20000, fmt: 'eur', overridable: true },
+
+  // ---------- Churn — now in Growth and LTV Realism ----------
+  monthlyChurn: { group: 'Growth and LTV Realism', label: 'Monthly churn rate (steady-state)', min: 0, max: 0.10, step: 0.005, value: 0.02, fmt: 'pct', overridable: true },
+  churnHoneymoon: { group: 'Growth and LTV Realism', label: 'Honeymoon (months with no churn)', min: 0, max: 12, step: 1, value: 3, fmt: 'int', overridable: false },
+
+  // ---------- Fixed overhead — moved to Operations ----------
+  founderCost: { group: 'Operations', label: 'Founders salaries (€/mo)', min: 0, max: 30000, step: 500, value: 0, fmt: 'eur', overridable: true },
+  overheadPct: { group: 'Operations', label: 'Other overhead (% of revenue)', min: 0, max: 0.30, step: 0.005, value: 0.06, fmt: 'pct', overridable: true },
+
+  // ---------- Valuation ----------
+  valuationMode: { group: 'Valuation', label: 'Mode (0 = profit ×, 1 = revenue ×)', min: 0, max: 1, step: 1, value: 0, fmt: 'mode', overridable: false },
+  valuationProfitMultiple: { group: 'Valuation', label: 'Profit multiple (×)', min: 0, max: 30, step: 0.5, value: 5, fmt: 'multiple', overridable: false },
+  valuationRevenueMultiple: { group: 'Valuation', label: 'Revenue multiple (×)', min: 0, max: 12, step: 0.5, value: 3, fmt: 'multiple', overridable: false },
+
+  // ---------- Growth realism (acquisition model) ----------
+  coldStartMonths: { group: 'Growth and LTV Realism', label: 'Cold-start ramp (months to full close-rate)', min: 0, max: 18, step: 1, value: 0, fmt: 'int', overridable: true },
+  saturationStrength: { group: 'Growth and LTV Realism', label: 'Saturation strength β (0 = off)', min: 0, max: 20, step: 0.5, value: 0, fmt: 'float', overridable: true },
+  seasonalityEnabled: { group: 'Growth and LTV Realism', label: 'Greek calendar seasonality', min: 0, max: 1, step: 1, value: 0, fmt: 'onoff', overridable: true },
+  referralCoefficient: { group: 'Growth and LTV Realism', label: 'Referral leads per active customer/mo', min: 0, max: 0.20, step: 0.005, value: 0, fmt: 'pct', overridable: true },
+  earlyChurnMultiplier: { group: 'Growth and LTV Realism', label: 'Early-churn multiplier (1st N mo after honeymoon)', min: 1, max: 5, step: 0.25, value: 1, fmt: 'multiple', overridable: true },
+  earlyChurnMonths: { group: 'Growth and LTV Realism', label: 'Early-churn duration (months)', min: 0, max: 12, step: 1, value: 4, fmt: 'int', overridable: true },
+};
+
+// Explicit sidebar group order — overrides knob-definition order
+const GROUP_ORDER = ['Horizon', 'Market', 'Pricing', 'Delivery', 'Growth and LTV Realism', 'Sales engine', 'Operations', 'Valuation'];
+
+// Greek B2B seasonality (multiplier on lead generation per calendar month)
+const SEASONALITY = { 1: 1.20, 2: 1.10, 3: 1.00, 4: 1.00, 5: 1.00, 6: 0.90, 7: 0.70, 8: 0.40, 9: 1.30, 10: 1.10, 11: 1.00, 12: 0.50 };
+
+// =============================================================================
+// SCENARIOS
+// =============================================================================
+
+const scenarios = {
+  conservative: { startMarketing: 1500, marketingGrowth: 0.02, leadCloseRate: 0.10, monthlyChurn: 0.03, salesCycleMonths: 3, costPerLead: 150 },
+  realistic:    { startMarketing: 3000, marketingGrowth: 0.03, leadCloseRate: 0.15, monthlyChurn: 0.02, salesCycleMonths: 2, costPerLead: 120 },
+  aggressive:   { startMarketing: 8000, marketingGrowth: 0.05, leadCloseRate: 0.20, monthlyChurn: 0.015, salesCycleMonths: 2, costPerLead: 100 },
+};
+let activeScenario = 'realistic';
+let tableMode = 'absolute'; // 'absolute' | 'percent'
+function togglePctMode(checked) { tableMode = checked ? 'percent' : 'absolute'; recompute(); }
+
+// =============================================================================
+// EVENTS — STATE & DEFAULTS
+// =============================================================================
+
+let nextEventId = 1;
+let events = [];
+
+// Default fields ensure every event has both month and condition state available
+const EVENT_COLORS = ['#f59e0b','#8b5cf6','#0ea5e9','#ec4899','#22c55e','#ef4444','#14b8a6','#a855f7','#f97316','#06b6d4'];
+function nextEventColor() {
+  const used = events.map(e => e.color).filter(Boolean);
+  for (const c of EVENT_COLORS) if (!used.includes(c)) return c;
+  return EVENT_COLORS[events.length % EVENT_COLORS.length];
+}
+
+function defaultEventFields() {
+  return {
+    description: '',
+    triggerType: 'month',
+    startMonth: 1,
+    condAggregation: 'sumLastN', condLastN: 3, condMetric: 'profit',
+    condComparator: 'gte', condThreshold: 30000,
+    metric: 'startMarketing', duration: 'oneoff', durationMonths: 3,
+    valueType: 'absolute', value: 5000,
+    enabled: true,
+    showInViz: true,
+    color: nextEventColor(),
+  };
+}
+
+// Quantize headcount to half-step (0.5, 1.0, 1.5, ...) — rounds UP so you never under-hire.
+function halfStep(x) { return Math.ceil(Math.max(0, x) * 2) / 2; }
+
+// Sensible starter events to illustrate the mechanic
+function seedDefaultEvents() {
+  events = [];
+  events.push({ id: nextEventId++, title: 'Founders salaries kick in', ...defaultEventFields(),
+    color: '#f59e0b',
+    description: 'Founders go scrappy until the business has cleared €30K profit in any rolling 3-month window. After that, salaries start.',
+    triggerType: 'condition', condAggregation: 'sumLastN', condLastN: 3, condMetric: 'profit',
+    condComparator: 'gte', condThreshold: 30000,
+    metric: 'founderCost', duration: 'permanent', valueType: 'absolute', value: 5000 });
+  events.push({ id: nextEventId++, title: 'Marketing burst (pilot)', ...defaultEventFields(),
+    color: '#8b5cf6',
+    description: 'Three-month aggressive marketing push during the pilot phase to validate demand. Spend drops back to base afterwards.',
+    triggerType: 'month', startMonth: 3,
+    metric: 'startMarketing', duration: 'months', durationMonths: 3, valueType: 'absolute', value: 12000 });
+  events.push({ id: nextEventId++, title: 'Churn improves at scale', ...defaultEventFields(),
+    color: '#0ea5e9', enabled: false,
+    description: 'Assumption: by Year 2 vendor diversity + product maturity drop monthly churn from 2% to 1.5%. Toggle on to test sensitivity.',
+    triggerType: 'month', startMonth: 18,
+    metric: 'monthlyChurn', duration: 'permanent', valueType: 'absolute', value: 0.015 });
+  events.push({ id: nextEventId++, title: 'Catering launches', ...defaultEventFields(),
+    color: '#ec4899',
+    description: 'Catering is a different motion than core meal + extras — different sales cycle, different vendor type. We launch it separately at M6.',
+    triggerType: 'month', startMonth: 6,
+    metric: 'cateringPerDay', duration: 'permanent', valueType: 'absolute', value: 1.25 });
+}
+
+function overridableKnobs() {
+  return Object.entries(knobs).filter(([k, v]) => v.overridable).map(([k]) => k);
+}
+
+function metricOptionsHtml(selectedKey) {
+  return overridableKnobs().map(k => `<option value="${k}" ${k === selectedKey ? 'selected' : ''}>${knobs[k].label}</option>`).join('');
+}
+
+// Map of condition-event id → month in which the condition was first met (set during simulation)
+let lastTriggerMap = {};
+
+function resolveEventStartMonth(ev) {
+  if (ev.triggerType === 'condition') {
+    const t = lastTriggerMap[ev.id];
+    return (t === undefined || t === null) ? null : t;
+  }
+  return ev.startMonth;
+}
+
+function eventIsActiveForMonth(ev, month, overrideStart) {
+  if (!ev.enabled) return false;
+  const startM = overrideStart !== undefined ? overrideStart : resolveEventStartMonth(ev);
+  if (startM === null || startM === undefined) return false;
+  if (month < startM) return false;
+  if (ev.duration === 'oneoff') return month === startM;
+  if (ev.duration === 'permanent') return true;
+  if (ev.duration === 'months') return month < startM + Math.max(1, ev.durationMonths);
+  return false;
+}
+
+// Evaluate a condition-based trigger using simulation history so far
+function checkCondition(ev, monthsSoFar) {
+  if (!monthsSoFar || monthsSoFar.length === 0) return false;
+  const metric = ev.condMetric || 'profit';
+  let val = 0;
+  if (ev.condAggregation === 'last') {
+    val = monthsSoFar[monthsSoFar.length - 1][metric] || 0;
+  } else {
+    const N = Math.max(1, ev.condLastN || 1);
+    const recent = monthsSoFar.slice(-N);
+    val = recent.reduce((s, mo) => s + (mo[metric] || 0), 0);
+  }
+  const thr = ev.condThreshold || 0;
+  return ev.condComparator === 'lte' ? val <= thr : val >= thr;
+}
+
+// Human-readable summary of an event for tooltips
+function describeEvent(ev) {
+  const lines = [ev.title];
+  if (ev.triggerType === 'condition') {
+    const t = lastTriggerMap[ev.id];
+    lines.push('Trigger: ' + (t ? 'fired at M' + t : 'condition not yet met'));
+    const aggLabel = ev.condAggregation === 'sumLastN' ? `sum over last ${ev.condLastN}mo` : 'last value';
+    const cmp = ev.condComparator === 'lte' ? '≤' : '≥';
+    lines.push(`Condition: ${aggLabel} of ${ev.condMetric} ${cmp} ${ev.condThreshold}`);
+  } else {
+    lines.push('Trigger: from M' + ev.startMonth);
+  }
+  lines.push('Overrides: ' + (knobs[ev.metric] ? knobs[ev.metric].label : ev.metric));
+  const durLabel = ev.duration === 'oneoff' ? 'one month'
+    : ev.duration === 'permanent' ? 'permanent'
+    : `for ${ev.durationMonths} months`;
+  lines.push('Duration: ' + durLabel);
+  lines.push('Value: ' + ev.value + ' (' + ev.valueType + ')');
+  return lines.join('\n');
+}
+
+// =============================================================================
+// FORMATTERS
+// =============================================================================
+
+function fmt(value, type) {
+  if (value === null || value === undefined || isNaN(value)) return '—';
+  switch (type) {
+    case 'pct': return (value * 100).toFixed(1) + '%';
+    case 'eur': return '€' + Math.round(value).toLocaleString();
+    case 'eur2': return '€' + value.toFixed(2);
+    case 'int': return Math.round(value).toLocaleString();
+    case 'float': return value.toFixed(1);
+    case 'multiple': return value.toFixed(1) + '×';
+    case 'mode': return value === 1 ? 'Revenue × multiple' : 'Profit × multiple';
+    case 'onoff': return value === 1 ? 'On' : 'Off';
+    case 'xaxis': return value === 1 ? "Jan '26" : 'M1, M2, …';
+    default: return value.toString();
+  }
+}
+function fmtEur(v) { return fmt(v, 'eur'); }
+function fmtInt(v) { return fmt(v, 'int'); }
+function fmtFloat(v) { return fmt(v, 'float'); }
+
+// X-axis month label — either "M12" or "Jan '27" depending on the xAxisMode knob
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function formatMonthLabel(monthIdx) {
+  const mode = Math.round(getKnob('xAxisMode'));
+  if (mode !== 1) return 'M' + monthIdx;
+  const calStart = Math.round(getKnob('calendarStart'));
+  const baseYear = Math.round(getKnob('calendarStartYear'));
+  const offset = (calStart - 1) + (monthIdx - 1);
+  const calMonth = (offset % 12) + 1;
+  const year = baseYear + Math.floor(offset / 12);
+  return `${MONTH_ABBR[calMonth - 1]} '${String(year).slice(2)}`;
+}
+
+// =============================================================================
+// SIDEBAR
+// =============================================================================
+
+function buildSidebar() {
+  const root = document.getElementById('sidebar-content');
+  root.innerHTML = '';
+  const groups = {};
+  for (const [key, k] of Object.entries(knobs)) {
+    if (!groups[k.group]) groups[k.group] = [];
+    groups[k.group].push(key);
+  }
+  const orderedNames = [...GROUP_ORDER, ...Object.keys(groups).filter(g => !GROUP_ORDER.includes(g))];
+  for (const groupName of orderedNames) {
+    if (!groups[groupName]) continue;
+    const keys = groups[groupName];
+    const h = document.createElement('h2');
+    h.textContent = groupName;
+    h.dataset.group = groupName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    root.appendChild(h);
+    const groupSlug = groupName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    for (const key of keys) {
+      const k = knobs[key];
+      const wrap = document.createElement('div');
+      wrap.className = 'knob';
+      wrap.dataset.group = groupSlug;
+      // Boolean / discrete-choice knobs render as a real select, not a slider
+      if (k.fmt === 'onoff' || k.fmt === 'mode' || k.fmt === 'xaxis') {
+        let options = '';
+        if (k.fmt === 'onoff') {
+          options = `<option value="0" ${k.value === 0 ? 'selected' : ''}>Off</option><option value="1" ${k.value === 1 ? 'selected' : ''}>On</option>`;
+        } else if (k.fmt === 'mode') {
+          options = `<option value="0" ${k.value === 0 ? 'selected' : ''}>Profit × multiple</option><option value="1" ${k.value === 1 ? 'selected' : ''}>Revenue × multiple</option>`;
+        } else if (k.fmt === 'xaxis') {
+          options = `<option value="0" ${k.value === 0 ? 'selected' : ''}>M1, M2, M3, …</option><option value="1" ${k.value === 1 ? 'selected' : ''}>Jan '26, Feb '26, …</option>`;
+        }
+        wrap.innerHTML = `
+          <label><span>${k.label}</span></label>
+          <select id="${key}" style="width:100%;padding:5px 7px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;background:white">${options}</select>
+        `;
+        root.appendChild(wrap);
+        wrap.querySelector('select').addEventListener('change', () => recompute());
+      } else {
+        wrap.innerHTML = `
+          <label><span>${k.label}</span><span class="value" id="val-${key}">${fmt(k.value, k.fmt)}</span></label>
+          <input type="range" id="${key}" min="${k.min}" max="${k.max}" step="${k.step}" value="${k.value}">
+        `;
+        root.appendChild(wrap);
+        wrap.querySelector('input').addEventListener('input', () => recompute());
+      }
+    }
+  }
+}
+
+function getKnob(key) {
+  const el = document.getElementById(key);
+  return el ? parseFloat(el.value) : knobs[key].value;
+}
+function setKnob(key, val) {
+  const el = document.getElementById(key);
+  if (el) el.value = val;
+}
+function updateValueLabels() {
+  for (const [key, k] of Object.entries(knobs)) {
+    const el = document.getElementById('val-' + key);
+    if (el) el.textContent = fmt(getKnob(key), k.fmt);
+  }
+}
+
+// =============================================================================
+// EVENTS — UI
+// =============================================================================
+
+function buildEventsPanel() {
+  const list = document.getElementById('events-list');
+  const count = document.getElementById('events-count');
+  count.textContent = events.length ? `(${events.filter(e => e.enabled).length} active / ${events.length} total)` : '';
+  if (events.length === 0) {
+    list.innerHTML = '<div class="events-empty">No events. Click "+ Add event" to create an intervention.</div>';
+    return;
+  }
+  list.innerHTML = events.map(ev => {
+    const statusBadge = ev.triggerType === 'condition'
+      ? ((lastTriggerMap[ev.id] != null)
+          ? `<span class="event-status" style="background:#dcfce7;color:#166534">✓ M${lastTriggerMap[ev.id]}</span>`
+          : `<span class="event-status" style="background:#fef3c7;color:#92400e">⏳ pending</span>`)
+      : `<span class="event-status" style="background:#dbeafe;color:#1e40af">📅 M${ev.startMonth}</span>`;
+    const condUI = ev.triggerType === 'condition' ? `
+      <div class="event-line">
+        <select data-field="condAggregation">
+          <option value="last" ${ev.condAggregation === 'last' ? 'selected' : ''}>last</option>
+          <option value="sumLastN" ${ev.condAggregation === 'sumLastN' ? 'selected' : ''}>sum last</option>
+        </select>
+        ${ev.condAggregation === 'sumLastN' ? `<input type="number" data-field="condLastN" value="${ev.condLastN}" min="1" max="36" style="width:34px">` : ''}
+        <select data-field="condMetric" style="flex:1 1 0;min-width:0">
+          <option value="profit" ${ev.condMetric === 'profit' ? 'selected' : ''}>profit</option>
+          <option value="cumProfit" ${ev.condMetric === 'cumProfit' ? 'selected' : ''}>cum profit</option>
+          <option value="totalRevenue" ${ev.condMetric === 'totalRevenue' ? 'selected' : ''}>revenue</option>
+          <option value="activeCompanies" ${ev.condMetric === 'activeCompanies' ? 'selected' : ''}>companies</option>
+          <option value="monthlyGMV" ${ev.condMetric === 'monthlyGMV' ? 'selected' : ''}>GMV</option>
+          <option value="vendorsActive" ${ev.condMetric === 'vendorsActive' ? 'selected' : ''}>vendors</option>
+        </select>
+        <select data-field="condComparator">
+          <option value="gte" ${ev.condComparator === 'gte' ? 'selected' : ''}>≥</option>
+          <option value="lte" ${ev.condComparator === 'lte' ? 'selected' : ''}>≤</option>
+        </select>
+        <input type="number" step="any" data-field="condThreshold" value="${ev.condThreshold}" style="flex:1 1 0;min-width:40px">
+      </div>` : '';
+    return `
+    <div class="event ${ev.enabled ? '' : 'disabled'}" data-id="${ev.id}">
+      <div class="event-header">
+        <button class="event-toggle ${ev.enabled ? 'on' : 'off'}" data-action="toggle">${ev.enabled ? 'ON' : 'OFF'}</button>
+        <input type="color" class="event-color-swatch" data-field="color" value="${ev.color || '#f59e0b'}" title="Color">
+        <input type="text" data-field="title" value="${escapeHtml(ev.title)}" placeholder="Title">
+        <button class="event-delete" data-action="delete" title="Delete">×</button>
+      </div>
+      <div class="event-body">
+        <div class="event-line">
+          ${statusBadge}
+          <span style="flex:1"></span>
+          <label class="event-viz-toggle"><input type="checkbox" data-field="showInViz" ${ev.showInViz !== false ? 'checked' : ''}> viz</label>
+        </div>
+        <textarea data-field="description" rows="2" placeholder="Description / rationale">${escapeHtml(ev.description || '')}</textarea>
+        <div class="event-line">
+          <select data-field="triggerType">
+            <option value="month" ${ev.triggerType === 'month' ? 'selected' : ''}>by month</option>
+            <option value="condition" ${ev.triggerType === 'condition' ? 'selected' : ''}>by cond</option>
+          </select>
+          ${ev.triggerType !== 'condition' ? `<label>M</label><input type="number" data-field="startMonth" value="${ev.startMonth}" min="1" max="60" style="width:42px">` : ''}
+        </div>
+        ${condUI}
+        <div class="event-line">
+          <label>Override</label>
+          <select class="metric" data-field="metric">${metricOptionsHtml(ev.metric)}</select>
+        </div>
+        <div class="event-line">
+          <select data-field="duration">
+            <option value="oneoff" ${ev.duration === 'oneoff' ? 'selected' : ''}>1mo</option>
+            <option value="permanent" ${ev.duration === 'permanent' ? 'selected' : ''}>perm</option>
+            <option value="months" ${ev.duration === 'months' ? 'selected' : ''}>N mo</option>
+          </select>
+          ${ev.duration === 'months' ? `<input type="number" data-field="durationMonths" value="${ev.durationMonths}" min="1" max="60" style="width:38px">` : ''}
+          <select data-field="valueType">
+            <option value="absolute" ${ev.valueType === 'absolute' ? 'selected' : ''}>=</option>
+            <option value="factor" ${ev.valueType === 'factor' ? 'selected' : ''}>×prev</option>
+          </select>
+          <input type="number" step="any" data-field="value" value="${ev.value}" style="flex:1 1 0;min-width:50px">
+        </div>
+      </div>
+    </div>
+  `;}).join('');
+
+  // Wire up listeners
+  list.querySelectorAll('.event').forEach(node => {
+    const id = parseInt(node.dataset.id);
+    node.querySelectorAll('[data-field]').forEach(input => {
+      input.addEventListener('input', () => {
+        const ev = events.find(e => e.id === id);
+        if (!ev) return;
+        const f = input.dataset.field;
+        if (f === 'startMonth' || f === 'durationMonths' || f === 'condLastN') ev[f] = parseInt(input.value) || 0;
+        else if (f === 'value' || f === 'condThreshold') ev[f] = parseFloat(input.value) || 0;
+        else if (f === 'showInViz') ev[f] = input.checked;
+        else ev[f] = input.value;
+        if (f === 'duration' || f === 'triggerType' || f === 'condAggregation') { buildEventsPanel(); }
+        recompute();
+      });
+    });
+    node.querySelector('[data-action="toggle"]').addEventListener('click', () => {
+      const ev = events.find(e => e.id === id);
+      ev.enabled = !ev.enabled;
+      buildEventsPanel();
+      recompute();
+    });
+    node.querySelector('[data-action="delete"]').addEventListener('click', () => {
+      events = events.filter(e => e.id !== id);
+      buildEventsPanel();
+      recompute();
+    });
+  });
+}
+
+function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function addEvent() {
+  events.push({ id: nextEventId++, title: 'New event', ...defaultEventFields() });
+  buildEventsPanel();
+  recompute();
+}
+
+function clearEvents() {
+  if (events.length === 0) return;
+  if (!confirm('Remove all events?')) return;
+  events = [];
+  buildEventsPanel();
+  recompute();
+}
+
+// =============================================================================
+// SIMULATION
+// =============================================================================
+
+function computeForecast() {
+  const horizon = Math.round(getKnob('monthsHorizon'));
+  const SAMEmp = getKnob('SAMEmployees');
+  const baseAvgSize = getKnob('avgCompanySize');
+  const SAM = SAMEmp / Math.max(1, baseAvgSize); // SAM expressed in companies (cap)
+  const daysPerMonth = getKnob('daysPerYear') / 12;
+  const honeymoon = Math.round(getKnob('churnHoneymoon'));
+  const vendorGmvCap = getKnob('vendorGmvCapacity');
+  const startingCompanies = Math.round(getKnob('startingCompanies'));
+  const overridable = overridableKnobs();
+
+  // Conditional event trigger tracking (cleared per run)
+  const condTriggerMonth = {};
+  for (const ev of events) {
+    if (ev.triggerType === 'condition') condTriggerMonth[ev.id] = null;
+  }
+  // Expose during this run so eventIsActiveForMonth / describeEvent see it consistently
+  lastTriggerMap = condTriggerMonth;
+
+  // Per-metric previous-month effective value (for factor mode)
+  const prevEff = {};
+  for (const metric of overridable) prevEff[metric] = getKnob(metric);
+
+  function effectiveAt(metric, m) {
+    const baseVal = getKnob(metric);
+    let effective = baseVal;
+    if (metric === 'startMarketing') {
+      const growth = getKnob('marketingGrowth');
+      effective = baseVal * Math.pow(1 + growth, m - 1);
+    }
+    for (const ev of events) {
+      if (ev.metric !== metric || !ev.enabled) continue;
+      const startM = ev.triggerType === 'condition' ? condTriggerMonth[ev.id] : ev.startMonth;
+      if (!eventIsActiveForMonth(ev, m, startM)) continue;
+      if (ev.valueType === 'absolute') effective = ev.value;
+      else if (ev.valueType === 'factor') effective = prevEff[metric] * ev.value;
+    }
+    return effective;
+  }
+  function S(metric, m) { return effectiveAt(metric, m); }
+
+  // State
+  const cohorts = []; // {startMonth, count}
+  if (startingCompanies > 0) {
+    // Seed past-honeymoon cohort so churn applies from M1
+    cohorts.push({ startMonth: -100, count: startingCompanies });
+  }
+  const pendingDeals = []; // {closeMonth, count}
+  const months = [];
+  let cumProfit = 0;
+  let breakEvenMonth = null;
+  let cashLow = 0;
+
+  for (let m = 1; m <= horizon; m++) {
+    // Evaluate conditional events using the history simulated so far.
+    // Once a condition is met, the trigger month is locked in.
+    for (const ev of events) {
+      if (ev.triggerType !== 'condition' || !ev.enabled) continue;
+      if (condTriggerMonth[ev.id] !== null) continue;
+      if (checkCondition(ev, months)) condTriggerMonth[ev.id] = m;
+    }
+
+    const marketing = S('startMarketing', m);
+    const cpl = S('costPerLead', m);
+    const closeRate = S('leadCloseRate', m);
+    const salesCycle = Math.round(S('salesCycleMonths', m));
+    const repCapacity = S('salesRepCapacity', m);
+    const repSalary = S('salesRepSalary', m);
+
+    const avgSize = S('avgCompanySize', m);
+    const participation = S('participation', m);
+    const mealValue = S('mealValue', m);
+    const extrasPerDay = S('extrasPerDay', m);
+    const cateringPerDay = S('cateringPerDay', m);
+
+    const companyBase = S('companyBaseSub', m);
+    const perEmp = S('companyPerEmployee', m);
+    const vendorSub = S('vendorSub', m);
+    const commission = S('commissionRate', m);
+    const serviceFeeRate = S('serviceFee', m);
+    const deliveryShare = S('deliveryShare', m);
+    const deliveryCharge = S('deliveryCharge', m);
+    const deliveryCost = S('deliveryCost', m);
+
+    const compPerOps = S('companiesPerOps', m);
+    const venPerOps = S('vendorsPerOps', m);
+    const opsSalary = S('opsSalary', m);
+    const techPerOrder = S('techPerOrder', m);
+    const churn = S('monthlyChurn', m);
+    const founderCost = S('founderCost', m);
+    const overheadPct = S('overheadPct', m);
+
+    // -------------------------------------------------------------------------
+    // ACQUISITION MODEL — applied each month before close
+    // -------------------------------------------------------------------------
+    // (1) Seasonality multiplier on paid-lead generation
+    const calStart = Math.round(getKnob('calendarStart'));
+    const calMonth = ((m - 1 + calStart - 1) % 12) + 1;
+    const seasonalityOn = Math.round(effectiveAt('seasonalityEnabled', m)) === 1;
+    const seasonalityMult = seasonalityOn ? (SEASONALITY[calMonth] || 1) : 1.0;
+    // (2) Cold-start ramp — close-rate scales 0→1 over first N months
+    const coldStartN = Math.round(effectiveAt('coldStartMonths', m));
+    const coldStartMult = coldStartN > 0 ? Math.min(1, m / coldStartN) : 1.0;
+    // (3) Saturation — close-rate × (1 − penetration)^β
+    const currentActiveCo = cohorts.reduce((s, c) => s + c.count, 0);
+    const currentActiveEmp = currentActiveCo * avgSize;
+    const SAMEmpVal = getKnob('SAMEmployees');
+    const penetration = SAMEmpVal > 0 ? Math.min(1, currentActiveEmp / SAMEmpVal) : 0;
+    const beta = effectiveAt('saturationStrength', m);
+    // Saturation curve — hyperbolic decay calibrated so β=1 cuts conversion ~50% at 10% penetration.
+    // Was (1−penetration)^β, but that's barely visible at <5% penetration. New form: 1 ÷ (1 + β · pen · 10).
+    const saturationMult = beta > 0 ? 1 / (1 + beta * penetration * 10) : 1.0;
+    // (4) Effective close-rate (after both modulators)
+    const effectiveCloseRate = closeRate * coldStartMult * saturationMult;
+
+    // Lead generation
+    const paidLeads = (cpl > 0 ? marketing / cpl : 0) * seasonalityMult;
+    const referralCoeff = effectiveAt('referralCoefficient', m);
+    const referralLeads = currentActiveCo * referralCoeff;
+    const leads = paidLeads + referralLeads;
+
+    // Rep capacity & deals
+    const repsRaw = leads > 0 ? leads / repCapacity : 0;
+    const repsNeeded = halfStep(repsRaw);
+    const dealsFromLeads = leads * effectiveCloseRate;
+    if (dealsFromLeads > 0) {
+      pendingDeals.push({ closeMonth: m + salesCycle, count: dealsFromLeads });
+    }
+
+    // Close deals maturing this month
+    let newCompanies = 0;
+    for (const d of pendingDeals) {
+      if (d.closeMonth === m) newCompanies += d.count;
+    }
+    // SAM cap
+    const currentActive = cohorts.reduce((s, c) => s + c.count, 0);
+    const headroom = Math.max(0, SAM - currentActive);
+    newCompanies = Math.min(newCompanies, headroom);
+    if (newCompanies > 0) cohorts.push({ startMonth: m, count: newCompanies });
+
+    // Churn per cohort — honeymoon + tiered (early-vs-steady) rate
+    const earlyMult = effectiveAt('earlyChurnMultiplier', m);
+    const earlyMos = Math.round(effectiveAt('earlyChurnMonths', m));
+    let totalChurned = 0;
+    for (const c of cohorts) {
+      const age = m - c.startMonth;
+      if (age > honeymoon && c.count > 0) {
+        const monthsPastHoneymoon = age - honeymoon;
+        const rate = (monthsPastHoneymoon <= earlyMos) ? churn * earlyMult : churn;
+        const churnedHere = c.count * rate;
+        c.count -= churnedHere;
+        totalChurned += churnedHere;
+      }
+    }
+    const effectiveChurnRate = currentActiveCo > 0 ? totalChurned / currentActiveCo : 0;
+
+    const activeCompanies = cohorts.reduce((s, c) => s + c.count, 0);
+    const activeEmployees = activeCompanies * avgSize;
+
+    // GMV
+    // Meals: based on participation (only orders placed count)
+    const dailyOrders = activeEmployees * participation;
+    const monthlyOrders = dailyOrders * daysPerMonth;
+    const gmvMeals = monthlyOrders * mealValue;
+    // Extras & catering: per employee per work day, independent of participation
+    // (companies budget these as flat €/employee/day for office coffee, snacks, catering)
+    const employeeWorkDays = activeEmployees * daysPerMonth;
+    const gmvExtras = employeeWorkDays * extrasPerDay;
+    const gmvCatering = employeeWorkDays * cateringPerDay;
+    const monthlyGMV = gmvMeals + gmvExtras + gmvCatering;
+
+    // Vendors needed
+    const vendorsActive = vendorGmvCap > 0 ? monthlyGMV / vendorGmvCap : 0;
+
+    // Delivery — ISOLATED from P&L. Outsourced, pass-through, ~zero margin by design.
+    // One consolidated drop per delivering-company per work day.
+    const deliveriesCount = activeCompanies * deliveryShare * daysPerMonth;
+    const revDelivery = deliveriesCount * deliveryCharge;
+    const deliveryCostTotal = deliveriesCount * deliveryCost;
+    const deliveryMargin = revDelivery - deliveryCostTotal;
+
+    // Revenue — EXCLUDES delivery (delivery is pass-through, see Deliveries section)
+    const revCompanySubs = activeCompanies * (companyBase + perEmp * avgSize);
+    const revVendorSubs = vendorsActive * vendorSub;
+    const revCommissionMeals = gmvMeals * commission;
+    const revCommissionExtras = gmvExtras * commission;
+    const revCommissionCatering = gmvCatering * commission;
+    const revCommission = revCommissionMeals + revCommissionExtras + revCommissionCatering;
+    const revServiceFee = monthlyOrders * serviceFeeRate;
+    const totalRevenue = revCompanySubs + revVendorSubs + revCommission + revServiceFee;
+
+    // Costs — EXCLUDES delivery cost (courier is pass-through)
+    const opsFTECompaniesRaw = activeCompanies / compPerOps;
+    const opsFTEVendorsRaw = vendorsActive / venPerOps;
+    const totalOpsFTERaw = opsFTECompaniesRaw + opsFTEVendorsRaw;
+    const totalOpsFTE = halfStep(totalOpsFTERaw);
+    const opsFTECompanies = opsFTECompaniesRaw;
+    const opsFTEVendors = opsFTEVendorsRaw;
+    const opsCost = totalOpsFTE * opsSalary;
+    const salesCost = repsNeeded * repSalary;
+    const techCost = monthlyOrders * techPerOrder;
+    const overheadCost = totalRevenue * overheadPct;
+    const totalCost = opsCost + salesCost + techCost + marketing + founderCost + overheadCost;
+
+    const profit = totalRevenue - totalCost;
+    cumProfit += profit;
+    if (breakEvenMonth === null && profit > 0) breakEvenMonth = m;
+    if (cumProfit < cashLow) cashLow = cumProfit;
+
+    // Acquisition unit economics
+    const cac = newCompanies > 0.01 ? marketing / newCompanies : 0;
+    const arpcMonthly = activeCompanies > 0 ? totalRevenue / activeCompanies : 0; // avg revenue per customer/mo
+    const customerLifetimeMo = churn > 0 ? Math.min(120, 1 / churn) : 120;
+    const ltv = arpcMonthly * customerLifetimeMo;
+    const ltvToCac = cac > 0 ? ltv / cac : 0;
+
+    // Company valuation — both methods computed; chosen mode picked downstream
+    const profitMultiple = getKnob('valuationProfitMultiple');
+    const revenueMultiple = getKnob('valuationRevenueMultiple');
+    const valuationMode = Math.round(getKnob('valuationMode'));
+    const annualProfit = profit * 12;
+    const annualRevenue = totalRevenue * 12;
+    const valuationByProfit = Math.max(0, annualProfit) * profitMultiple;
+    const valuationByRevenue = annualRevenue * revenueMultiple;
+    const valuation = valuationMode === 1 ? valuationByRevenue : valuationByProfit;
+
+    months.push({
+      month: m,
+      // Acquisition model
+      marketing, leads, paidLeads, referralLeads, repsNeeded,
+      coldStartMult, saturationMult, seasonalityMult, effectiveCloseRate,
+      effectiveChurnRate, cac, arpcMonthly, customerLifetimeMo, ltv, ltvToCac,
+      // Marketplace
+      newCompanies, churned: totalChurned,
+      activeCompanies, activeEmployees,
+      vendorsActive, monthlyOrders,
+      deliveriesCount, revDelivery, deliveryCostTotal, deliveryMargin,
+      gmvMeals, gmvExtras, gmvCatering, monthlyGMV,
+      // P&L
+      revCompanySubs, revVendorSubs,
+      revCommissionMeals, revCommissionExtras, revCommissionCatering, revCommission,
+      revServiceFee, totalRevenue,
+      opsFTECompanies, opsFTEVendors, totalOpsFTE,
+      opsCost, salesCost, techCost, founderCost, overheadCost, totalCost,
+      profit, cumProfit,
+      annualProfit, annualRevenue, valuationByProfit, valuationByRevenue, valuation,
+    });
+
+    // Update prevEff for next month's factor-mode resolution
+    for (const metric of overridable) prevEff[metric] = effectiveAt(metric, m);
+  }
+
+  return { months, breakEvenMonth, cashLow, condTriggerMonth };
+}
+
+// =============================================================================
+// RENDER — Cards
+// =============================================================================
+
+function renderCards(result) {
+  const months = result.months;
+  const m = months[months.length - 1];
+  const arr = m.totalRevenue * 12;
+  const totalHeadcount = (m.totalOpsFTE + m.repsNeeded + 3).toFixed(1);
+  const profitPositive = m.profit >= 0;
+  const cards = document.getElementById('cards');
+  const SAMEmp = getKnob('SAMEmployees');
+  const penetration = SAMEmp > 0 ? (m.activeEmployees / SAMEmp) : 0;
+  cards.innerHTML = `
+    <div class="card">
+      <div class="label">Month ${m.month} — employees</div>
+      <div class="value">${fmtInt(m.activeEmployees)} <span style="font-size:13px;color:#6b7280;font-weight:500">/ ${fmtInt(SAMEmp)} SAM</span></div>
+      <div class="sub">${(penetration * 100).toFixed(2)}% of SAM (employees) · ${fmtInt(m.activeCompanies)} active companies · ${fmtFloat(m.vendorsActive)} vendors</div>
+    </div>
+    <div class="card">
+      <div class="label">Annual run rate (end of horizon)</div>
+      <div class="value">${fmtEur(arr)}</div>
+      <div class="sub">${fmtEur(m.totalRevenue)} / month</div>
+    </div>
+    <div class="card ${profitPositive ? 'positive' : 'negative'}">
+      <div class="label">Cumulative profit / cash · Valuation</div>
+      <div class="value">${fmtEur(m.cumProfit)}</div>
+      <div class="sub">low point: ${fmtEur(result.cashLow)} · ${result.breakEvenMonth ? 'breakeven m' + result.breakEvenMonth : 'no breakeven yet'}<br>Valuation: <b>${fmtEur(m.valuation)}</b> (${getKnob('valuationMode') === 1 ? `${getKnob('valuationRevenueMultiple').toFixed(1)}× revenue` : `${getKnob('valuationProfitMultiple').toFixed(1)}× profit`})</div>
+    </div>
+    <div class="card">
+      <div class="label">Headcount needed</div>
+      <div class="value">${totalHeadcount}</div>
+      <div class="sub">ops ${fmtFloat(m.totalOpsFTE)} · sales ${fmtFloat(m.repsNeeded)} · founders 3</div>
+    </div>
+  `;
+}
+
+// =============================================================================
+// RENDER — Charts
+// =============================================================================
+
+// Register annotation plugin so we can mark events on the charts
+if (typeof window['chartjs-plugin-annotation'] !== 'undefined') {
+  Chart.register(window['chartjs-plugin-annotation']);
+}
+
+// Helper: convert hex color to rgba with alpha
+function hexToRgba(hex, alpha) {
+  if (!hex || !hex.startsWith('#')) return `rgba(245, 158, 11, ${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Build annotation objects for enabled, visible events — colored band for duration + start/end lines.
+// No hover tooltip on the chart itself; the clickable dot strip ABOVE the chart owns interactivity.
+function buildEventAnnotations() {
+  const ann = {};
+  const horizon = Math.round(getKnob('monthsHorizon'));
+  const visible = events.filter(e => e.enabled && e.showInViz !== false);
+  let idx = 0;
+  visible.forEach((e) => {
+    const startM = resolveEventStartMonth(e);
+    if (startM === null || startM === undefined) return; // condition not yet met → no annotation
+    const startX = startM - 1;
+    const color = e.color || '#f59e0b';
+
+    // Shaded box ONLY for finite-duration events (not one-off, not permanent)
+    if (e.duration === 'months') {
+      const endX = startX + Math.max(1, e.durationMonths) - 1;
+      if (endX > startX) {
+        ann['evBox' + idx] = {
+          type: 'box',
+          xMin: startX, xMax: endX,
+          backgroundColor: hexToRgba(color, 0.10),
+          borderColor: 'transparent', borderWidth: 0,
+          drawTime: 'beforeDatasetsDraw',
+        };
+      }
+      ann['evEnd' + idx] = {
+        type: 'line', xMin: endX, xMax: endX,
+        borderColor: hexToRgba(color, 0.40),
+        borderWidth: 1.5, borderDash: [2, 4],
+      };
+    }
+
+    // Start line (always, for every event type)
+    ann['evStart' + idx] = {
+      type: 'line', xMin: startX, xMax: startX,
+      borderColor: hexToRgba(color, 0.55),
+      borderWidth: 2, borderDash: [4, 3],
+    };
+    idx++;
+  });
+  return ann;
+}
+
+// =============================================================================
+// EVENT POPUP — shared by chart dots + table cells
+// =============================================================================
+
+function showEventPopup(ev, anchorEvent) {
+  hideEventPopup();
+  const popup = document.getElementById('event-popup');
+  const body = document.getElementById('event-popup-body');
+  const color = ev.color || '#f59e0b';
+  let triggerHtml;
+  if (ev.triggerType === 'condition') {
+    const t = lastTriggerMap[ev.id];
+    const aggLabel = ev.condAggregation === 'sumLastN' ? `sum over last ${ev.condLastN} months` : 'last month value';
+    const cmp = ev.condComparator === 'lte' ? '≤' : '≥';
+    triggerHtml = t
+      ? `<b>Fired at M${t}</b><br><span style="color:#6b7280">when ${aggLabel} of ${ev.condMetric} ${cmp} ${ev.condThreshold}</span>`
+      : `<b style="color:#92400e">Condition not yet met</b><br><span style="color:#6b7280">when ${aggLabel} of ${ev.condMetric} ${cmp} ${ev.condThreshold}</span>`;
+  } else {
+    triggerHtml = `From M${ev.startMonth}`;
+  }
+  const durLabel = ev.duration === 'oneoff' ? '1 month'
+    : ev.duration === 'permanent' ? 'permanent (from start, no end)'
+    : `for ${ev.durationMonths} months`;
+  const metricLabel = knobs[ev.metric] ? knobs[ev.metric].label : ev.metric;
+  const valueLabel = ev.valueType === 'absolute' ? `${ev.value} (absolute)` : `× ${ev.value} (factor on prev month)`;
+  const descHtml = ev.description ? `<div class="row" style="margin:6px 0 10px;color:#374151;font-style:italic">${escapeHtml(ev.description)}</div>` : '';
+  body.innerHTML = `
+    <div class="title" style="color:${color}">${escapeHtml(ev.title)}</div>
+    ${descHtml}
+    <div class="row"><span class="label">Trigger</span>${triggerHtml}</div>
+    <div class="row"><span class="label">Overrides</span>${escapeHtml(metricLabel)}</div>
+    <div class="row"><span class="label">Duration</span>${durLabel}</div>
+    <div class="row"><span class="label">Value</span>${valueLabel}</div>
+  `;
+  popup.style.borderColor = color;
+  popup.classList.add('open');
+  // Position near cursor, keeping inside viewport
+  const ww = window.innerWidth;
+  const wh = window.innerHeight;
+  const w = popup.offsetWidth;
+  const h = popup.offsetHeight;
+  let left = (anchorEvent.clientX || 100) + 12;
+  let top = (anchorEvent.clientY || 100) + 12;
+  if (left + w > ww - 12) left = (anchorEvent.clientX || 100) - w - 12;
+  if (top + h > wh - 12) top = (anchorEvent.clientY || 100) - h - 12;
+  popup.style.left = Math.max(8, left) + 'px';
+  popup.style.top = Math.max(8, top) + 'px';
+}
+
+function hideEventPopup() {
+  document.getElementById('event-popup').classList.remove('open');
+}
+
+// Generic info popup — used by table info icons (ⓘ) to explain row calculations + formulas
+function showInfoPopup(label, calc, mouseEvent) {
+  hideEventPopup();
+  const popup = document.getElementById('event-popup');
+  const body = document.getElementById('event-popup-body');
+  // Try to extract a "formula-like" snippet from the calc text (anything between :, after — or "= ")
+  body.innerHTML = `
+    <div class="title" style="color:#4f46e5">${escapeHtml(label)}</div>
+    <div class="row" style="margin-top:8px"><span class="label">How it's calculated</span></div>
+    <div class="row" style="color:#374151;line-height:1.6;background:#f5f3ff;border-left:3px solid #8b5cf6;padding:8px 10px;border-radius:0 4px 4px 0;margin-top:4px;font-size:12px">${escapeHtml(calc)}</div>
+  `;
+  popup.style.borderColor = '#8b5cf6';
+  popup.classList.add('open');
+  // Position near cursor
+  const ww = window.innerWidth, wh = window.innerHeight;
+  const w = popup.offsetWidth, h = popup.offsetHeight;
+  let left = (mouseEvent.clientX || 100) + 12;
+  let top = (mouseEvent.clientY || 100) + 12;
+  if (left + w > ww - 12) left = (mouseEvent.clientX || 100) - w - 12;
+  if (top + h > wh - 12) top = (mouseEvent.clientY || 100) - h - 12;
+  popup.style.left = Math.max(8, left) + 'px';
+  popup.style.top = Math.max(8, top) + 'px';
+}
+
+// Click delegation for info icons in the table — opens the formula popup
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (t && t.classList && t.classList.contains('info-icon') && t.dataset.infoCalc) {
+    e.stopPropagation();
+    showInfoPopup(t.dataset.infoLabel || '', t.dataset.infoCalc, e);
+  }
+}, true);
+
+// Dismiss popup when clicking anywhere outside it (and not on a marker/dot/closer)
+document.addEventListener('click', (e) => {
+  const popup = document.getElementById('event-popup');
+  if (!popup) return;
+  if (popup.contains(e.target)) return;
+  if (e.target.classList && (e.target.classList.contains('event-marker') || e.target.classList.contains('event-dot') || e.target.classList.contains('info-icon'))) return;
+  hideEventPopup();
+});
+
+// Position event dots above each chart, at the x-pixel of each event's start month
+function positionEventDots(chartId) {
+  const chart = charts[chartId];
+  if (!chart) return;
+  const stripId = chartId.replace('chart-', 'strip-');
+  const strip = document.getElementById(stripId);
+  if (!strip) return;
+  strip.innerHTML = '';
+  const xScale = chart.scales && chart.scales.x;
+  if (!xScale) return;
+  const visible = events.filter(e => e.enabled && e.showInViz !== false);
+  visible.forEach(e => {
+    const startM = resolveEventStartMonth(e);
+    if (startM === null || startM === undefined) return;
+    const monthIdx = startM - 1;
+    if (monthIdx < 0) return;
+    const xPixel = xScale.getPixelForValue(monthIdx);
+    if (!isFinite(xPixel)) return;
+    const dot = document.createElement('div');
+    dot.className = 'event-dot';
+    dot.style.left = xPixel + 'px';
+    dot.style.background = e.color || '#f59e0b';
+    dot.title = e.title;
+    dot.addEventListener('click', (ev) => { ev.stopPropagation(); showEventPopup(e, ev); });
+    strip.appendChild(dot);
+  });
+}
+
+function positionAllEventDots() {
+  Object.keys(charts).forEach(positionEventDots);
+}
+
+// Reposition on window resize (chart re-renders responsively, so x positions may shift)
+window.addEventListener('resize', () => { setTimeout(positionAllEventDots, 150); });
+
+const charts = {};
+function makeChart(id, type, datasets, labels, opts) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  if (charts[id]) charts[id].destroy();
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } },
+      annotation: { annotations: buildEventAnnotations() },
+    },
+    scales: { x: { ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } },
+  };
+  // Shallow-merge with caller overrides; preserve annotations
+  const merged = Object.assign({}, baseOpts, opts || {});
+  if (opts && opts.plugins) merged.plugins = Object.assign({}, baseOpts.plugins, opts.plugins);
+  if (opts && opts.scales) merged.scales = Object.assign({}, baseOpts.scales, opts.scales);
+  charts[id] = new Chart(ctx, { type, data: { labels, datasets }, options: merged });
+  // After chart's first paint, position the event dots above it
+  setTimeout(() => positionEventDots(id), 0);
+}
+
+function renderCharts(result) {
+  const months = result.months;
+  const labels = months.map(m => formatMonthLabel(m.month));
+  const teal = '#0d9488', blue = '#2563eb', green = '#16a34a', red = '#dc2626',
+        amber = '#f59e0b', violet = '#8b5cf6', cyan = '#06b6d4', pink = '#ec4899';
+
+  // ---------- ACQUISITION MODEL CHARTS ----------
+  makeChart('chart-effclose', 'line', [
+    { label: 'Effective close-rate', data: months.map(m => m.effectiveCloseRate * 100), borderColor: violet, backgroundColor: violet + '20', tension: 0.25, fill: true },
+    { label: 'Base close-rate (knob)', data: months.map(() => getKnob('leadCloseRate') * 100), borderColor: '#9ca3af', borderDash: [3, 3], tension: 0 },
+  ], labels);
+  makeChart('chart-leads', 'line', [
+    { label: 'Paid leads (marketing)', data: months.map(m => m.paidLeads), borderColor: amber, backgroundColor: amber + '60', tension: 0.25, fill: true, stack: 'leads' },
+    { label: 'Referral leads (from active customers)', data: months.map(m => m.referralLeads), borderColor: green, backgroundColor: green + '60', tension: 0.25, fill: true, stack: 'leads' },
+  ], labels, { scales: { y: { stacked: true, ticks: { font: { size: 10 } } } } });
+  makeChart('chart-cac', 'line', [
+    { label: 'CAC (€/new customer)', data: months.map(m => m.cac), borderColor: red, backgroundColor: red + '20', tension: 0.25, fill: true },
+  ], labels);
+  makeChart('chart-ltvcac', 'line', [
+    { label: 'LTV : CAC', data: months.map(m => m.ltvToCac), borderColor: blue, backgroundColor: blue + '20', tension: 0.25, fill: true },
+    { label: 'Healthy threshold (3×)', data: months.map(() => 3), borderColor: '#9ca3af', borderDash: [4, 4], tension: 0, pointRadius: 0 },
+  ], labels);
+  makeChart('chart-churn', 'line', [
+    { label: 'Effective churn rate', data: months.map(m => m.effectiveChurnRate * 100), borderColor: red, backgroundColor: red + '20', tension: 0.25, fill: true },
+    { label: 'Steady-state churn (knob)', data: months.map(() => getKnob('monthlyChurn') * 100), borderColor: '#9ca3af', borderDash: [3, 3], tension: 0, pointRadius: 0 },
+  ], labels);
+  makeChart('chart-penetration', 'line', [
+    { label: 'Penetration of SAM', data: months.map(m => {
+        const SAMEmp = getKnob('SAMEmployees');
+        return SAMEmp > 0 ? (m.activeEmployees / SAMEmp * 100) : 0;
+      }), borderColor: pink, backgroundColor: pink + '20', tension: 0.25, fill: true },
+  ], labels);
+
+  // ---------- FORECAST CHARTS ----------
+  makeChart('chart-companies', 'line', [
+    { label: 'Active companies', data: months.map(m => m.activeCompanies), borderColor: blue, backgroundColor: blue + '20', tension: 0.25, fill: true, yAxisID: 'yCompanies' },
+    { label: 'Active employees', data: months.map(m => m.activeEmployees), borderColor: green, backgroundColor: 'transparent', tension: 0.25, fill: false, yAxisID: 'yEmployees', borderDash: [5, 4] },
+  ], labels, {
+    scales: {
+      x: { ticks: { font: { size: 10 } } },
+      yCompanies: { type: 'linear', position: 'left', ticks: { font: { size: 10 }, color: blue }, title: { display: true, text: 'Companies', font: { size: 10 }, color: blue } },
+      yEmployees: { type: 'linear', position: 'right', ticks: { font: { size: 10 }, color: green }, title: { display: true, text: 'Employees', font: { size: 10 }, color: green }, grid: { drawOnChartArea: false } },
+    },
+  });
+  makeChart('chart-revenue-cost', 'line', [
+    { label: 'Revenue', data: months.map(m => m.totalRevenue), borderColor: green, tension: 0.25 },
+    { label: 'Cost', data: months.map(m => m.totalCost), borderColor: red, tension: 0.25 },
+  ], labels);
+  makeChart('chart-profit', 'bar', [
+    { label: 'Monthly profit', data: months.map(m => m.profit), backgroundColor: months.map(m => m.profit >= 0 ? '#10b981' : '#ef4444') },
+  ], labels);
+  makeChart('chart-cum-profit', 'line', [
+    { label: 'Cumulative profit', data: months.map(m => m.cumProfit), borderColor: violet, backgroundColor: violet + '20', tension: 0.25, fill: true },
+  ], labels);
+  makeChart('chart-headcount', 'line', [
+    { label: 'Sales reps (half-step)', data: months.map(m => m.repsNeeded), borderColor: amber, tension: 0.2, stepped: 'after' },
+    { label: 'Ops FTE (combined, half-step)', data: months.map(m => m.totalOpsFTE), borderColor: violet, tension: 0.2, stepped: 'after' },
+    { label: 'Total hired (ex-founders)', data: months.map(m => m.repsNeeded + m.totalOpsFTE), borderColor: '#6b7280', borderDash: [4, 4], tension: 0, stepped: 'after' },
+  ], labels);
+  makeChart('chart-funnel', 'line', [
+    { label: 'Leads / month', data: months.map(m => m.leads), borderColor: blue, tension: 0.2 },
+    { label: 'New companies / month', data: months.map(m => m.newCompanies), borderColor: green, tension: 0.2 },
+    { label: 'Churned / month', data: months.map(m => m.churned), borderColor: red, tension: 0.2 },
+  ], labels);
+  makeChart('chart-gmv', 'line', [
+    { label: 'Meals', data: months.map(m => m.gmvMeals), borderColor: teal, backgroundColor: teal + '40', tension: 0.25, fill: true, stack: 'gmv' },
+    { label: 'Extras', data: months.map(m => m.gmvExtras), borderColor: amber, backgroundColor: amber + '40', tension: 0.25, fill: true, stack: 'gmv' },
+    { label: 'Catering', data: months.map(m => m.gmvCatering), borderColor: '#ec4899', backgroundColor: '#ec489940', tension: 0.25, fill: true, stack: 'gmv' },
+  ], labels, { scales: { y: { stacked: true, ticks: { font: { size: 10 } } } } });
+  makeChart('chart-marketing', 'bar', [
+    { label: 'Marketing spend', data: months.map(m => m.marketing), backgroundColor: amber + '80', borderColor: amber },
+  ], labels);
+  const valuationLabel = getKnob('valuationMode') === 1
+    ? `Valuation (${getKnob('valuationRevenueMultiple').toFixed(1)}× annual revenue)`
+    : `Valuation (${getKnob('valuationProfitMultiple').toFixed(1)}× annual profit)`;
+  makeChart('chart-valuation', 'line', [
+    { label: valuationLabel, data: months.map(m => m.valuation), borderColor: '#0ea5e9', backgroundColor: '#0ea5e920', tension: 0.25, fill: true },
+  ], labels);
+}
+
+// =============================================================================
+// RENDER — Table
+// =============================================================================
+
+function renderTable(result) {
+  const months = result.months;
+  const headers = ['', ...months.map(m => formatMonthLabel(m.month))];
+  const SAMEmp = getKnob('SAMEmployees');
+
+  // Row schema: { label, cat, metrics?, get(m)?, fmt?, kind?, isTotal?, noPct? }
+  // - kind: 'monetary' (€, eligible for %-of-revenue mode) | 'count' | 'pct' | 'text'
+  // - noPct: monetary row that should NEVER convert to % (e.g. annualized values)
+  const rows = [
+    { group: true, label: 'Acquisition model (model of the model)', cat: 'funnel' },
+    { label: 'Marketing spend', cat: 'funnel', calc: 'Starting marketing × (1 + growth)^(t−1), plus any boost or event override.', metrics: ['startMarketing'], get: m => m.marketing, fmt: 'eur', kind: 'monetary' },
+    { label: 'Seasonality multiplier', cat: 'funnel', calc: 'Greek calendar multiplier (Jan 1.2×, Aug 0.4×, Sep 1.3×, Dec 0.5×, others around 1×). 1.00× when seasonality is off.', metrics: ['seasonalityEnabled'], get: m => m.seasonalityMult, fmt: 'float', kind: 'count' },
+    { label: 'Paid leads (marketing-sourced)', cat: 'funnel', calc: '(Marketing ÷ CPL) × Seasonality multiplier.', metrics: ['startMarketing', 'costPerLead'], get: m => m.paidLeads, fmt: 'float', kind: 'count' },
+    { label: 'Referral leads (from active customers)', cat: 'funnel', calc: 'Active companies × Referral coefficient. Compounds as the base grows.', metrics: ['referralCoefficient'], get: m => m.referralLeads, fmt: 'float', kind: 'count' },
+    { label: 'Total leads', cat: 'funnel', calc: 'Paid + Referral leads.', get: m => m.leads, fmt: 'float', kind: 'count', isTotal: true },
+    { label: 'Cold-start multiplier', cat: 'funnel', calc: 'min(1, current-month ÷ cold-start months). Linearly ramps close-rate over first N months. 1.0× when ramp is off.', metrics: ['coldStartMonths'], get: m => m.coldStartMult, fmt: 'float', kind: 'count' },
+    { label: 'Saturation multiplier', cat: 'funnel', calc: '1 ÷ (1 + β × penetration × 10). Hyperbolic decay calibrated so β=1 cuts conversion ~50% at 10% penetration; β=3 cuts it to ~25% at 10%. 1.0× when β=0.', metrics: ['saturationStrength'], get: m => m.saturationMult, fmt: 'float', kind: 'count' },
+    { label: 'Effective close-rate', cat: 'funnel', calc: 'Base close-rate × Cold-start × Saturation multipliers. The actual conversion this month.', metrics: ['leadCloseRate'], get: m => m.effectiveCloseRate, fmt: 'pct', kind: 'pct' },
+    { label: 'New companies closed', cat: 'funnel', calc: 'Total leads × Effective close-rate, delivered after Sales cycle lag (months).', metrics: ['leadCloseRate', 'salesCycleMonths'], get: m => m.newCompanies, fmt: 'float', kind: 'count' },
+    { label: 'Churned companies', cat: 'funnel', calc: 'Cohort-by-cohort: early-multiplier × base churn for the first N months past honeymoon, then base churn.', metrics: ['monthlyChurn', 'earlyChurnMultiplier'], get: m => m.churned, fmt: 'float', kind: 'count' },
+    { label: 'Effective churn rate', cat: 'funnel', calc: 'Churned ÷ Active companies — the blended rate after early-cohort & honeymoon mix.', get: m => m.effectiveChurnRate, fmt: 'pct', kind: 'pct' },
+    { label: 'CAC (€ per new customer)', cat: 'funnel', calc: 'Marketing spend ÷ New companies closed. Approximate — conflates marketing-now with closes-now.', get: m => m.cac, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'ARPC (€/customer/month)', cat: 'funnel', calc: 'Total revenue ÷ Active companies. Average revenue per customer per month.', get: m => m.arpcMonthly, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'Customer lifetime (months)', cat: 'funnel', calc: '1 ÷ Steady-state monthly churn rate. Capped at 120 months.', get: m => m.customerLifetimeMo, fmt: 'float', kind: 'count' },
+    { label: 'LTV (€)', cat: 'funnel', calc: 'ARPC × Customer lifetime. Lifetime gross revenue from a customer.', get: m => m.ltv, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'LTV : CAC ratio', cat: 'funnel', calc: 'LTV ÷ CAC. Rule of thumb for a healthy B2B SaaS is ≥ 3. Below 1 is structurally bad.', get: m => m.ltvToCac, fmt: 'float', kind: 'count', isTotal: true },
+
+    { group: true, label: 'Marketplace', cat: 'marketplace' },
+    { label: 'Active companies', cat: 'marketplace', calc: 'Previous-month active + new closed − churned, capped at SAM headroom.', get: m => m.activeCompanies, fmt: 'float', kind: 'count' },
+    { label: 'Active employees', cat: 'marketplace', calc: 'Active companies × Avg company size.', metrics: ['avgCompanySize'], get: m => m.activeEmployees, fmt: 'int', kind: 'count' },
+    { label: 'Penetration of SAM (employees)', cat: 'marketplace', calc: 'Active employees ÷ SAM (employees). SAM is the growth ceiling.', get: m => SAMEmp > 0 ? (m.activeEmployees / SAMEmp) : 0, fmt: 'pct', kind: 'pct' },
+    { label: 'Vendors active', cat: 'marketplace', calc: 'Monthly GMV ÷ GMV-per-vendor capacity. Vendors auto-scale with food volume.', metrics: ['vendorGmvCapacity'], get: m => m.vendorsActive, fmt: 'float', kind: 'count' },
+    { label: 'Monthly orders', cat: 'marketplace', calc: 'Active employees × Participation × Days/month. (Participation = 3/5 days by default.)', metrics: ['participation'], get: m => m.monthlyOrders, fmt: 'int', kind: 'count' },
+    { label: 'GMV — meals', cat: 'marketplace', calc: 'Monthly orders × Avg meal value (€).', metrics: ['mealValue', 'participation'], get: m => m.gmvMeals, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'GMV — extras', cat: 'marketplace', calc: 'Active employees × Days/month × Extras €/emp/day. Independent of participation — this is the company\'s flat budget for coffee/snacks.', metrics: ['extrasPerDay'], get: m => m.gmvExtras, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'GMV — catering', cat: 'marketplace', calc: 'Active employees × Days/month × Catering €/emp/day. Same model as extras but for catered events.', metrics: ['cateringPerDay'], get: m => m.gmvCatering, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'Monthly GMV total', cat: 'marketplace', calc: 'Sum of GMV — meals + extras + catering. This is the value moving through the platform, NOT CF revenue.', get: m => m.monthlyGMV, fmt: 'eur', kind: 'monetary', isTotal: true, noPct: true },
+
+    { group: true, label: 'Revenue (ex-delivery)', cat: 'revenue' },
+    { label: 'Company subscriptions', cat: 'revenue', calc: 'Active companies × (Base subscription + Per-employee fee × Avg size).', metrics: ['companyBaseSub', 'companyPerEmployee'], get: m => m.revCompanySubs, fmt: 'eur', kind: 'monetary' },
+    { label: 'Vendor subscriptions', cat: 'revenue', calc: 'Active vendors × Vendor subscription/mo.', metrics: ['vendorSub'], get: m => m.revVendorSubs, fmt: 'eur', kind: 'monetary' },
+    { label: 'Commission — meals', cat: 'revenue', calc: 'Meals GMV × Vendor commission %. CF\'s take from food vendors on meal orders.', metrics: ['commissionRate', 'mealValue'], get: m => m.revCommissionMeals, fmt: 'eur', kind: 'monetary' },
+    { label: 'Commission — extras', cat: 'revenue', calc: 'Extras GMV × Commission %.', metrics: ['commissionRate', 'extrasPerDay'], get: m => m.revCommissionExtras, fmt: 'eur', kind: 'monetary' },
+    { label: 'Commission — catering', cat: 'revenue', calc: 'Catering GMV × Commission %.', metrics: ['commissionRate', 'cateringPerDay'], get: m => m.revCommissionCatering, fmt: 'eur', kind: 'monetary' },
+    { label: 'Service fees', cat: 'revenue', calc: 'Monthly orders × Service fee per order (€). Paid by employee/company at checkout.', metrics: ['serviceFee'], get: m => m.revServiceFee, fmt: 'eur', kind: 'monetary' },
+    { label: 'Total revenue', cat: 'revenue', calc: 'Sum of subscriptions + commissions + service fees. EXCLUDES delivery (delivery is pass-through, see Deliveries section).', get: m => m.totalRevenue, fmt: 'eur', kind: 'monetary', isTotal: true },
+
+    { group: true, label: 'Costs (ex-delivery)', cat: 'costs' },
+    { label: 'Sales reps (hired, half-step)', cat: 'costs', calc: 'CEIL(Leads ÷ Sales-rep capacity × 2) ÷ 2 → next half-FTE. You always round up so you don\'t under-hire.', metrics: ['salesRepCapacity'], get: m => m.repsNeeded, fmt: 'float', kind: 'count' },
+    { label: 'Ops FTE (hired, half-step)', cat: 'costs', calc: 'Half-step ceil of (active companies/companies-per-ops + active vendors/vendors-per-ops). One role covers both.', metrics: ['companiesPerOps', 'vendorsPerOps'], get: m => m.totalOpsFTE, fmt: 'float', kind: 'count' },
+    { label: 'Total headcount (incl. 3 founders)', cat: 'costs', calc: 'Sales reps + Ops FTE + 3 founders (fixed).', get: m => m.totalOpsFTE + m.repsNeeded + 3, fmt: 'float', kind: 'count' },
+    { label: 'Sales rep salaries', cat: 'costs', calc: 'Sales reps (half-step) × Loaded monthly salary.', metrics: ['salesRepSalary', 'salesRepCapacity'], get: m => m.salesCost, fmt: 'eur', kind: 'monetary' },
+    { label: 'Ops salaries', cat: 'costs', calc: 'Ops FTE (half-step) × Loaded monthly salary.', metrics: ['opsSalary', 'companiesPerOps', 'vendorsPerOps'], get: m => m.opsCost, fmt: 'eur', kind: 'monetary' },
+    { label: 'Founders salaries', cat: 'costs', calc: 'Knob value + any event override. 0 by default — kicks in via the conditional event.', metrics: ['founderCost'], get: m => m.founderCost, fmt: 'eur', kind: 'monetary' },
+    { label: 'Tech infra (per order)', cat: 'costs', calc: 'Monthly orders × Tech cost per order (€). Covers hosting, GonnaOrder fees, payment processing, etc.', metrics: ['techPerOrder'], get: m => m.techCost, fmt: 'eur', kind: 'monetary' },
+    { label: 'Marketing spend', cat: 'costs', calc: 'Same value used to drive leads in Sales funnel — counted as cost here too.', metrics: ['startMarketing'], get: m => m.marketing, fmt: 'eur', kind: 'monetary' },
+    { label: 'Other overhead (% rev)', cat: 'costs', calc: 'Total revenue × Overhead %. Catches legal, accounting, office, software, etc.', metrics: ['overheadPct'], get: m => m.overheadCost, fmt: 'eur', kind: 'monetary' },
+    { label: 'Total cost', cat: 'costs', calc: 'Sum of all operating costs. EXCLUDES delivery cost (pass-through).', get: m => m.totalCost, fmt: 'eur', kind: 'monetary', isTotal: true },
+
+    { group: true, label: 'Bottom line', cat: 'bottom' },
+    { label: 'Monthly profit', cat: 'bottom', calc: 'Total revenue − Total cost. Excludes delivery on both sides (it nets ~0 by design).', get: m => m.profit, fmt: 'eur', kind: 'monetary', isTotal: true },
+    { label: 'Cumulative profit / cash', cat: 'bottom', calc: 'Running sum of monthly profits from M1. The low point of this line is your peak funding need.', get: m => m.cumProfit, fmt: 'eur', kind: 'monetary', noPct: true },
+
+    { group: true, label: 'Deliveries (isolated, pass-through)', cat: 'deliveries' },
+    { label: 'Deliveries per month', cat: 'deliveries', calc: 'Active companies × Share-of-companies-using-delivery × Days/month. Assumes one consolidated drop per delivering company per work day.', metrics: ['deliveryShare'], get: m => m.deliveriesCount, fmt: 'int', kind: 'count' },
+    { label: 'Delivery revenue (collected)', cat: 'deliveries', calc: 'Deliveries × Charge per drop. Passed to courier — not CF margin.', metrics: ['deliveryCharge', 'deliveryShare'], get: m => m.revDelivery, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'Delivery cost (courier)', cat: 'deliveries', calc: 'Deliveries × Cost per drop (outsourced courier).', metrics: ['deliveryCost', 'deliveryShare'], get: m => m.deliveryCostTotal, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'Net delivery margin', cat: 'deliveries', calc: 'Delivery revenue − Delivery cost. Should hover near zero — this line exists to monitor courier-pricing drift, not to make money.', get: m => m.deliveryMargin, fmt: 'eur', kind: 'monetary', noPct: true, isTotal: true },
+
+    { group: true, label: 'Valuation', cat: 'valuation' },
+    { label: 'Annualized revenue', cat: 'valuation', calc: 'Current-month revenue × 12. Common ARR proxy.', get: m => m.annualRevenue, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: 'Annualized profit', cat: 'valuation', calc: 'Current-month profit × 12.', get: m => m.annualProfit, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: `Valuation @ ${getKnob('valuationProfitMultiple').toFixed(1)}× profit`, cat: 'valuation', calc: 'MAX(0, annualized profit) × Profit multiple. Floored at zero.', metrics: ['valuationProfitMultiple'], get: m => m.valuationByProfit, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: `Valuation @ ${getKnob('valuationRevenueMultiple').toFixed(1)}× revenue`, cat: 'valuation', calc: 'Annualized revenue × Revenue multiple. Always non-negative.', metrics: ['valuationRevenueMultiple'], get: m => m.valuationByRevenue, fmt: 'eur', kind: 'monetary', noPct: true },
+    { label: `Valuation (selected: ${getKnob('valuationMode') === 1 ? 'revenue ×' : 'profit ×'})`, cat: 'valuation', calc: 'Whichever valuation method matches the selected Mode knob.', get: m => m.valuation, fmt: 'eur', kind: 'monetary', isTotal: true, noPct: true },
+  ];
+
+  // Helper: visible events to mark at a given month.
+  // - "for N months" events → mark every active month (start to end)
+  // - "permanent" or "one-off" events → mark only the start month
+  function eventsActiveAt(metrics, monthNum) {
+    if (!metrics || metrics.length === 0) return [];
+    return events.filter(ev => {
+      if (!ev.enabled) return false;
+      if (ev.showInViz === false) return false;
+      if (!metrics.includes(ev.metric)) return false;
+      const startM = resolveEventStartMonth(ev);
+      if (startM === null || startM === undefined) return false;
+      if (ev.duration === 'months') return eventIsActiveForMonth(ev, monthNum);
+      return monthNum === startM; // permanent + one-off: start month only
+    });
+  }
+
+  let html = '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+  for (const r of rows) {
+    if (r.group) {
+      html += `<tr class="group" data-cat="${r.cat || ''}"><td colspan="${headers.length}">${r.label}</td></tr>`;
+      continue;
+    }
+    const rowClass = [r.cat ? '' : '', r.isTotal ? 'is-total' : ''].filter(Boolean).join(' ');
+    const infoIcon = r.calc ? `<span class="info-icon" data-info-label="${escapeHtml(r.label)}" data-info-calc="${escapeHtml(r.calc)}" title="${escapeHtml(r.label)} — click for full info">i</span>` : '';
+    html += `<tr data-cat="${r.cat || ''}" class="${rowClass}"><td>${r.label}${infoIcon}</td>`;
+    for (let i = 0; i < months.length; i++) {
+      const m = months[i];
+      const raw = r.get ? r.get(m) : null;
+      let display;
+      if (raw === null || raw === undefined || isNaN(raw)) {
+        display = '—';
+      } else if (tableMode === 'percent' && r.kind === 'monetary' && !r.noPct) {
+        display = m.totalRevenue > 0 ? (raw / m.totalRevenue * 100).toFixed(1) + '%' : '—';
+      } else {
+        display = fmt(raw, r.fmt);
+      }
+      // Negative-value styling for monetary cells
+      if (r.kind === 'monetary' && raw < 0) display = `<span class="neg">${display}</span>`;
+      // Event markers — clickable
+      if (r.metrics) {
+        const active = eventsActiveAt(r.metrics, m.month);
+        if (active.length > 0) {
+          const markers = active.map(e => {
+            const color = e.color || '#f59e0b';
+            return `<span class="event-marker" style="background:${color}" data-event-id="${e.id}" title="${escapeHtml(e.title)} — click for details"></span>`;
+          }).join('');
+          display = markers + display;
+        }
+      }
+      html += `<td>${display}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody>';
+  document.getElementById('forecast-table').innerHTML = html;
+}
+
+// Click delegation for event markers in the table — opens the same popup
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (t && t.classList && t.classList.contains('event-marker') && t.dataset.eventId) {
+    e.stopPropagation();
+    const evObj = events.find(x => x.id === parseInt(t.dataset.eventId));
+    if (evObj) showEventPopup(evObj, e);
+  }
+}, true);
+
+// =============================================================================
+// SCENARIOS & CONFIG IO
+// =============================================================================
+
+function loadScenario(name) {
+  const s = scenarios[name];
+  if (!s) return;
+  activeScenario = name;
+  for (const [k, v] of Object.entries(s)) setKnob(k, v);
+  document.querySelectorAll('.scenario-bar button').forEach(b => b.classList && b.classList.remove('active'));
+  document.getElementById('btn-' + name).classList.add('active');
+  recompute();
+}
+
+function exportConfig() {
+  const knobValues = {};
+  for (const k of Object.keys(knobs)) knobValues[k] = getKnob(k);
+  const config = { knobs: knobValues, events };
+  const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'cf-simulator-config.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function openImport() {
+  document.getElementById('import-modal').classList.add('open');
+  document.getElementById('import-text').focus();
+}
+function closeImport() { document.getElementById('import-modal').classList.remove('open'); }
+function applyImport() {
+  try {
+    const data = JSON.parse(document.getElementById('import-text').value);
+    if (data.knobs) for (const [k, v] of Object.entries(data.knobs)) if (knobs[k]) setKnob(k, v);
+    if (Array.isArray(data.events)) {
+      events = data.events.map(e => ({ ...e, id: nextEventId++ }));
+      buildEventsPanel();
+    }
+    closeImport();
+    recompute();
+  } catch (e) { alert('Invalid JSON: ' + e.message); }
+}
+
+// =============================================================================
+// RECOMPUTE
+// =============================================================================
+
+function recompute() {
+  updateValueLabels();
+  const result = computeForecast();
+  renderCards(result);
+  renderCharts(result);
+  renderTable(result);
+}
+
+// =============================================================================
+// INIT
+// =============================================================================
+
+buildSidebar();
+seedDefaultEvents();
+buildEventsPanel();
+recompute();
+</script>
+</body>
+</html>
