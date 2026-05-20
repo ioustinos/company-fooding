@@ -1699,7 +1699,9 @@ function recompute() {
 // CHAT AGENT — in-page Claude
 // =============================================================================
 
-const CHAT_ENDPOINT = '/api/cf-explain'; // proxied by public/_redirects to /.netlify/functions/cf-explain
+// Use canonical Netlify Functions path directly — the /api/* rewrite via _redirects
+// dropped POST requests to 404 in this site config, so we skip the rewrite layer.
+const CHAT_ENDPOINT = '/.netlify/functions/cf-explain';
 let chatHistory = []; // [{role: 'user'|'assistant'|'error', content: string}]
 let chatBusy = false;
 
