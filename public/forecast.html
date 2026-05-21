@@ -826,6 +826,7 @@ function buildEventsPanel() {
             <select data-field="valueType">
               <option value="absolute" ${ev.valueType === 'absolute' ? 'selected' : ''}>=</option>
               <option value="factor" ${ev.valueType === 'factor' ? 'selected' : ''}>×prev</option>
+              <option value="additive" ${ev.valueType === 'additive' ? 'selected' : ''}>+ amount</option>
             </select>
             <input type="number" step="any" data-field="value" value="${ev.value}" style="flex:1 1 0;min-width:60px">
           </div>
@@ -921,6 +922,7 @@ function computeForecast() {
       if (!eventIsActiveForMonth(ev, m, startM)) continue;
       if (ev.valueType === 'absolute') effective = ev.value;
       else if (ev.valueType === 'factor') effective = prevEff[metric] * ev.value;
+      else if (ev.valueType === 'additive') effective = effective + ev.value;
     }
     return effective;
   }
@@ -1299,7 +1301,9 @@ function showEventPopup(ev, anchorEvent) {
     : ev.duration === 'permanent' ? 'permanent (from start, no end)'
     : `for ${ev.durationMonths} months`;
   const metricLabel = knobs[ev.metric] ? knobs[ev.metric].label : ev.metric;
-  const valueLabel = ev.valueType === 'absolute' ? `${ev.value} (absolute)` : `× ${ev.value} (factor on prev month)`;
+  const valueLabel = ev.valueType === 'absolute' ? `= ${ev.value} (absolute)`
+    : ev.valueType === 'factor' ? `× ${ev.value} (factor on prev month)`
+    : `${ev.value >= 0 ? '+' : ''}${ev.value} (added on top of the running value)`;
   const descHtml = ev.description ? `<div class="row" style="margin:6px 0 10px;color:#374151;font-style:italic">${escapeHtml(ev.description)}</div>` : '';
   body.innerHTML = `
     <div class="title" style="color:${color}">${escapeHtml(ev.title)}</div>
