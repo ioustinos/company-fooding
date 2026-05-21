@@ -31,6 +31,7 @@ Key mechanics in the simulator (so you can reason about cause and effect):
 - Revenue: company subs (base + per-employee × avg size) + vendor subs + commission on GMV (split meals/extras/catering) + service fees. Delivery is ISOLATED from revenue/cost (pass-through, zero net by design).
 - Variable cost-to-serve per customer = (ops salaries + tech infra cost) ÷ active companies. Contribution margin = ARPC − variable cost-to-serve. Margin-LTV = contribution margin × customer lifetime (1/churn). LTV:CAC uses margin-LTV.
 - Valuation = annualised profit × profit-multiple OR annualised revenue × revenue-multiple, depending on \`valuationMode\` knob.
+- Cash & runway: cash balance = \`startingCash\` + cumulative profit + cumulative injections (v1 treats profit as cash, no DSO/DPO timing lag). Runway = first month cash balance goes negative (out of money). Minimum raise to survive = the lowest cash balance reached (the trough), if negative. Funding rounds/grants/loans are modelled via events that override the \`cashInjection\` metric in a specific month (duration = 1 month, absolute value = the amount).
 - SAM = 460K Attica employees (private firms with 5+ employees, derived from ELSTAT Q4 2024 LFS). Growth capped at SAM.
 - Default scenario: 6 starting companies (seed at M1), 230 work days/year, 60% participation, €9 meal, 2.5% steady-state churn, 6-month honeymoon.
 
