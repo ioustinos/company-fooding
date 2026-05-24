@@ -131,7 +131,7 @@
 
 ### E3.3 — Vendors: list + create + edit
 - Labels: `frontend`, `backend`.
-- AC: `/admin/vendors` — same shape as Companies. `gonnaorder_merchant_id` field is required and uniqueness is enforced.
+- AC: `/admin/vendors` — same shape as Companies. Form fields: name, legal_name, vat_number, contact_email, discount_percentage (0–100), discount_applies_to (benefit_price | final_price), tags (chip input). No GO identifier on the vendor — that's collected per-relationship at agreement time (E3.4).
 - blockedBy: E2.1, E1.5.
 
 ### E3.4 — Matchmaking Agreements: list + create + edit

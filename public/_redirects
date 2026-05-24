@@ -1,1 +1,10 @@
-/*  /index.html  200
+# API rewrite — MUST come BEFORE the SPA /* catch-all or it gets swallowed.
+# Per conventions.md, /api/* lives in _redirects (not netlify.toml) because
+# Netlify evaluates _redirects BEFORE netlify.toml at runtime.
+/api/*     /.netlify/functions/:splat    200
+
+# spec fallback (any unknown path under /spec/ → the spec's index.html)
+/spec/*    /spec/index.html              200
+
+# SPA fallback (everything else → React app shell)
+/*         /index.html                   200
