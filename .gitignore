@@ -13,3 +13,12 @@ dist
 
 # Drag-drop artifact (use public/spec/ instead)
 design-spec/orexi-deploy/
+
+# Cross-session memory (contains secrets like github_credentials.sh — NEVER commit)
+.auto-memory/
+
+# Generated reports (re-generate from scripts/ when needed)
+reports/
+
+# Netlify deploy artifacts (stray zips in repo root)
+deploy-*.zip

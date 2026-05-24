@@ -191,7 +191,7 @@ sticker_mode       ::= 'employee_name' | 'anonymized'
 - **`company_offices`** — `id`, `company_id`, `label_el/_en`, `street`, `area`, `zip`, `lat`, `lng`, `is_default`, created/updated.
 - **`company_users`** — `id`, `user_id` (→ `auth.users`), `company_id`, `role` (`company_role`), `status` ('active'|'invited'|'suspended'), created/updated.
 - **`employees`** — `id`, `user_id` (→ `auth.users`, nullable until first login), `company_id`, `external_ref` (nullable, company-supplied e.g. payroll id), `display_name`, `email`, `default_office_id` (→ `company_offices`), `status` ('active'|'inactive'), created/updated.
-- **`vendors`** — `id`, `name`, `legal_name`, `vat_number`, `contact_email`, `gonnaorder_merchant_id` (unique), `status` ('active'|'suspended'), created/updated.
+- **`vendors`** — `id`, `name`, `legal_name`, `vat_number`, `contact_email`, `discount_percentage`, `discount_applies_to` ('benefit_price'|'final_price'), `tags` (text[]), `status` ('active'|'suspended'), created/updated. **No GonnaOrder identifier on the vendor** — a GO store represents a (vendor × company) relationship, so the GO store id lives on `agreement_shops.gonnaorder_shop_id`. GO's parent-store concept is deferred until we need menu inheritance / cross-store queries.
 
 ### 4.3 Matchmaking
 
@@ -321,7 +321,7 @@ create view public.my_benefits as
 | --------------------------------- | ------------------------------------------ |
 | `cf-create-company`               | Create a company + first admin invite      |
 | `cf-update-company`               | Edit company details                       |
-| `cf-create-vendor`                | Onboard a vendor (links `gonnaorder_merchant_id`) |
+| `cf-create-vendor`                | Onboard a vendor (name, legal/VAT, discount, tags) |
 | `cf-update-vendor`                | Edit vendor details                        |
 | `cf-create-agreement`             | Create matchmaking agreement + shop links  |
 | `cf-update-agreement`             | Edit / pause / end agreement               |
