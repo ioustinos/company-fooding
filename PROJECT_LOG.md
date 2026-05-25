@@ -20,6 +20,68 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-05-26 — Matched the orexi spec for real: design-system primitives + spec-faithful Dashboard, Benefits list & full Benefit editor
+
+**Status:** Done (live on main) · one follow-up needing approval (migration 16)
+**Linked tickets:** CF-33, CF-34 (benefits), CF-37 (dashboard)
+
+**Why:** The first company panel worked but didn't *look* like the orexi spec
+(`public/spec/index.html`) — it had the theme but different layouts, and the
+benefit creation was a flat form, not the spec's multi-section editor with its
+embedded logic. Ioustinos was explicit: "MATCH the spec site we built… not only
+replicate layouts but assumed/described functionality and wiring. the benefits
+have so many different options and a whole logic embedded." Built overnight on
+the standing autonomy grant.
+
+**What:**
+- **`src/lib/specui.tsx`** — ported the orexi design-system primitives to React:
+  `Icon` (same SVG path set), `PlateMark`, `Pill`, `Btn`, `KPI` (left tone bar via
+  `var(--tone)`), `FormSection`, `Field`, `RadioCard`, `Sparkbars` (benefit+extra
+  stacked), `ActIcon`, `money`/`moneyFull`. Class strings copied from the spec.
+- **`CompanyApp` shell** — spec header (plate logo + "orexi" wordmark + Beta pill +
+  EL/EN segmented toggle + avatar dropdown w/ sign-out) and the grouped sidebar
+  (Overview / Management / Finance / Settings) with icons + active states. New
+  routes: `/company/benefits/new` and `/company/benefits/:id`.
+- **CompanyDashboard** — rebuilt to `page_co_dashboard`: greeting + 4 KPI cards +
+  30-day stacked sparkbars (continuous window, zero-filled) + live activity feed +
+  quick-action cards. `cf-dashboard` now also returns `recent[]` (last 8 orders).
+- **BenefitsPage** — rebuilt to `page_co_benefits`: header + New-benefit button,
+  Active/Archived tabs, 2-col card grid (type, carryover badge, amount, cadence,
+  assigned count, computed next-top-up), empty state.
+- **BenefitEditPage** (new) — the centerpiece, `page_co_benefit_edit` with the
+  embedded logic: Basics; Amount & cadence with the **cadence-dependent anchor
+  panel** (monthly day-of-month + "last day"; weekly day picker; daily time; one-off
+  date) + live **preview** string + carryover radio cards; Usage rules (daily cap,
+  per-order min/max, days-of-week pills); Assignment (all / group / pick) with a
+  **live searchable employee picker**, selected-chips, select-all/clear, and a
+  **people + cost/cycle preview**; Validity; sticky save bar with dirty state.
+  Create + edit modes, wired to `cf-benefits` (POST/PUT) and `cf-benefit-assign`.
+- **Backend:** `cf-benefits` now persists the full option set (description, daily_cap,
+  per_order_min/max, days_of_week, valid_to) and supports `GET ?id=` (single +
+  assigned employee ids) and `PUT` (update + rule upsert). `cf-benefit-assign`
+  gained `target='employees'` (id list) for the picker.
+
+**Notes for next session:**
+- **Migration 16 is written but NOT applied** (`supabase/migrations/16_benefit_rules_anchor.sql`).
+  It adds `topup_dom / topup_dom_eom / topup_dow / topup_time` to `benefit_rules`.
+  The benefit editor *captures* the anchor and shows the preview, but the anchor is
+  **not persisted yet** — needs Ioustinos's approval (Show Before Execute), then wire
+  the 4 fields into `cf-benefits` POST/PUT + the form payload. Cosmetic until the
+  scheduler leaves dry-run (`CF_TOPUPS_DRY_RUN`).
+- **Branding:** header now shows "orexi" (matching the spec) rather than "Company
+  Fooding". Trivial to flip back if the rebrand timing changes.
+- **Groups:** the Assignment "Specific group" card is present for spec parity but
+  shows a "coming soon" state — no groups table/UI yet (employees have `group_id`
+  but it's unpopulated). All + pick are fully wired.
+- **Verify:** `tsc -b` clean for all touched files (only pre-existing `cf-explain.ts`
+  error remains, non-gating since build = `vite build`). Full app bundles clean via
+  esbuild. Deploy `855bdf6` on main → Netlify state `ready`, 13 functions live,
+  `*/30` sync cron intact. The sandbox can't run `vite build` itself (mounted
+  node_modules is macOS-native; rolldown/esbuild binaries are darwin) — Netlify's
+  linux runner builds fine.
+
+---
+
 ## 2026-05-25 — Company panel built & live (dashboard, employees, benefits, vendors, settings, reports)
 
 **Status:** Done
