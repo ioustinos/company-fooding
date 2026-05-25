@@ -20,6 +20,51 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-05-25 — Company panel built & live (dashboard, employees, benefits, vendors, settings, reports)
+
+**Status:** Done
+**Linked tickets:** CF-4, CF-33, CF-34, CF-35, CF-37, CF-67
+
+**Why:** The deployed app was shells; Ioustinos wants a real, clicking company
+experience to put in front of customers (Queensway) within a week — add
+employees, create benefits, pull GonnaOrder data, see a live report. Built it
+overnight on full initiative per his "GO, build for me" instruction.
+
+**What — the orexi design, made real on the CF stack, wired to Supabase:**
+- **Design system:** orexi theme (colors + Fraunces/Inter) via Tailwind CDN in index.html
+  (CDN for beta; migrate to a PostCSS build before prod).
+- **Company switcher:** `useCompanyStore` + `cf-companies` fn. super_admin picks any of the
+  3 companies; company_admin is locked to their own. Lives in the company top bar.
+- **Pages (all under /company, orexi-styled, live data):**
+  - Dashboard — `cf-dashboard`: KPIs, spend trend, by-weekday, top users, by-vendor.
+  - Reports — `cf-report` (company-scoped): totals + per-employee + order log + date filter.
+  - Employees — `cf-employees`: list, single add (email validation), **bulk CSV import**,
+    activate/deactivate. Voucher code = GO link.
+  - Benefits — `cf-benefits`: list + create (writes benefit + benefit_rules), assigned count,
+    **assign-to-all-employees** via `cf-benefit-assign` (idempotent; sets voucher code).
+  - Vendors — `cf-vendors`: read-only cards (discount, agreement terms, GO store, delivery).
+  - Settings — `cf-company`: editable company profile + offices list.
+- **Auth/routing:** super_admin allowed into /company; login routes admins to /company.
+
+**New functions (13 total now live):** cf-companies, cf-company, cf-dashboard, cf-employees,
+cf-benefits, cf-benefit-assign, cf-vendors (+ earlier cf-me, cf-report, cf-ping,
+cf-sync-gonnaorder, cf-scheduled-sync, cf-explain).
+
+**Deploys:** main `2232ccd` (core) → `d30022e` (vendors+settings) → `aa76dbf` (bulk import +
+assignment). All green, secret scan clean, scheduled sync still registered.
+
+**Notes:**
+- Could NOT runtime-test the UI from the sandbox (egress blocks the Netlify site). Builds are
+  green and schemas were verified before each function; first human click-through is the real test.
+- Benefit assignment writes `benefit_assignments` rows but does NOT mint real GonnaOrder
+  vouchers yet (that's the scheduler/n8n side). For the demo, assignment + voucher-code linkage
+  is enough to show the loop.
+- Admin (super-admin platform) pages remain placeholders except /admin/reports — the company
+  side was the priority.
+- Tailwind CDN shows a console "not for production" warning — fine for beta, swap to PostCSS build later.
+
+---
+
 ## 2026-05-25 — Reports in-app: real auth role resolution + admin reports page (live data)
 
 **Status:** Done
