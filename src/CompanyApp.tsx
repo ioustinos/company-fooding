@@ -8,6 +8,8 @@ import CompanyDashboard from './pages/company/CompanyDashboard'
 import EmployeesPage from './pages/company/EmployeesPage'
 import BenefitsPage from './pages/company/BenefitsPage'
 import CompanyReportsPage from './pages/company/CompanyReportsPage'
+import VendorsPage from './pages/company/VendorsPage'
+import SettingsPage from './pages/company/SettingsPage'
 
 function TopBar() {
   const { user, signOut } = useAuthStore()
@@ -81,6 +83,8 @@ function SideNav() {
         <NavLink to="/company/reports" className={link}>{L('Αναφορές', 'Reports')}</NavLink>
         <NavLink to="/company/employees" className={link}>{t('employees')}</NavLink>
         <NavLink to="/company/benefits" className={link}>{t('benefits')}</NavLink>
+        <NavLink to="/company/vendors" className={link}>{L('Συνεργάτες', 'Vendors')}</NavLink>
+        <NavLink to="/company/settings" className={link}>{L('Ρυθμίσεις', 'Settings')}</NavLink>
       </nav>
     </aside>
   )
@@ -116,6 +120,8 @@ export default function CompanyApp() {
             <Route path="reports" element={<CompanyReportsPage />} />
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="benefits" element={<BenefitsPage />} />
+            <Route path="vendors" element={<VendorsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/company" replace />} />
           </Routes>
         </main>
