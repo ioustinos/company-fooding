@@ -20,6 +20,73 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-05-25 — Reports in-app: real auth role resolution + admin reports page (live data)
+
+**Status:** Done
+**Linked tickets:** CF-12, CF-37
+
+**Why:** The frontend was a shell — logging in resolved no role (RoleGuard
+couldn't admit anyone) and there was no reports screen, so the Queensway data
+was only visible via Supabase/PDF. Goal: log in → see the live report in the app.
+
+**What:**
+- `_shared/auth.ts` — real `getCaller()`: resolves role via service-role queries
+  (cf_admins → super_admin, company_users → company_admin+companyId, employees →
+  employee). Single source of truth for "who is calling".
+- `cf-me.ts` — GET, returns the caller's resolved identity. Browser calls it after
+  login so role resolution stays server-side (no client RLS dependency).
+- `cf-report.ts` — GET, admin-gated. Aggregates orders into totals / perCompany /
+  perEmployee / perDay / order-log JSON. super_admin sees all companies;
+  company_admin locked to own company. Service-role read, authz via getCaller.
+- `useAuthStore.ts` — `resolveAppUser()` now calls `/api/cf-me` (was a null stub).
+- `pages/admin/ReportsPage.tsx` — renders the report (totals cards + 4 tables) with
+  a date-range filter. Wired into AdminApp at `/admin/reports` + nav link.
+- `LoginPage.tsx` — post-login redirect by role (super_admin → /admin/reports).
+- Seeded `ioustinos@wecook.gr` into auth.users (+ identity, email pre-confirmed),
+  auto-linked the 3 company_users via the handle_new_user trigger, seeded cf_admins
+  as cf_owner (super_admin).
+
+**Notes:**
+- This is the real CF-12 (auth) + CF-37 (reports) work, previously only scaffolded.
+- `cf-report` aggregates in-memory from up to 5000 order rows — fine at current scale;
+  move to SQL GROUP BY / an RPC if order volume grows large.
+- Other admin pages (Companies, Vendors, Invoices, Settings) are still Placeholders.
+
+---
+
+## 2026-05-25 — GonnaOrder scheduled sync live in production (every 30 min)
+
+**Status:** Done
+**Linked tickets:** CF-48, CF-75
+
+**Why:** Reports need to reflect recent GonnaOrder activity without anyone
+manually triggering a sync. A server-side scheduler keeps the `orders` mirror
+relatively live.
+
+**What:**
+- `netlify/functions/_shared/syncGonnaOrder.ts` — extracted `runSync()` core from
+  cf-sync-gonnaorder so the HTTP endpoint and the scheduled job share identical logic.
+- `netlify/functions/cf-scheduled-sync.ts` — Netlify Scheduled Function, cron
+  `*/30 * * * *` (UTC). Calls `runSync({ since: 3 days ago, dryRun: false })`. No HTTP
+  auth (invoked internally by Netlify's scheduler). 3-day lookback covers late/amended
+  orders; idempotent upsert makes overlap harmless. Stores `raw_payload` for new orders.
+- `cf-sync-gonnaorder.ts` — slimmed to the HTTP wrapper + admin-token auth, delegates to
+  shared `runSync`.
+- Pushed to `dev` (`126453a`) then to `main` (`c94eb65`). Production deploy `6a13f83a`
+  green; Netlify registered `function_schedules: [{cron: "*/30 * * * *", name:
+  "cf-scheduled-sync"}]`. First automatic run 2026-05-25 07:30 UTC.
+
+**Notes:**
+- **Netlify runs scheduled functions ONLY on the production deploy** — never on branch/
+  preview deploys. Confirmed: dev branch deploys aren't enabled on this site anyway
+  (`dev--company-fooding.netlify.app` 404s), so verification happened directly on main.
+- This is "relatively live", not real-time. For true real-time, switch to GonnaOrder
+  webhooks (CF-47) — the scheduled pull is the pragmatic v1.
+- Watch runs: Netlify → Functions → cf-scheduled-sync → Logs. Each logs
+  `[cf-scheduled-sync] done {...totals} since <date>`.
+
+---
+
 ## 2026-05-15 — Retroactive setup-tech-stack catch-up: PROJECT_LOG, .auto-memory, redirect fix, repo wiring
 
 **Status:** In progress (CF-77)

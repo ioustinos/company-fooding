@@ -23,7 +23,17 @@ export default function LoginPage() {
     e.preventDefault()
     try {
       await signIn(email, password)
-      nav(from, { replace: true })
+      // Route by resolved role: admins to their panel, everyone else to `from`.
+      const role = useAuthStore.getState().user?.role
+      const dest =
+        from && from !== '/'
+          ? from
+          : role === 'super_admin'
+            ? '/admin/reports'
+            : role === 'company_admin' || role === 'company_owner'
+              ? '/company'
+              : '/'
+      nav(dest, { replace: true })
     } catch {
       // error shown from store
     }

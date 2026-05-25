@@ -27,17 +27,31 @@ type AuthState = {
   hydrate: () => Promise<void>
 }
 
-// Resolve role + companyId from the `profiles` + `company_members` tables.
-// Returns nulls if not yet provisioned. Service-role writes happen in Netlify
-// Functions; this client reads what RLS exposes to the authenticated user.
-async function resolveAppUser(u: User): Promise<AuthUser> {
-  // Placeholder: real query lands in E4.x / E5.x once tables exist.
-  return {
+// Resolve role + companyId via the server (cf-me). Role resolution runs with the
+// service role server-side, so the browser doesn't need RLS read access to
+// cf_admins / company_users / employees. Falls back to nulls on any error.
+async function resolveAppUser(u: User, accessToken: string): Promise<AuthUser> {
+  const base: AuthUser = {
     id: u.id,
     email: u.email ?? null,
     role: null,
     companyId: null,
     fullName: (u.user_metadata?.full_name as string) ?? null,
+  }
+  try {
+    const res = await fetch('/api/cf-me', {
+      headers: { authorization: `Bearer ${accessToken}` },
+    })
+    if (!res.ok) return base
+    const me = await res.json()
+    return {
+      ...base,
+      role: (me.role as AppRole | null) ?? null,
+      companyId: (me.companyId as string | null) ?? null,
+      fullName: (me.fullName as string | null) ?? base.fullName,
+    }
+  } catch {
+    return base
   }
 }
 
@@ -51,11 +65,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true, error: null })
     const { data } = await supabase.auth.getSession()
     const session = data.session
-    const user = session?.user ? await resolveAppUser(session.user) : null
+    const user = session?.user
+      ? await resolveAppUser(session.user, session.access_token)
+      : null
     set({ session, user, loading: false })
 
     supabase.auth.onAuthStateChange(async (_evt, s) => {
-      const u = s?.user ? await resolveAppUser(s.user) : null
+      const u = s?.user ? await resolveAppUser(s.user, s.access_token) : null
       set({ session: s, user: u })
     })
   },
@@ -67,7 +83,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ loading: false, error: error.message })
       throw error
     }
-    const u = data.user ? await resolveAppUser(data.user) : null
+    const u = data.user && data.session
+      ? await resolveAppUser(data.user, data.session.access_token)
+      : null
     set({ session: data.session, user: u, loading: false })
   },
 

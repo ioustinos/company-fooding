@@ -2,6 +2,7 @@ import { Routes, Route, NavLink } from 'react-router-dom'
 import Header from './components/layout/Header'
 import { useUIStore } from './store/useUIStore'
 import { makeTr } from './lib/translations'
+import ReportsPage from './pages/admin/ReportsPage'
 
 function AdminShell({ children }: { children: React.ReactNode }) {
   const { lang } = useUIStore()
@@ -20,6 +21,7 @@ function AdminShell({ children }: { children: React.ReactNode }) {
         <aside style={{ padding: 16, borderRight: '1px solid var(--cf-border)' }}>
           <nav style={{ display: 'grid', gap: 6 }}>
             <NavLink to="/admin" end style={linkStyle}>Dashboard</NavLink>
+            <NavLink to="/admin/reports" style={linkStyle}>Reports</NavLink>
             <NavLink to="/admin/companies" style={linkStyle}>Companies</NavLink>
             <NavLink to="/admin/vendors" style={linkStyle}>{t('vendors')}</NavLink>
             <NavLink to="/admin/invoices" style={linkStyle}>{t('invoices')}</NavLink>
@@ -46,6 +48,7 @@ export default function AdminApp() {
     <AdminShell>
       <Routes>
         <Route index element={<Placeholder title="Super Admin — Dashboard" />} />
+        <Route path="reports" element={<ReportsPage />} />
         <Route path="companies" element={<Placeholder title="Companies" />} />
         <Route path="vendors" element={<Placeholder title="Vendors" />} />
         <Route path="invoices" element={<Placeholder title="Invoices" />} />
