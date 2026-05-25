@@ -32,7 +32,7 @@ export default function App() {
       <Route
         path="/company/*"
         element={
-          <RoleGuard allow={['company_owner', 'company_admin']}>
+          <RoleGuard allow={['company_owner', 'company_admin', 'super_admin']}>
             <Suspense fallback={<Loading />}>
               <CompanyApp />
             </Suspense>

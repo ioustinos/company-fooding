@@ -5,6 +5,43 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Company Fooding</title>
+
+    <!-- orexi design system — fonts + Tailwind (CDN for beta; migrate to PostCSS build before prod) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              bg: '#FAF7F2',
+              surface: '#FFFFFF',
+              ink: { DEFAULT: '#1A2E24', soft: '#5A6B63', faint: '#8D9B93' },
+              line: '#E3DED4',
+              brand: { DEFAULT: '#2D4F3C', hover: '#244033', soft: '#E8EDE7' },
+              accent: { DEFAULT: '#D97948', hover: '#C66A3D', soft: '#FBEFE3' },
+              success: '#3E8E5F',
+              warn: '#E0A443',
+              danger: '#C54B4B',
+            },
+            fontFamily: {
+              display: ['Fraunces', 'Georgia', 'serif'],
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+              mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      html, body, #root { height: 100%; }
+      body { background: #FAF7F2; color: #1A2E24; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

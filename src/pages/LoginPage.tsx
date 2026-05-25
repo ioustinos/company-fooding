@@ -28,11 +28,9 @@ export default function LoginPage() {
       const dest =
         from && from !== '/'
           ? from
-          : role === 'super_admin'
-            ? '/admin/reports'
-            : role === 'company_admin' || role === 'company_owner'
-              ? '/company'
-              : '/'
+          : role === 'super_admin' || role === 'company_admin' || role === 'company_owner'
+            ? '/company'
+            : '/'
       nav(dest, { replace: true })
     } catch {
       // error shown from store
