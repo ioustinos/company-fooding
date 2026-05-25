@@ -1,13 +1,19 @@
-// cf-benefits — list + create benefits for a company.
+// cf-benefits — list / get-one / create / update benefits for a company.
 //
-// GET  /api/cf-benefits?companyId=<uuid>   → list (with their rule cadence)
-// POST /api/cf-benefits  {
-//        companyId, name_el, name_en, credit_amount_eur, valid_from,
-//        topup_cadence ('daily'|'weekly'|'monthly'|'one_time'), carryover ('reset'|'accumulate')
-//      } → create benefit + its benefit_rules row
+// GET  /api/cf-benefits?companyId=<uuid>     → list (with rule + assigned_count)
+// GET  /api/cf-benefits?id=<uuid>            → single benefit + rule + assigned ids
+// POST /api/cf-benefits   { …full option set }            → create benefit + rule
+// PUT  /api/cf-benefits   { id, …full option set }        → update benefit + rule
 //   - super_admin → any company; company_admin → own
 //
-// credit_amount is stored in cents. The form sends euros; we ×100 here.
+// Money fields arrive in euros and are stored in cents (×100). Optional caps
+// (daily_cap, per_order_min/max) are nullable. days_of_week is 1..7 (Mon..Sun),
+// null/empty = all days.
+//
+// NOTE: the top-up *anchor* (day-of-month / day-of-week / time) is captured by
+// the form but not yet persisted — it needs migration 16 (benefit_rules anchor
+// columns) which awaits approval. The scheduler is still in dry-run, so anchor
+// is cosmetic until then.
 
 import type { Context } from '@netlify/functions'
 import { ok, badRequest, forbidden, methodNotAllowed, errorResponse } from './_shared/errors'
@@ -16,6 +22,41 @@ import { supabaseAdmin } from './_shared/supabaseAdmin'
 
 const CADENCES = ['daily', 'weekly', 'monthly', 'one_time']
 const CARRYOVERS = ['reset', 'accumulate']
+
+type Body = {
+  companyId?: string; id?: string
+  name_el?: string; name_en?: string
+  description_el?: string; description_en?: string
+  credit_amount_eur?: number; valid_from?: string; valid_to?: string
+  topup_cadence?: string; carryover?: string
+  daily_cap_eur?: number | null; per_order_min_eur?: number | null; per_order_max_eur?: number | null
+  days_of_week?: number[] | null
+}
+
+// euros → cents, or null when blank/invalid (used for optional caps)
+function eurToCentsOpt(v: number | null | undefined): number | null {
+  if (v === null || v === undefined || v === ('' as unknown)) return null
+  const n = Number(v)
+  if (!Number.isFinite(n) || n < 0) return null
+  return Math.round(n * 100)
+}
+
+function normDays(d: number[] | null | undefined): number[] | null {
+  if (!Array.isArray(d) || d.length === 0 || d.length === 7) return null // null = all days
+  const set = [...new Set(d.filter((n) => Number.isInteger(n) && n >= 1 && n <= 7))].sort((a, b) => a - b)
+  return set.length === 0 || set.length === 7 ? null : set
+}
+
+function validateCore(b: Body) {
+  if (!b.name_el?.trim() || !b.name_en?.trim()) return 'name_el and name_en required'
+  const eur = Number(b.credit_amount_eur)
+  if (!Number.isFinite(eur) || eur < 0) return 'credit_amount_eur must be a non-negative number'
+  const cadence = b.topup_cadence ?? 'daily'
+  if (!CADENCES.includes(cadence)) return `topup_cadence must be one of ${CADENCES.join(', ')}`
+  const carryover = b.carryover ?? 'reset'
+  if (!CARRYOVERS.includes(carryover)) return `carryover must be one of ${CARRYOVERS.join(', ')}`
+  return null
+}
 
 export default async (req: Request, _ctx: Context) => {
   try {
@@ -27,20 +68,48 @@ export default async (req: Request, _ctx: Context) => {
     const resolveCompany = (v: string | null) =>
       caller.role === 'company_admin' ? caller.companyId : v
 
+    // ---- GET ----
     if (req.method === 'GET') {
       const url = new URL(req.url)
+      const id = url.searchParams.get('id')
+
+      // single benefit (for the edit page)
+      if (id) {
+        const { data, error } = await sb
+          .from('benefits')
+          .select('id, company_id, name_el, name_en, description_el, description_en, ' +
+                  'credit_amount, currency, status, valid_from, valid_to, ' +
+                  'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week)')
+          .eq('id', id)
+          .maybeSingle()
+        if (error) throw new Error(error.message)
+        const b = data as unknown as ({ company_id: string } & Record<string, unknown>) | null
+        if (!b) return badRequest('benefit not found')
+        if (caller.role === 'company_admin' && b.company_id !== caller.companyId) {
+          return forbidden('Not your benefit')
+        }
+        const { data: assigns } = await sb
+          .from('benefit_assignments')
+          .select('employee_id')
+          .eq('benefit_id', id)
+          .is('unassigned_at', null)
+        const assignedEmployeeIds = (assigns ?? []).map((a) => a.employee_id).filter(Boolean)
+        return ok({ benefit: b, assignedEmployeeIds })
+      }
+
+      // list
       const companyId = resolveCompany(url.searchParams.get('companyId'))
       if (!companyId) return badRequest('companyId required')
       const { data, error } = await sb
         .from('benefits')
-        .select('id, name_el, name_en, credit_amount, currency, status, valid_from, valid_to, ' +
-                'benefit_rules(topup_cadence, topup_amount, carryover)')
+        .select('id, name_el, name_en, description_el, description_en, credit_amount, currency, ' +
+                'status, valid_from, valid_to, ' +
+                'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week)')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
       if (error) throw new Error(error.message)
 
-      // attach active-assignment counts per benefit
-      const benefits = data ?? []
+      const benefits = (data ?? []) as unknown as Array<{ id: string } & Record<string, unknown>>
       if (benefits.length > 0) {
         const ids = benefits.map((b) => b.id)
         const { data: assigns } = await sb
@@ -49,60 +118,106 @@ export default async (req: Request, _ctx: Context) => {
           .in('benefit_id', ids)
           .is('unassigned_at', null)
         const counts = new Map<string, number>()
-        for (const a of assigns ?? []) counts.set(a.benefit_id, (counts.get(a.benefit_id) ?? 0) + 1)
-        for (const b of benefits as Array<Record<string, unknown>>) b.assigned_count = counts.get(b.id as string) ?? 0
+        for (const a of (assigns ?? []) as Array<{ benefit_id: string }>) counts.set(a.benefit_id, (counts.get(a.benefit_id) ?? 0) + 1)
+        for (const b of benefits) b.assigned_count = counts.get(b.id) ?? 0
       }
       return ok({ benefits })
     }
 
+    // ---- POST (create) ----
     if (req.method === 'POST') {
-      const b = (await req.json().catch(() => ({}))) as {
-        companyId?: string; name_el?: string; name_en?: string
-        credit_amount_eur?: number; valid_from?: string
-        topup_cadence?: string; carryover?: string
-      }
+      const b = (await req.json().catch(() => ({}))) as Body
       const companyId = resolveCompany(b.companyId ?? null)
       if (!companyId) return badRequest('companyId required')
-      if (!b.name_el?.trim() || !b.name_en?.trim()) return badRequest('name_el and name_en required')
-      const eur = Number(b.credit_amount_eur)
-      if (!Number.isFinite(eur) || eur < 0) return badRequest('credit_amount_eur must be a non-negative number')
+      const verr = validateCore(b)
+      if (verr) return badRequest(verr)
+
+      const cents = Math.round(Number(b.credit_amount_eur) * 100)
       const cadence = b.topup_cadence ?? 'daily'
-      if (!CADENCES.includes(cadence)) return badRequest(`topup_cadence must be one of ${CADENCES.join(', ')}`)
       const carryover = b.carryover ?? 'reset'
-      if (!CARRYOVERS.includes(carryover)) return badRequest(`carryover must be one of ${CARRYOVERS.join(', ')}`)
-      const cents = Math.round(eur * 100)
 
       const { data: benefit, error: benErr } = await sb
         .from('benefits')
         .insert({
           company_id: companyId,
-          name_el: b.name_el.trim(),
-          name_en: b.name_en.trim(),
+          name_el: b.name_el!.trim(),
+          name_en: b.name_en!.trim(),
+          description_el: b.description_el?.trim() || null,
+          description_en: b.description_en?.trim() || null,
           credit_amount: cents,
           valid_from: b.valid_from || new Date().toISOString().slice(0, 10),
+          valid_to: b.valid_to || null,
           status: 'active',
         })
         .select('id, name_el, name_en, credit_amount, status, valid_from')
         .single()
       if (benErr) throw new Error(benErr.message)
 
-      // Create the rule (cadence + per-tick top-up amount = the credit amount).
       const { error: ruleErr } = await sb.from('benefit_rules').insert({
         benefit_id: benefit!.id,
         topup_cadence: cadence,
         topup_amount: cents,
         carryover,
+        daily_cap: eurToCentsOpt(b.daily_cap_eur),
+        per_order_min: eurToCentsOpt(b.per_order_min_eur),
+        per_order_max: eurToCentsOpt(b.per_order_max_eur),
+        days_of_week: normDays(b.days_of_week),
       })
       if (ruleErr) {
-        // roll back the benefit so we don't leave an orphan with no rule
-        await sb.from('benefits').delete().eq('id', benefit!.id)
+        await sb.from('benefits').delete().eq('id', benefit!.id) // roll back orphan
         throw new Error(`benefit_rules: ${ruleErr.message}`)
       }
-
       return ok({ benefit })
     }
 
-    return methodNotAllowed(['GET', 'POST'])
+    // ---- PUT (update) ----
+    if (req.method === 'PUT') {
+      const b = (await req.json().catch(() => ({}))) as Body
+      if (!b.id) return badRequest('id required')
+      const verr = validateCore(b)
+      if (verr) return badRequest(verr)
+
+      // verify access
+      const { data: existing, error: exErr } = await sb
+        .from('benefits').select('id, company_id').eq('id', b.id).maybeSingle()
+      if (exErr) throw new Error(exErr.message)
+      if (!existing) return badRequest('benefit not found')
+      if (caller.role === 'company_admin' && existing.company_id !== caller.companyId) {
+        return forbidden('Not your benefit')
+      }
+
+      const cents = Math.round(Number(b.credit_amount_eur) * 100)
+      const cadence = b.topup_cadence ?? 'daily'
+      const carryover = b.carryover ?? 'reset'
+
+      const { error: upErr } = await sb.from('benefits').update({
+        name_el: b.name_el!.trim(),
+        name_en: b.name_en!.trim(),
+        description_el: b.description_el?.trim() || null,
+        description_en: b.description_en?.trim() || null,
+        credit_amount: cents,
+        valid_from: b.valid_from || undefined,
+        valid_to: b.valid_to || null,
+      }).eq('id', b.id)
+      if (upErr) throw new Error(upErr.message)
+
+      // upsert the rule (one per benefit, unique benefit_id)
+      const { error: ruleErr } = await sb.from('benefit_rules').upsert({
+        benefit_id: b.id,
+        topup_cadence: cadence,
+        topup_amount: cents,
+        carryover,
+        daily_cap: eurToCentsOpt(b.daily_cap_eur),
+        per_order_min: eurToCentsOpt(b.per_order_min_eur),
+        per_order_max: eurToCentsOpt(b.per_order_max_eur),
+        days_of_week: normDays(b.days_of_week),
+      }, { onConflict: 'benefit_id' })
+      if (ruleErr) throw new Error(`benefit_rules: ${ruleErr.message}`)
+
+      return ok({ id: b.id })
+    }
+
+    return methodNotAllowed(['GET', 'POST', 'PUT'])
   } catch (e) {
     return errorResponse(e)
   }

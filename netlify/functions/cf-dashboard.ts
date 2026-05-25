@@ -93,6 +93,19 @@ export default async (req: Request, _ctx: Context) => {
     const topUsers = [...userMap.values()].sort((a, b) => b.gross - a.gross).slice(0, 10)
     const byVendor = [...vendorMap.values()].sort((a, b) => b.gross - a.gross)
 
+    // Recent activity — most recent orders for the dashboard feed.
+    const recent = [...rows]
+      .filter((r) => r.delivery_date)
+      .sort((a, b) => (b.delivery_date ?? '').localeCompare(a.delivery_date ?? ''))
+      .slice(0, 8)
+      .map((r) => ({
+        kind: 'order' as const,
+        who: r.employees?.display_name ?? r.voucher_code ?? '—',
+        where: r.vendors?.name ?? '—',
+        amount: r.subtotal,
+        at: r.delivery_date,
+      }))
+
     return ok({
       period: { from, to },
       companyId: companyId ?? 'all',
@@ -107,6 +120,7 @@ export default async (req: Request, _ctx: Context) => {
       byWeekday: weekday,
       topUsers,
       byVendor,
+      recent,
     })
   } catch (e) {
     return errorResponse(e)

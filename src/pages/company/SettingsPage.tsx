@@ -59,7 +59,7 @@ export default function SettingsPage() {
   const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30'
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="p-8 max-w-3xl">
       <h1 className="mb-1 font-display text-3xl font-semibold text-ink">{L('Ρυθμίσεις', 'Settings')}</h1>
       <p className="mb-6 text-sm text-ink-soft">{L('Στοιχεία εταιρείας & γραφεία', 'Company profile & offices')}</p>
 

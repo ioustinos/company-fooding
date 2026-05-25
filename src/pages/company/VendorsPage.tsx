@@ -36,7 +36,7 @@ export default function VendorsPage() {
   }, [token, selectedId])
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="p-8 max-w-[1100px]">
       <h1 className="mb-1 font-display text-3xl font-semibold text-ink">{L('Συνεργάτες', 'Vendors')}</h1>
       <p className="mb-6 text-sm text-ink-soft">{L('Οι προμηθευτές φαγητού της εταιρείας σας', 'Your company’s food vendors')}</p>
 

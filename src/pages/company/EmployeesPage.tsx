@@ -98,7 +98,7 @@ export default function EmployeesPage() {
   const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30'
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="p-8 max-w-[1100px]">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold text-ink">{L('Υπάλληλοι', 'Employees')}</h1>

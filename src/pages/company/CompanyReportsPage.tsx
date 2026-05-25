@@ -44,7 +44,7 @@ export default function CompanyReportsPage() {
   const tdr = td + ' text-right tabular-nums'
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="p-8 max-w-6xl">
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold text-ink">{L('Αναφορές', 'Reports')}</h1>

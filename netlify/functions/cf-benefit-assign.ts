@@ -1,8 +1,10 @@
 // cf-benefit-assign — assign a benefit to employees.
 //
-// POST /api/cf-benefit-assign  { benefitId, target: 'all' | 'employee', employeeId? }
-//   - 'all'      → assign to every active employee in the benefit's company
-//   - 'employee' → assign to one employee
+// POST /api/cf-benefit-assign  { benefitId, target, employeeId?, employeeIds? }
+//   - 'all'       → assign to every active employee in the benefit's company
+//   - 'employee'  → assign to one employee (employeeId)
+//   - 'employees' → assign to a specific set (employeeIds[]) — used by the
+//                   benefit form's "Specific people" picker
 //   Idempotent: an employee already actively assigned to the benefit is skipped.
 //   Sets gonnaorder_voucher_code = employee.external_ref (the voucher convention),
 //   so the assignment ties to that employee's GonnaOrder orders.
@@ -21,7 +23,8 @@ export default async (req: Request, _ctx: Context) => {
     if (!caller || (caller.role !== 'super_admin' && caller.role !== 'company_admin')) {
       return forbidden('Admins only')
     }
-    const b = (await req.json().catch(() => ({}))) as { benefitId?: string; target?: string; employeeId?: string }
+    const b = (await req.json().catch(() => ({}))) as
+      { benefitId?: string; target?: string; employeeId?: string; employeeIds?: string[] }
     if (!b.benefitId) return badRequest('benefitId required')
     const target = b.target ?? 'all'
 
@@ -50,8 +53,12 @@ export default async (req: Request, _ctx: Context) => {
     if (target === 'employee') {
       if (!b.employeeId) return badRequest('employeeId required for target=employee')
       empQuery = empQuery.eq('id', b.employeeId)
+    } else if (target === 'employees') {
+      const ids = (b.employeeIds ?? []).filter(Boolean)
+      if (ids.length === 0) return badRequest('employeeIds required for target=employees')
+      empQuery = empQuery.in('id', ids)
     } else if (target !== 'all') {
-      return badRequest("target must be 'all' or 'employee'")
+      return badRequest("target must be 'all', 'employee', or 'employees'")
     }
     const { data: emps, error: empErr } = await empQuery
     if (empErr) throw new Error(empErr.message)

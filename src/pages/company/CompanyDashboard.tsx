@@ -1,20 +1,39 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { fmtMoney } from '../../lib/helpers'
+import { Icon, KPI, Sparkbars, ActIcon, moneyFull } from '../../lib/specui'
+import type { IconName } from '../../lib/specui'
 
+type Recent = { kind: 'order'; who: string; where: string; amount: number; at: string | null }
 type Dash = {
   totals: { orders: number; gross: number; benefit: number; topup: number; employees: number }
   trend: { date: string; gross: number; benefit: number; orders: number }[]
-  byWeekday: { day: string; orders: number; gross: number }[]
-  topUsers: { name: string; orders: number; gross: number }[]
-  byVendor: { vendor: string; orders: number; gross: number }[]
+  recent: Recent[]
+}
+
+// Build a continuous N-day window ending today so the bar chart reads as a
+// proper 30-day strip even when some days had no orders.
+function buildWindow(trend: Dash['trend'], days: number) {
+  const byDate = new Map(trend.map((t) => [t.date, t]))
+  const out: { benefit: number; extra: number }[] = []
+  const today = new Date()
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - i)
+    const iso = d.toISOString().slice(0, 10)
+    const row = byDate.get(iso)
+    const benefit = row?.benefit ?? 0
+    const gross = row?.gross ?? 0
+    out.push({ benefit, extra: Math.max(0, gross - benefit) })
+  }
+  return out
 }
 
 export default function CompanyDashboard() {
-  const { session } = useAuthStore()
-  const { selectedId, companies } = useCompanyStore()
+  const { session, user } = useAuthStore()
+  const { selectedId } = useCompanyStore()
   const { lang } = useUIStore()
   const L = (el: string, en: string) => (lang === 'el' ? el : en)
   const [data, setData] = useState<Dash | null>(null)
@@ -23,8 +42,6 @@ export default function CompanyDashboard() {
 
   const from = '2026-03-01'
   const to = new Date().toISOString().slice(0, 10)
-  const m = (c: number) => fmtMoney(c, lang)
-  const companyName = companies.find((c) => c.id === selectedId)?.name
 
   useEffect(() => {
     if (!session?.access_token || !selectedId) return
@@ -41,117 +58,123 @@ export default function CompanyDashboard() {
     })()
   }, [session?.access_token, selectedId])
 
-  const maxTrend = data ? Math.max(1, ...data.trend.map((t) => t.gross)) : 1
-  const maxWd = data ? Math.max(1, ...data.byWeekday.map((w) => w.gross)) : 1
+  const firstName = (user?.fullName || user?.email || 'there').split(/[ @]/)[0]
+  const greeting = (() => {
+    const h = new Date().getHours()
+    if (h < 12) return L('Καλημέρα', 'Good morning')
+    if (h < 18) return L('Καλησπέρα', 'Good afternoon')
+    return L('Καλό βράδυ', 'Good evening')
+  })()
+
+  const series = data ? buildWindow(data.trend, 30) : []
+  const windowTotal = series.reduce((a, d) => a + d.benefit + d.extra, 0)
+  const benefitShare = data && data.totals.gross > 0
+    ? Math.round((data.totals.benefit / data.totals.gross) * 100) : 0
+  const orderDays = data ? data.trend.length : 0
+  const avgPerDay = data && orderDays > 0 ? Math.round(data.totals.orders / orderDays) : 0
+
+  const quick: { to: string; title: string; sub: string; icon: IconName; tone: 'brand' | 'accent' | 'warn' }[] = [
+    { to: '/company/employees', title: L('Προσκαλέστε υπαλλήλους', 'Invite employees'), sub: L('Με email ή μαζικά από CSV.', 'Via email or CSV import.'), icon: 'users', tone: 'brand' },
+    { to: '/company/benefits/new', title: L('Δημιουργία παροχής', 'Create a benefit'), sub: L('Μηνιαία, εβδομαδιαία ή one-off.', 'Monthly, weekly, or one-off.'), icon: 'wallet', tone: 'accent' },
+    { to: '/company/reports', title: L('Αναφορές & δαπάνες', 'Reports & spend'), sub: L('Αναλυτική εικόνα χρήσης.', 'Detailed usage breakdown.'), icon: 'file', tone: 'warn' },
+  ]
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="mb-6">
-        <h1 className="font-display text-3xl font-semibold text-ink">{L('Πίνακας', 'Dashboard')}</h1>
-        <p className="text-sm text-ink-soft">
-          {companyName} · {L('περίοδος', 'period')} {from} → {to}
+    <section className="p-8 space-y-6 max-w-[1100px]">
+      <div>
+        <h1 className="font-display text-[36px] leading-[44px] font-semibold">
+          {greeting}, <span className="italic text-ink-soft">{firstName}</span>
+        </h1>
+        <p className="text-ink-soft mt-2 text-[15px]">
+          {L('Σύντομη εικόνα των παροχών και της δραστηριότητας.', 'A quick read on benefits and activity.')}
         </p>
       </div>
 
-      {error && <div className="mb-4 rounded-lg border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
+      {error && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
       {loading && !data && <div className="text-ink-soft">{L('Φόρτωση…', 'Loading…')}</div>}
 
       {data && (
-        <div className="grid gap-6">
-          {/* KPIs */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-            {[
-              { label: L('Παραγγελίες', 'Orders'), val: data.totals.orders.toLocaleString() },
-              { label: L('Τζίρος', 'Gross'), val: m(data.totals.gross) },
-              { label: L('Παροχή', 'Benefit'), val: m(data.totals.benefit), accent: true },
-              { label: L('Πληρωμή υπαλλήλου', 'Top-up'), val: m(data.totals.topup) },
-              { label: L('Ενεργοί υπάλληλοι', 'Active employees'), val: data.totals.employees.toLocaleString() },
-            ].map((k) => (
-              <div key={k.label} className="rounded-xl border border-line bg-surface p-4">
-                <div className="text-xs font-medium uppercase tracking-wide text-ink-faint">{k.label}</div>
-                <div className={`mt-1 font-display text-2xl font-semibold ${k.accent ? 'text-brand' : 'text-ink'}`}>{k.val}</div>
-              </div>
-            ))}
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KPI label={L('Ενεργοί εργαζόμενοι', 'Active employees')} value={data.totals.employees}
+              tone="brand" icon="users" sub={L('με παραγγελία στην περίοδο', 'ordered this period')} />
+            <KPI label={L('Συνολική δαπάνη', 'Total spend')} value={moneyFull(data.totals.gross, lang)}
+              tone="accent" icon="wallet" sub={L(`από ${from}`, `since ${from}`)} />
+            <KPI label={L('Καλύφθηκε από παροχή', 'Covered by benefit')} value={moneyFull(data.totals.benefit, lang)}
+              tone="success" icon="chart" sub={L(`${benefitShare}% της δαπάνης`, `${benefitShare}% of spend`)} />
+            <KPI label={L('Παραγγελίες', 'Orders')} value={data.totals.orders}
+              tone="warn" icon="shop" sub={L(`μ.ό. ${avgPerDay}/ημέρα`, `${avgPerDay}/day avg`)} />
           </div>
 
-          {/* Spend trend */}
-          <section className="rounded-xl border border-line bg-surface p-5">
-            <h2 className="mb-4 font-display text-lg font-semibold text-ink">{L('Τάση δαπανών', 'Spending trend')}</h2>
-            {data.trend.length === 0 ? <p className="text-sm text-ink-soft">{L('Καμία δραστηριότητα', 'No activity')}</p> : (
-              <div className="flex items-end gap-1 overflow-x-auto" style={{ height: 160 }}>
-                {data.trend.map((t) => (
-                  <div key={t.date} className="flex flex-col items-center justify-end" style={{ minWidth: 10 }} title={`${t.date}: ${m(t.gross)} (${t.orders})`}>
-                    <div className="w-2 rounded-t bg-brand" style={{ height: `${(t.gross / maxTrend) * 140}px` }} />
+          <div className="grid lg:grid-cols-[3fr_2fr] gap-6">
+            {/* chart */}
+            <div className="bg-surface border border-line rounded-md shadow-sm p-6">
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h2 className="font-display text-[20px] font-semibold">{L('Δαπάνες · τελευταίες 30 μέρες', 'Spend · last 30 days')}</h2>
+                  <div className="flex items-center gap-4 mt-2">
+                    <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-soft"><span className="w-2.5 h-2.5 rounded-xs bg-brand"></span>{L('Καλύπτεται από παροχή', 'Covered by benefit')}</span>
+                    <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-soft"><span className="w-2.5 h-2.5 rounded-xs bg-accent"></span>{L('Επιπλέον από υπαλλήλους', 'Extra paid by employees')}</span>
                   </div>
-                ))}
+                </div>
+                <div className="text-right">
+                  <div className="num text-[22px] font-semibold">{moneyFull(windowTotal, lang)}</div>
+                  <div className="text-[11px] text-ink-faint">{L('σύνολο 30 ημερών', '30-day total')}</div>
+                </div>
               </div>
-            )}
-            <div className="mt-2 flex justify-between text-xs text-ink-faint">
-              <span>{data.trend[0]?.date}</span><span>{data.trend[data.trend.length - 1]?.date}</span>
+              <Sparkbars series={series} />
+              <div className="flex justify-between mt-2 num text-[10px] text-ink-faint">
+                <span>{L('πριν 30 μέρες', '30d ago')}</span><span>{L('τώρα', 'now')}</span>
+              </div>
             </div>
-          </section>
 
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* By weekday */}
-            <section className="rounded-xl border border-line bg-surface p-5">
-              <h2 className="mb-4 font-display text-lg font-semibold text-ink">{L('Χρήση ανά ημέρα', 'Usage by weekday')}</h2>
-              <div className="grid gap-2">
-                {data.byWeekday.map((w) => (
-                  <div key={w.day} className="flex items-center gap-3">
-                    <span className="w-10 text-xs text-ink-soft">{w.day}</span>
-                    <div className="h-4 flex-1 rounded bg-bg">
-                      <div className="h-4 rounded bg-accent" style={{ width: `${(w.gross / maxWd) * 100}%` }} />
+            {/* activity */}
+            <div className="bg-surface border border-line rounded-md shadow-sm">
+              <div className="flex items-center justify-between p-5 border-b border-line">
+                <h2 className="font-display text-[20px] font-semibold">{L('Δραστηριότητα', 'Activity')}</h2>
+                <Link to="/company/reports" className="text-[12.5px] text-brand font-medium hover:underline">{L('Όλα', 'View all')}</Link>
+              </div>
+              <div className="divide-y divide-line">
+                {data.recent.length === 0 && (
+                  <div className="p-6 text-center text-[13px] text-ink-faint">{L('Καμία δραστηριότητα ακόμη', 'No activity yet')}</div>
+                )}
+                {data.recent.map((a, i) => (
+                  <div key={i} className="p-4 flex items-start gap-3">
+                    <ActIcon kind={a.kind} />
+                    <div className="flex-1 min-w-0 text-[13.5px] text-ink leading-[20px]">
+                      <div>
+                        <b>{a.who}</b> {L('παραγγελία', 'ordered at')} <b>{a.where}</b> · <span className="num">{moneyFull(a.amount, lang)}</span>
+                      </div>
+                      <div className="text-[11.5px] text-ink-faint font-mono mt-0.5">{a.at}</div>
                     </div>
-                    <span className="w-20 text-right text-xs tabular-nums text-ink-soft">{m(w.gross)}</span>
                   </div>
                 ))}
               </div>
-            </section>
-
-            {/* Top users */}
-            <section className="rounded-xl border border-line bg-surface p-5">
-              <h2 className="mb-4 font-display text-lg font-semibold text-ink">{L('Top χρήστες', 'Top users')}</h2>
-              <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-ink-faint">
-                  <th className="pb-2">{L('Υπάλληλος', 'Employee')}</th>
-                  <th className="pb-2 text-right">{L('Παρ.', 'Ord.')}</th>
-                  <th className="pb-2 text-right">{L('Τζίρος', 'Gross')}</th>
-                </tr></thead>
-                <tbody>
-                  {data.topUsers.map((u, i) => (
-                    <tr key={i} className="border-t border-line/60">
-                      <td className="py-1.5 text-ink">{u.name}</td>
-                      <td className="py-1.5 text-right tabular-nums text-ink-soft">{u.orders}</td>
-                      <td className="py-1.5 text-right tabular-nums text-ink">{m(u.gross)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
+            </div>
           </div>
 
-          {/* By vendor */}
-          <section className="rounded-xl border border-line bg-surface p-5">
-            <h2 className="mb-4 font-display text-lg font-semibold text-ink">{L('Δαπάνες ανά συνεργάτη', 'Spend by vendor')}</h2>
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-ink-faint">
-                <th className="pb-2">{L('Συνεργάτης', 'Vendor')}</th>
-                <th className="pb-2 text-right">{L('Παραγγελίες', 'Orders')}</th>
-                <th className="pb-2 text-right">{L('Τζίρος', 'Gross')}</th>
-              </tr></thead>
-              <tbody>
-                {data.byVendor.map((v, i) => (
-                  <tr key={i} className="border-t border-line/60">
-                    <td className="py-1.5 text-ink">{v.vendor}</td>
-                    <td className="py-1.5 text-right tabular-nums text-ink-soft">{v.orders}</td>
-                    <td className="py-1.5 text-right tabular-nums text-ink">{m(v.gross)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        </div>
+          {/* quick actions */}
+          <div>
+            <h2 className="font-display text-[20px] font-semibold mb-3">{L('Γρήγορες ενέργειες', 'Quick actions')}</h2>
+            <div className="grid md:grid-cols-3 gap-3">
+              {quick.map((q) => (
+                <Link key={q.to} to={q.to} className="group bg-surface border border-line rounded-md p-5 hover:border-ink-soft transition flex items-start gap-4">
+                  <div className={`w-10 h-10 rounded-sm ${q.tone === 'brand' ? 'bg-brand-soft text-brand' : q.tone === 'accent' ? 'bg-accent-soft text-accent' : 'bg-[#FBF1DA] text-[#A37620]'} flex items-center justify-center shrink-0`}>
+                    <Icon name={q.icon} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-[14.5px] flex items-center gap-1.5">
+                      {q.title}
+                      <span className="text-ink-faint group-hover:text-ink transition"><Icon name="chevron_r" /></span>
+                    </div>
+                    <div className="text-[12.5px] text-ink-soft mt-0.5">{q.sub}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </>
       )}
-    </div>
+    </section>
   )
 }
