@@ -38,7 +38,21 @@ export default async (req: Request, _ctx: Context) => {
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
       if (error) throw new Error(error.message)
-      return ok({ benefits: data ?? [] })
+
+      // attach active-assignment counts per benefit
+      const benefits = data ?? []
+      if (benefits.length > 0) {
+        const ids = benefits.map((b) => b.id)
+        const { data: assigns } = await sb
+          .from('benefit_assignments')
+          .select('benefit_id')
+          .in('benefit_id', ids)
+          .is('unassigned_at', null)
+        const counts = new Map<string, number>()
+        for (const a of assigns ?? []) counts.set(a.benefit_id, (counts.get(a.benefit_id) ?? 0) + 1)
+        for (const b of benefits as Array<Record<string, unknown>>) b.assigned_count = counts.get(b.id as string) ?? 0
+      }
+      return ok({ benefits })
     }
 
     if (req.method === 'POST') {

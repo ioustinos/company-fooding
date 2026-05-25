@@ -8,6 +8,7 @@ type Rule = { topup_cadence: string; topup_amount: number; carryover: string }
 type Benefit = {
   id: string; name_el: string; name_en: string; credit_amount: number
   status: string; valid_from: string; benefit_rules: Rule[] | Rule | null
+  assigned_count?: number
 }
 
 export default function BenefitsPage() {
@@ -62,6 +63,25 @@ export default function BenefitsPage() {
     finally { setSaving(false) }
   }
 
+  const [assignBusy, setAssignBusy] = useState<string | null>(null)
+  const [assignMsg, setAssignMsg] = useState<string | null>(null)
+  async function assignAll(benefitId: string) {
+    if (!token) return
+    setAssignBusy(benefitId); setAssignMsg(null)
+    try {
+      const r = await fetch('/api/cf-benefit-assign', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ benefitId, target: 'all' }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`)
+      setAssignMsg(L(`Ανατέθηκε σε ${d.assigned} (παράβλεψη ${d.skipped})`, `Assigned to ${d.assigned} (skipped ${d.skipped})`))
+      await load()
+    } catch (e) { setAssignMsg(e instanceof Error ? e.message : 'Failed') }
+    finally { setAssignBusy(null) }
+  }
+
   const ruleOf = (b: Benefit): Rule | null => Array.isArray(b.benefit_rules) ? (b.benefit_rules[0] ?? null) : b.benefit_rules
   const input = 'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30'
 
@@ -94,6 +114,7 @@ export default function BenefitsPage() {
       </form>
 
       {error && <div className="mb-4 text-sm text-danger">{error}</div>}
+      {assignMsg && <div className="mb-4 text-sm text-ink-soft">{assignMsg}</div>}
       {loading ? <div className="text-ink-soft">{L('Φόρτωση…', 'Loading…')}</div> : (
         <div className="overflow-x-auto rounded-xl border border-line bg-surface">
           <table className="w-full text-sm">
@@ -102,8 +123,9 @@ export default function BenefitsPage() {
               <th className="px-4 py-2 text-right">{L('Ποσό', 'Amount')}</th>
               <th className="px-4 py-2">{L('Συχνότητα', 'Cadence')}</th>
               <th className="px-4 py-2">{L('Carryover', 'Carryover')}</th>
-              <th className="px-4 py-2">{L('Από', 'From')}</th>
+              <th className="px-4 py-2 text-right">{L('Ανατεθειμένο', 'Assigned')}</th>
               <th className="px-4 py-2">{L('Κατάσταση', 'Status')}</th>
+              <th className="px-4 py-2 text-right">{L('Ενέργειες', 'Actions')}</th>
             </tr></thead>
             <tbody>
               {rows.map((b) => { const rule = ruleOf(b); return (
@@ -112,11 +134,17 @@ export default function BenefitsPage() {
                   <td className="px-4 py-2 text-right tabular-nums text-ink">{fmtMoney(b.credit_amount, lang)}</td>
                   <td className="px-4 py-2 text-ink-soft">{rule?.topup_cadence ?? '—'}</td>
                   <td className="px-4 py-2 text-ink-soft">{rule?.carryover ?? '—'}</td>
-                  <td className="px-4 py-2 text-ink-soft">{b.valid_from}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-ink">{b.assigned_count ?? 0}</td>
                   <td className="px-4 py-2"><span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs text-brand">{b.status}</span></td>
+                  <td className="px-4 py-2 text-right">
+                    <button onClick={() => void assignAll(b.id)} disabled={assignBusy === b.id}
+                      className="text-xs font-medium text-brand underline hover:text-brand-hover disabled:opacity-50">
+                      {assignBusy === b.id ? L('Ανάθεση…', 'Assigning…') : L('Ανάθεση σε όλους', 'Assign to all')}
+                    </button>
+                  </td>
                 </tr>
               )})}
-              {rows.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-faint">{L('Καμία παροχή ακόμη', 'No benefits yet')}</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-6 text-center text-ink-faint">{L('Καμία παροχή ακόμη', 'No benefits yet')}</td></tr>}
             </tbody>
           </table>
         </div>

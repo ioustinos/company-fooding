@@ -1,9 +1,10 @@
-// cf-employees — list + create employees for a company.
+// cf-employees — list, create (single + bulk), edit/deactivate employees.
 //
-// GET  /api/cf-employees?companyId=<uuid>            → list
-// POST /api/cf-employees  { companyId, display_name, email?, external_ref? }  → create
-//   - super_admin → any company (companyId required)
-//   - company_admin → own company (companyId ignored/forced)
+// GET   /api/cf-employees?companyId=<uuid>                 → list
+// POST  /api/cf-employees  { companyId, display_name, email?, external_ref? }   → create one
+// POST  /api/cf-employees  { companyId, rows: [{display_name,email?,external_ref?}] } → bulk
+// PATCH /api/cf-employees  { id, display_name?, email?, external_ref?, status? }  → edit/deactivate
+//   - super_admin → any company (companyId required for create); company_admin → own
 //
 // Writes via service role; authz enforced here.
 
@@ -12,6 +13,8 @@ import { ok, badRequest, forbidden, methodNotAllowed, errorResponse } from './_s
 import { getCaller } from './_shared/auth'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
 
+type InRow = { display_name?: string; email?: string; external_ref?: string }
+
 export default async (req: Request, _ctx: Context) => {
   try {
     const caller = await getCaller(req)
@@ -19,9 +22,7 @@ export default async (req: Request, _ctx: Context) => {
       return forbidden('Admins only')
     }
     const sb = supabaseAdmin()
-
-    const resolveCompany = (bodyOrQuery: string | null): string | null =>
-      caller.role === 'company_admin' ? caller.companyId : bodyOrQuery
+    const resolveCompany = (v: string | null) => (caller.role === 'company_admin' ? caller.companyId : v)
 
     if (req.method === 'GET') {
       const url = new URL(req.url)
@@ -37,28 +38,48 @@ export default async (req: Request, _ctx: Context) => {
     }
 
     if (req.method === 'POST') {
-      const body = (await req.json().catch(() => ({}))) as {
-        companyId?: string; display_name?: string; email?: string; external_ref?: string
-      }
+      const body = (await req.json().catch(() => ({}))) as
+        { companyId?: string; rows?: InRow[] } & InRow
       const companyId = resolveCompany(body.companyId ?? null)
       if (!companyId) return badRequest('companyId required')
-      if (!body.display_name?.trim()) return badRequest('display_name required')
 
-      // default office (if the company has one) so deliveries route correctly
+      // default office for delivery routing
       const { data: office } = await sb
         .from('company_offices').select('id').eq('company_id', companyId).eq('is_default', true).maybeSingle()
+      const officeId = office?.id ?? null
 
-      const row = {
+      const toRow = (r: InRow) => ({
         company_id: companyId,
-        display_name: body.display_name.trim(),
-        email: body.email?.trim() || null,
-        external_ref: body.external_ref?.trim() || null,
-        default_office_id: office?.id ?? null,
+        display_name: (r.display_name ?? '').trim(),
+        email: r.email?.trim() || null,
+        external_ref: r.external_ref?.trim() || null,
+        default_office_id: officeId,
         status: 'active',
+      })
+
+      // BULK
+      if (Array.isArray(body.rows)) {
+        const valid = body.rows.map(toRow).filter((r) => r.display_name)
+        if (valid.length === 0) return badRequest('No valid rows (display_name required on each)')
+        // upsert on (company_id, lower(external_ref)) would be ideal; insert + skip dups
+        const results = { inserted: 0, skipped: 0, errors: [] as string[] }
+        for (const r of valid) {
+          const { error } = await sb.from('employees').insert(r)
+          if (error) {
+            if (error.code === '23505' || error.message.includes('duplicate')) results.skipped++
+            else results.errors.push(`${r.display_name}: ${error.message}`)
+          } else results.inserted++
+        }
+        return ok({ bulk: results })
       }
-      const { data, error } = await sb.from('employees').insert(row).select('id, display_name, email, external_ref, status').single()
+
+      // SINGLE
+      const row = toRow(body)
+      if (!row.display_name) return badRequest('display_name required')
+      const { data, error } = await sb.from('employees').insert(row)
+        .select('id, display_name, email, external_ref, status').single()
       if (error) {
-        if (error.message.includes('duplicate') || error.code === '23505') {
+        if (error.code === '23505' || error.message.includes('duplicate')) {
           return badRequest('An employee with that email or voucher code already exists in this company')
         }
         throw new Error(error.message)
@@ -66,7 +87,34 @@ export default async (req: Request, _ctx: Context) => {
       return ok({ employee: data })
     }
 
-    return methodNotAllowed(['GET', 'POST'])
+    if (req.method === 'PATCH') {
+      const b = (await req.json().catch(() => ({}))) as
+        { id?: string; display_name?: string; email?: string; external_ref?: string; status?: string }
+      if (!b.id) return badRequest('id required')
+
+      // company_admin may only edit employees in their own company
+      if (caller.role === 'company_admin') {
+        const { data: emp } = await sb.from('employees').select('company_id').eq('id', b.id).maybeSingle()
+        if (!emp || emp.company_id !== caller.companyId) return forbidden('Not your employee')
+      }
+
+      const patch: Record<string, string | null> = {}
+      if (b.display_name !== undefined) { if (!b.display_name.trim()) return badRequest('display_name cannot be empty'); patch.display_name = b.display_name.trim() }
+      if (b.email !== undefined) patch.email = b.email.trim() || null
+      if (b.external_ref !== undefined) patch.external_ref = b.external_ref.trim() || null
+      if (b.status !== undefined) { if (!['active', 'inactive'].includes(b.status)) return badRequest('status must be active|inactive'); patch.status = b.status }
+      if (Object.keys(patch).length === 0) return badRequest('nothing to update')
+
+      const { data, error } = await sb.from('employees').update(patch).eq('id', b.id)
+        .select('id, display_name, email, external_ref, status').single()
+      if (error) {
+        if (error.code === '23505') return badRequest('Voucher code already used by another employee')
+        throw new Error(error.message)
+      }
+      return ok({ employee: data })
+    }
+
+    return methodNotAllowed(['GET', 'POST', 'PATCH'])
   } catch (e) {
     return errorResponse(e)
   }
