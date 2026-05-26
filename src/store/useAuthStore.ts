@@ -20,6 +20,7 @@ type AuthState = {
   session: Session | null
   user: AuthUser | null
   loading: boolean
+  hydrated: boolean
   error: string | null
 
   signIn: (email: string, password: string) => Promise<void>
@@ -59,25 +60,37 @@ async function resolveAppUser(u: User, accessToken: string): Promise<AuthUser> {
   }
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
-  loading: false,
+  // loading=true on boot so RoleGuard + LoginPage render a splash, not a
+  // login form, while we resolve any URL-fragment magic-link / reset token.
+  loading: true,
+  hydrated: false,
   error: null,
 
+  // Hydrate is idempotent — safe to call multiple times. The onAuthStateChange
+  // subscription is installed only on the first call (tracked via `hydrated`).
   hydrate: async () => {
+    if (get().hydrated) return
     set({ loading: true, error: null })
-    const { data } = await supabase.auth.getSession()
-    const session = data.session
-    const user = session?.user
-      ? await resolveAppUser(session.user, session.access_token)
-      : null
-    set({ session, user, loading: false })
+    try {
+      const { data } = await supabase.auth.getSession()
+      const session = data.session
+      const user = session?.user
+        ? await resolveAppUser(session.user, session.access_token)
+        : null
+      set({ session, user, loading: false, hydrated: true })
 
-    supabase.auth.onAuthStateChange(async (_evt, s) => {
-      const u = s?.user ? await resolveAppUser(s.user, s.access_token) : null
-      set({ session: s, user: u })
-    })
+      // After initial hydrate, keep state in sync with SDK events (magic-link
+      // arrivals, recovery sign-in, token refresh, sign-out from another tab).
+      supabase.auth.onAuthStateChange(async (_evt, s) => {
+        const u = s?.user ? await resolveAppUser(s.user, s.access_token) : null
+        set({ session: s, user: u })
+      })
+    } catch {
+      set({ loading: false, hydrated: true })
+    }
   },
 
   signIn: async (email, password) => {
