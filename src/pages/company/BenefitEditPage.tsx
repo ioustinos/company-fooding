@@ -19,6 +19,8 @@ type Rule = {
   days_of_week: number[] | null
   topup_dom: number | null; topup_dom_eom: boolean | null
   topup_dow: number | null; topup_time: string | null
+  voucher_discount_type: 'absolute' | 'percentile' | null
+  voucher_discount_pct: number | null
 }
 type Benefit = {
   id: string; name_el: string; name_en: string
@@ -51,6 +53,9 @@ export default function BenefitEditPage() {
   const [amount, setAmount] = useState('6.00')
   const [cadence, setCadence] = useState<Cadence>('monthly')
   const [carryover, setCarryover] = useState<Carryover>('reset')
+  // voucher style at GO
+  const [voucherType, setVoucherType] = useState<'absolute' | 'percentile'>('absolute')
+  const [voucherPct, setVoucherPct] = useState<string>('5')
   // anchor (captured; persisted once migration 16 lands)
   const [dom, setDom] = useState(1)
   const [domEom, setDomEom] = useState(false)
@@ -115,6 +120,8 @@ export default function BenefitEditPage() {
           if (rule.topup_dom_eom) setDomEom(true)
           if (rule.topup_dow != null) setDow(rule.topup_dow)
           if (rule.topup_time) setTime(rule.topup_time.slice(0, 5))
+          if (rule.voucher_discount_type) setVoucherType(rule.voucher_discount_type)
+          if (rule.voucher_discount_pct != null) setVoucherPct(String(rule.voucher_discount_pct))
         }
         setValidFrom(b.valid_from); setValidTo(b.valid_to || '')
         const assigned: string[] = d.assignedEmployeeIds ?? []
@@ -188,6 +195,9 @@ export default function BenefitEditPage() {
       topup_dom_eom: domEom,
       topup_dow: dow,
       topup_time: time,
+      // voucher style at GO
+      voucher_discount_type: voucherType,
+      voucher_discount_pct: voucherType === 'percentile' ? Number(voucherPct) : null,
     }
     try {
       const r = await fetch('/api/cf-benefits', {
@@ -361,6 +371,28 @@ export default function BenefitEditPage() {
                 <RadioCard name="carry" checked={carryover === 'accumulate'} onClick={() => { setCarryover('accumulate'); touch() }}
                   title={L('Συσσώρευση', 'Accumulate')} sub={L('Μεταφέρεται στον επόμενο κύκλο.', 'Rolls over to next cycle.')} />
               </div>
+            </div>
+
+            {/* Voucher style at GO */}
+            <div className="mt-5">
+              <span className="block text-[12.5px] font-semibold text-ink mb-2">{L('Τύπος voucher στο GonnaOrder', 'GonnaOrder voucher style')}</span>
+              <div className="grid md:grid-cols-2 gap-2">
+                <RadioCard name="voucher" checked={voucherType === 'absolute'} onClick={() => { setVoucherType('absolute'); touch() }}
+                  title={L('Σταθερό ποσό ανά κύκλο', 'Fixed amount per cycle')}
+                  sub={L('Το ποσό παραπάνω γίνεται "balance" στο voucher.', 'The amount above becomes the voucher balance.')} />
+                <RadioCard name="voucher" checked={voucherType === 'percentile'} onClick={() => { setVoucherType('percentile'); touch() }}
+                  title={L('Ποσοστιαία έκπτωση', 'Percentage discount')}
+                  sub={L('% off σε κάθε παραγγελία (χωρίς cap ανά κύκλο).', '% off each order (no per-cycle cap).')} />
+              </div>
+              {voucherType === 'percentile' && (
+                <div className="mt-3 max-w-[200px]">
+                  <Field label={L('Ποσοστό έκπτωσης (%)', 'Discount percentage (%)')}>
+                    <input type="number" min="1" max="100" step="1" value={voucherPct}
+                      onChange={(e) => { setVoucherPct(e.target.value); touch() }}
+                      className="w-full h-10 px-3 bg-surface border border-line rounded-xs text-[14px] font-mono focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15" />
+                  </Field>
+                </div>
+              )}
             </div>
           </FormSection>
 

@@ -27,12 +27,20 @@ import { ok, forbidden, methodNotAllowed, errorResponse } from './_shared/errors
 import { supabaseAdmin } from './_shared/supabaseAdmin'
 import { createVoucher, updateVoucher, findVoucherByCode } from './_shared/gonnaorder'
 
+type Rule = {
+  topup_cadence: string; topup_amount: number
+  voucher_discount_type: 'absolute' | 'percentile'
+  voucher_discount_pct: number | null
+}
 type Assign = {
   id: string
   employee_id: string
   benefit_id: string
   gonnaorder_voucher_code: string | null
-  benefits: { id: string; company_id: string; name_el: string; name_en: string; status: string } | null
+  benefits: {
+    id: string; company_id: string; name_el: string; name_en: string; status: string
+    benefit_rules: Rule[] | Rule | null
+  } | null
   employees: { id: string; display_name: string; external_ref: string | null; status: string } | null
 }
 
@@ -62,7 +70,8 @@ export default async (req: Request, _ctx: Context) => {
   const sb = supabaseAdmin()
   let q = sb.from('benefit_assignments')
     .select('id, employee_id, benefit_id, gonnaorder_voucher_code, ' +
-            'benefits(id, company_id, name_el, name_en, status), ' +
+            'benefits(id, company_id, name_el, name_en, status, ' +
+            'benefit_rules(topup_cadence, topup_amount, voucher_discount_type, voucher_discount_pct)), ' +
             'employees(id, display_name, external_ref, status)')
     .is('unassigned_at', null)
   if (b.assignmentId) q = q.eq('id', b.assignmentId)
@@ -90,22 +99,36 @@ export default async (req: Request, _ctx: Context) => {
     if (!storeId) { result.skipped = 'no GO shop for company'; results.push(result); continue }
     result.store_id = storeId; result.voucher_code = code
 
+    // Pull the rule + decide voucher style
+    const rule = Array.isArray(benefit.benefit_rules) ? benefit.benefit_rules[0] : benefit.benefit_rules
+    const voucherType: 'absolute' | 'percentile' = (rule?.voucher_discount_type as 'absolute' | 'percentile') || 'absolute'
+    const pct = rule?.voucher_discount_pct ?? null
+    const amountCents = rule?.topup_amount ?? 0
+    result.voucher_style = voucherType
+    if (voucherType === 'absolute') result.amount_eur = amountCents / 100
+    if (voucherType === 'percentile') result.discount_pct = pct ?? null
+
     try {
       const existing = await findVoucherByCode(storeId, code)
       result.existing = Boolean(existing)
-
-      // For now mirror the n8n model: 5% PERCENTILE MULTI_USE. When CF moves to
-      // fixed-amount balance vouchers, switch to ABSOLUTE + initialValue from
-      // benefit_rules.topup_amount.
       const now = new Date()
       const sixMo = new Date(now); sixMo.setMonth(sixMo.getMonth() + 6)
+
+      // What we'd CREATE if the voucher is missing
+      const createPayload = voucherType === 'percentile'
+        ? { discount: pct ?? 5, discountType: 'PERCENTILE' as const, initialValue: null }
+        : { discount: amountCents / 100, discountType: 'ABSOLUTE' as const, initialValue: amountCents / 100 }
 
       if (dryRun) {
         result.action = existing ? 'WOULD UPDATE' : 'WOULD CREATE'
         result.payload = existing
-          ? { id: existing.id, code, startDate: now.toISOString(), endDate: sixMo.toISOString(), isActive: true }
-          : { code, discount: 5, discountType: 'PERCENTILE', type: 'MULTI_USE', startDate: now.toISOString(), endDate: sixMo.toISOString() }
+          ? { id: existing.id, code, startDate: now.toISOString(), endDate: sixMo.toISOString(), isActive: true,
+              discount: existing.discount, discountType: existing.discountType }
+          : { code, type: 'MULTI_USE', startDate: now.toISOString(), endDate: sixMo.toISOString(),
+              orderMinAmount: 0, ...createPayload }
       } else if (existing) {
+        // Update preserves existing discount/discountType — refreshes dates +
+        // isActive. We never silently *change* a live voucher's type.
         const updated = await updateVoucher({
           storeId, voucherId: String(existing.id ?? ''),
           fields: {
@@ -118,8 +141,11 @@ export default async (req: Request, _ctx: Context) => {
         result.voucher_id = updated.id
       } else {
         const created = await createVoucher({
-          storeId, code, discount: 5, discountType: 'PERCENTILE', type: 'MULTI_USE',
+          storeId, code, type: 'MULTI_USE',
           startDate: now, endDate: sixMo, orderMinAmount: 0,
+          discount: createPayload.discount,
+          discountType: createPayload.discountType,
+          initialValue: createPayload.initialValue,
         })
         result.action = 'CREATED'
         result.voucher_id = created.id

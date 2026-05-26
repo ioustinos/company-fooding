@@ -25,6 +25,7 @@ import type { Context } from '@netlify/functions'
 import { ok, methodNotAllowed } from './_shared/errors'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
 import { parseOrder } from './_shared/parseGonnaOrder'
+import { getOrder } from './_shared/gonnaorder'
 import type { GoOrder } from './_shared/gonnaorder'
 
 const CANCEL_TYPES = new Set(['ORDER_CANCELLED', 'ORDER_CANCELED', 'ORDER_DELETED'])
@@ -121,14 +122,24 @@ export default async (req: Request, _ctx: Context) => {
     }
 
     if (UPSERT_TYPES.has(eventType)) {
-      // Best-effort: try to parse the full GO order shape. If the webhook
-      // payload is a slim status-only event, we just touch the row's status.
+      // Webhook payloads omit voucherCode + voucherDiscount + items on UPDATE
+      // events. Fetch the canonical order detail from GO to enrich.
+      const storeId = orderData.storeId != null ? String(orderData.storeId) : null
+      let full: GoOrder | null = null
+      if (storeId) {
+        try { full = await getOrder(storeId, externalId) } catch { /* ignore — fall back */ }
+      }
+      // Prefer the full detail; fall back to the webhook payload (which has
+      // totals + customer + wishTime but no voucherCode).
+      const source = (full ?? (orderData as unknown as GoOrder))
       try {
-        const parsed = parseOrder(orderData as unknown as GoOrder)
-        // Upsert by external_order_id
+        // The detail endpoint returns full GO shape with orderId — parseOrder
+        // works. The webhook-only fallback may have epoch-ms times; parseOrder
+        // accepts ISO strings or numbers via new Date().
+        const parsed = parseOrder({ ...source, orderId: source.orderId ?? source.uuid ?? externalId })
         await sb.from('orders').upsert(parsed.order, { onConflict: 'external_order_id' })
       } catch {
-        // Slim payload — just upsert minimal fields
+        // Last-resort slim upsert so we at least record the event
         await sb.from('orders').upsert({
           source: 'gonnaorder',
           external_order_id: externalId,
@@ -138,8 +149,11 @@ export default async (req: Request, _ctx: Context) => {
           raw_payload: payload,
         }, { onConflict: 'external_order_id' })
       }
-      await sb.from('webhook_events').update({ processed: true }).eq('dedupe_key', dedupeKey)
-      return ok({ received: true, action: 'upserted', externalId, eventType })
+      await sb.from('webhook_events').update({
+        processed: true,
+        error: full ? null : 'enrichment via getOrder failed; used webhook payload',
+      }).eq('dedupe_key', dedupeKey)
+      return ok({ received: true, action: 'upserted', externalId, eventType, enriched: Boolean(full) })
     }
 
     // Unknown event type — log + ignore.

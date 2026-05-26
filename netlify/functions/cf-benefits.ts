@@ -35,6 +35,9 @@ type Body = {
   // anchor — when the top-up fires within the cadence
   topup_dom?: number | null; topup_dom_eom?: boolean
   topup_dow?: number | null; topup_time?: string | null
+  // voucher style at GO
+  voucher_discount_type?: 'absolute' | 'percentile'
+  voucher_discount_pct?: number | null
 }
 
 // Coerce anchor fields based on cadence — only set the fields that apply to
@@ -103,7 +106,7 @@ export default async (req: Request, _ctx: Context) => {
           .from('benefits')
           .select('id, company_id, name_el, name_en, description_el, description_en, ' +
                   'credit_amount, currency, status, valid_from, valid_to, ' +
-                  'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week, topup_dom, topup_dom_eom, topup_dow, topup_time)')
+                  'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week, topup_dom, topup_dom_eom, topup_dow, topup_time, voucher_discount_type, voucher_discount_pct)')
           .eq('id', id)
           .maybeSingle()
         if (error) throw new Error(error.message)
@@ -128,7 +131,7 @@ export default async (req: Request, _ctx: Context) => {
         .from('benefits')
         .select('id, name_el, name_en, description_el, description_en, credit_amount, currency, ' +
                 'status, valid_from, valid_to, ' +
-                'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week, topup_dom, topup_dom_eom, topup_dow, topup_time)')
+                'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week, topup_dom, topup_dom_eom, topup_dow, topup_time, voucher_discount_type, voucher_discount_pct)')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
       if (error) throw new Error(error.message)
@@ -178,6 +181,9 @@ export default async (req: Request, _ctx: Context) => {
       if (benErr) throw new Error(benErr.message)
 
       const anchor = normAnchor(b, cadence)
+      const vType = b.voucher_discount_type === 'percentile' ? 'percentile' : 'absolute'
+      const vPct = vType === 'percentile' && Number.isInteger(b.voucher_discount_pct)
+        ? Math.max(1, Math.min(100, Number(b.voucher_discount_pct))) : null
       const { error: ruleErr } = await sb.from('benefit_rules').insert({
         benefit_id: benefit!.id,
         topup_cadence: cadence,
@@ -187,6 +193,8 @@ export default async (req: Request, _ctx: Context) => {
         per_order_min: eurToCentsOpt(b.per_order_min_eur),
         per_order_max: eurToCentsOpt(b.per_order_max_eur),
         days_of_week: normDays(b.days_of_week),
+        voucher_discount_type: vType,
+        voucher_discount_pct: vPct,
         ...anchor,
       })
       if (ruleErr) {
@@ -235,6 +243,9 @@ export default async (req: Request, _ctx: Context) => {
 
       // upsert the rule (one per benefit, unique benefit_id)
       const anchor = normAnchor(b, cadence)
+      const vType = b.voucher_discount_type === 'percentile' ? 'percentile' : 'absolute'
+      const vPct = vType === 'percentile' && Number.isInteger(b.voucher_discount_pct)
+        ? Math.max(1, Math.min(100, Number(b.voucher_discount_pct))) : null
       const { error: ruleErr } = await sb.from('benefit_rules').upsert({
         benefit_id: b.id,
         topup_cadence: cadence,
@@ -244,6 +255,8 @@ export default async (req: Request, _ctx: Context) => {
         per_order_min: eurToCentsOpt(b.per_order_min_eur),
         per_order_max: eurToCentsOpt(b.per_order_max_eur),
         days_of_week: normDays(b.days_of_week),
+        voucher_discount_type: vType,
+        voucher_discount_pct: vPct,
         ...anchor,
       }, { onConflict: 'benefit_id' })
       if (ruleErr) throw new Error(`benefit_rules: ${ruleErr.message}`)

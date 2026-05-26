@@ -176,6 +176,38 @@ export async function listOrders(opts: ListOrdersOpts): Promise<GoOrder[]> {
   return all
 }
 
+/**
+ * Fetch a single order by its GO uuid (or numeric id). Used by the webhook
+ * handler to enrich incoming events — webhook payloads omit fields like
+ * voucherCode / voucherDiscount / orderItems on UPDATE events; the detail
+ * endpoint returns them.
+ *
+ * Tries `GET /stores/{storeId}/orders/{orderUuid}` first (REST convention).
+ * Falls back to the orders/search endpoint with a status-agnostic page scan
+ * if the detail endpoint isn't available.
+ */
+export async function getOrder(storeId: string, orderUuid: string): Promise<GoOrder | null> {
+  // Try GET first.
+  const direct = await requestWithAuth('GET', `/stores/${encodeURIComponent(storeId)}/orders/${encodeURIComponent(orderUuid)}`)
+  if (direct.ok) {
+    const json = await direct.json().catch(() => null) as GoOrder | null
+    if (json) return json
+  }
+  // Fall back: search the first few pages for the matching uuid.
+  for (let page = 0; page < 5; page++) {
+    const res = await postWithAuth(
+      `/stores/${encodeURIComponent(storeId)}/orders/search?size=100&page=${page}&sort=createdAt,desc`,
+      { status: [], isReady: false },
+    )
+    if (!res.ok) break
+    const arr = pickOrders(await res.json())
+    const hit = arr.find((o) => (o.uuid && String(o.uuid) === orderUuid) || (o.orderId !== undefined && String(o.orderId) === orderUuid))
+    if (hit) return hit
+    if (arr.length < 100) break
+  }
+  return null
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Customer vouchers (GO)
 //
