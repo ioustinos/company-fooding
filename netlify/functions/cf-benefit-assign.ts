@@ -17,11 +17,30 @@ import { getCaller } from './_shared/auth'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
 
 export default async (req: Request, _ctx: Context) => {
-  if (req.method !== 'POST') return methodNotAllowed(['POST'])
+  if (req.method !== 'POST' && req.method !== 'DELETE') return methodNotAllowed(['POST', 'DELETE'])
   try {
     const caller = await getCaller(req)
     if (!caller || (caller.role !== 'super_admin' && caller.role !== 'company_admin')) {
       return forbidden('Admins only')
+    }
+
+    const sbDel = supabaseAdmin()
+    // ---- DELETE: unassign (soft-delete by stamping unassigned_at) ----
+    if (req.method === 'DELETE') {
+      const d = (await req.json().catch(() => ({}))) as { assignmentId?: string }
+      if (!d.assignmentId) return badRequest('assignmentId required')
+      // verify access via the parent benefit's company
+      const { data: row } = await sbDel.from('benefit_assignments')
+        .select('id, benefit_id, benefits(company_id)').eq('id', d.assignmentId).maybeSingle()
+      const r = row as unknown as { id: string; benefits: { company_id: string } | null } | null
+      if (!r) return badRequest('assignment not found')
+      if (caller.role === 'company_admin' && r.benefits?.company_id !== caller.companyId) {
+        return forbidden('Not your assignment')
+      }
+      const { error } = await sbDel.from('benefit_assignments')
+        .update({ unassigned_at: new Date().toISOString() }).eq('id', d.assignmentId)
+      if (error) throw new Error(error.message)
+      return ok({ unassigned: 1 })
     }
     const b = (await req.json().catch(() => ({}))) as
       { benefitId?: string; target?: string; employeeId?: string; employeeIds?: string[] }

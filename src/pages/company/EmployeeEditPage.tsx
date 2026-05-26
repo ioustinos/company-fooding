@@ -6,7 +6,12 @@ import { useUIStore } from '../../store/useUIStore'
 import { Icon, Btn, FormSection, Field, Pill, txtInputCls, moneyFull } from '../../lib/specui'
 
 type Mode = 'one' | 'csv'
-type Employee = { id: string; display_name: string; email: string | null; external_ref: string | null; status: string; benefits_count?: number; spend?: number }
+type Employee = { id: string; display_name: string; email: string | null; external_ref: string | null; status: string; office?: { label_el: string | null; label_en: string | null } | null }
+type Assignment = {
+  id: string; benefit_id: string; assigned_at: string; gonnaorder_voucher_code: string | null
+  benefits: { name_el: string; name_en: string; credit_amount: number; status: string; benefit_rules?: { topup_cadence: string } | { topup_cadence: string }[] | null } | null
+}
+type Order = { id: string; delivery_date: string | null; subtotal: number; benefit_applied: number; topup_amount: number; vendors: { name: string } | null }
 
 export default function EmployeeEditPage() {
   const { session } = useAuthStore()
@@ -27,37 +32,56 @@ export default function EmployeeEditPage() {
   const [empId, setEmpId] = useState('')
   const [voucher, setVoucher] = useState('')
   const [status, setStatus] = useState<'active' | 'inactive'>('active')
-  const [meta, setMeta] = useState<{ benefits_count: number; spend: number } | null>(null)
+  const [office, setOffice] = useState<string | null>(null)
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(isEdit)
+  const [unassigning, setUnassigning] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const touch = () => setDirty(true)
 
-  // load existing employee when in edit mode
-  useEffect(() => {
-    if (!token || !isEdit || !selectedId) return
+  // load existing employee + their assignments + recent orders
+  async function loadDetail() {
+    if (!token || !isEdit || !id) return
     setLoading(true); setErr(null)
-    ;(async () => {
-      try {
-        const r = await fetch(`/api/cf-employees?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
-        if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
-        const d = await r.json()
-        const e = (d.employees ?? []).find((x: Employee) => x.id === id) as Employee | undefined
-        if (!e) throw new Error(L('Δεν βρέθηκε ο υπάλληλος', 'Employee not found'))
-        const parts = (e.display_name || '').split(/\s+/)
-        setFirstName(parts[0] || '')
-        setLastName(parts.slice(1).join(' '))
-        setEmail(e.email || '')
-        setEmpId('')
-        setVoucher(e.external_ref || '')
-        setStatus(e.status === 'active' ? 'active' : 'inactive')
-        setMeta({ benefits_count: e.benefits_count ?? 0, spend: e.spend ?? 0 })
-        setDirty(false)
-      } catch (er) { setErr(er instanceof Error ? er.message : 'Failed to load') }
-      finally { setLoading(false) }
-    })()
-  }, [token, isEdit, id, selectedId])
+    try {
+      const r = await fetch(`/api/cf-employees?id=${id}`, { headers: { authorization: `Bearer ${token}` } })
+      if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
+      const d = await r.json()
+      const e = d.employee as Employee
+      if (!e) throw new Error(L('Δεν βρέθηκε ο υπάλληλος', 'Employee not found'))
+      const parts = (e.display_name || '').split(/\s+/)
+      setFirstName(parts[0] || '')
+      setLastName(parts.slice(1).join(' '))
+      setEmail(e.email || '')
+      setEmpId('')
+      setVoucher(e.external_ref || '')
+      setStatus(e.status === 'active' ? 'active' : 'inactive')
+      setOffice(lang === 'el' ? (e.office?.label_el ?? null) : (e.office?.label_en ?? null))
+      setAssignments(d.assignments ?? [])
+      setOrders(d.orders ?? [])
+      setDirty(false)
+    } catch (er) { setErr(er instanceof Error ? er.message : 'Failed to load') }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { void loadDetail() /* eslint-disable-next-line */ }, [token, isEdit, id, lang])
+
+  async function unassign(assignmentId: string) {
+    if (!token) return
+    setUnassigning(assignmentId)
+    try {
+      const r = await fetch('/api/cf-benefit-assign', {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ assignmentId }),
+      })
+      if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
+      setAssignments((arr) => arr.filter((a) => a.id !== assignmentId))
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to unassign') }
+    finally { setUnassigning(null) }
+  }
 
   // csv
   const [csv, setCsv] = useState('')
@@ -144,8 +168,9 @@ export default function EmployeeEditPage() {
                 : L('Προσθέστε ένα άτομο ή κάντε μαζική εισαγωγή από CSV.', 'Add one person or bulk-import from CSV.')}
             </p>
           </div>
-          {isEdit && meta && (
+          {isEdit && (
             <div className="flex items-center gap-2">
+              {office && <span className="text-[12.5px] text-ink-soft">{office}</span>}
               <Pill tone={status === 'active' ? 'success' : 'neutral'}>{status === 'active' ? L('Ενεργός', 'Active') : L('Ανενεργός', 'Inactive')}</Pill>
             </div>
           )}
@@ -196,20 +221,71 @@ export default function EmployeeEditPage() {
                   </div>
                 </FormSection>
 
-                {meta && (
-                  <FormSection title={L('Σύνοψη', 'Summary')} sub={L('Τι έχει συμβεί μέχρι τώρα.', 'What has happened so far.')}>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">{L('Ενεργές παροχές', 'Active benefits')}</div>
-                        <div className="num text-[24px] font-semibold mt-1">{meta.benefits_count}</div>
-                      </div>
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">{L('Συνολική χρήση', 'Total used')}</div>
-                        <div className="num text-[24px] font-semibold mt-1">{moneyFull(meta.spend, lang)}</div>
-                      </div>
+                <FormSection title={L('Παροχές', 'Benefits')} sub={L('Ενεργές αναθέσεις. Πατήστε × για να ακυρώσετε.', 'Active assignments. Click × to unassign.')}>
+                  {assignments.length === 0 ? (
+                    <div className="text-[13px] text-ink-faint">{L('Κανένα ενεργό benefit', 'No active benefits')}</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {assignments.map((a) => {
+                        const b = a.benefits
+                        if (!b) return null
+                        const rule = Array.isArray(b.benefit_rules) ? b.benefit_rules[0] : b.benefit_rules
+                        const cadLabel = rule?.topup_cadence === 'monthly' ? L('κάθε μήνα', 'every month')
+                          : rule?.topup_cadence === 'weekly' ? L('κάθε εβδομάδα', 'every week')
+                          : rule?.topup_cadence === 'daily' ? L('καθημερινά', 'every day')
+                          : rule?.topup_cadence === 'one_time' ? L('μία φορά', 'one-off') : ''
+                        return (
+                          <div key={a.id} className="flex items-center gap-3 p-3 border border-line rounded">
+                            <div className="w-9 h-9 rounded bg-accent-soft text-accent flex items-center justify-center shrink-0"><Icon name="wallet" /></div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-[14px] truncate">{lang === 'el' ? b.name_el : b.name_en}</div>
+                              <div className="text-[12px] text-ink-soft num">{moneyFull(b.credit_amount, lang)} · {cadLabel}</div>
+                            </div>
+                            {a.gonnaorder_voucher_code && (
+                              <span className="text-[10.5px] font-mono bg-bg border border-line text-ink-faint px-1.5 py-0.5 rounded-xs shrink-0">{a.gonnaorder_voucher_code}</span>
+                            )}
+                            <button onClick={() => void unassign(a.id)} disabled={unassigning === a.id}
+                              className="w-7 h-7 rounded-xs flex items-center justify-center text-ink-faint hover:text-danger hover:bg-danger/5 disabled:opacity-50"
+                              title={L('Ακύρωση', 'Unassign')}>
+                              <Icon name="x" />
+                            </button>
+                          </div>
+                        )
+                      })}
                     </div>
-                  </FormSection>
-                )}
+                  )}
+                </FormSection>
+
+                <FormSection title={L('Πρόσφατες παραγγελίες', 'Recent orders')} sub={L('Οι τελευταίες 30 παραγγελίες του υπαλλήλου.', 'The employee’s last 30 orders.')}>
+                  {orders.length === 0 ? (
+                    <div className="text-[13px] text-ink-faint">{L('Καμία παραγγελία ακόμη', 'No orders yet')}</div>
+                  ) : (
+                    <div className="border border-line rounded overflow-hidden">
+                      <table className="w-full text-[13px]">
+                        <thead className="bg-bg/40 border-b border-line">
+                          <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">
+                            <th className="px-3 py-2">{L('Ημ/νία', 'Date')}</th>
+                            <th className="px-3 py-2">{L('Συνεργάτης', 'Vendor')}</th>
+                            <th className="px-3 py-2 text-right">{L('Σύνολο', 'Total')}</th>
+                            <th className="px-3 py-2 text-right">{L('Παροχή', 'Benefit')}</th>
+                            <th className="px-3 py-2 text-right">{L('Επιπλέον', 'Extra')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-line">
+                          {orders.map((o) => (
+                            <tr key={o.id}>
+                              <td className="px-3 py-2 font-mono text-[12px]">{o.delivery_date}</td>
+                              <td className="px-3 py-2 truncate">{o.vendors?.name ?? '—'}</td>
+                              <td className="px-3 py-2 text-right num">{moneyFull(o.subtotal, lang)}</td>
+                              <td className="px-3 py-2 text-right num text-brand">{moneyFull(o.benefit_applied, lang)}</td>
+                              <td className="px-3 py-2 text-right num text-ink-soft">{o.topup_amount > 0 ? moneyFull(o.topup_amount, lang) : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </FormSection>
               </>
             )}
 

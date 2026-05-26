@@ -31,6 +31,29 @@ type Body = {
   topup_cadence?: string; carryover?: string
   daily_cap_eur?: number | null; per_order_min_eur?: number | null; per_order_max_eur?: number | null
   days_of_week?: number[] | null
+  // anchor — when the top-up fires within the cadence
+  topup_dom?: number | null; topup_dom_eom?: boolean
+  topup_dow?: number | null; topup_time?: string | null
+}
+
+// Coerce anchor fields based on cadence — only set the fields that apply to
+// the chosen cadence; null out the others so the row reads cleanly.
+function normAnchor(b: Body, cadence: string) {
+  const time = b.topup_time && /^\d{2}:\d{2}/.test(b.topup_time) ? b.topup_time.slice(0, 5) + ':00' : null
+  if (cadence === 'monthly') {
+    const eom = Boolean(b.topup_dom_eom)
+    const dom = eom ? null : (Number.isInteger(b.topup_dom) ? Math.max(1, Math.min(31, Number(b.topup_dom))) : null)
+    return { topup_dom: dom, topup_dom_eom: eom, topup_dow: null, topup_time: time }
+  }
+  if (cadence === 'weekly') {
+    const dow = Number.isInteger(b.topup_dow) ? Math.max(1, Math.min(7, Number(b.topup_dow))) : null
+    return { topup_dom: null, topup_dom_eom: false, topup_dow: dow, topup_time: time }
+  }
+  if (cadence === 'daily') {
+    return { topup_dom: null, topup_dom_eom: false, topup_dow: null, topup_time: time }
+  }
+  // one_time — anchor is unused; valid_from + time at most
+  return { topup_dom: null, topup_dom_eom: false, topup_dow: null, topup_time: time }
 }
 
 // euros → cents, or null when blank/invalid (used for optional caps)
@@ -79,7 +102,7 @@ export default async (req: Request, _ctx: Context) => {
           .from('benefits')
           .select('id, company_id, name_el, name_en, description_el, description_en, ' +
                   'credit_amount, currency, status, valid_from, valid_to, ' +
-                  'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week)')
+                  'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week, topup_dom, topup_dom_eom, topup_dow, topup_time)')
           .eq('id', id)
           .maybeSingle()
         if (error) throw new Error(error.message)
@@ -104,7 +127,7 @@ export default async (req: Request, _ctx: Context) => {
         .from('benefits')
         .select('id, name_el, name_en, description_el, description_en, credit_amount, currency, ' +
                 'status, valid_from, valid_to, ' +
-                'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week)')
+                'benefit_rules(topup_cadence, topup_amount, carryover, daily_cap, per_order_min, per_order_max, days_of_week, topup_dom, topup_dom_eom, topup_dow, topup_time)')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
       if (error) throw new Error(error.message)
@@ -153,6 +176,7 @@ export default async (req: Request, _ctx: Context) => {
         .single()
       if (benErr) throw new Error(benErr.message)
 
+      const anchor = normAnchor(b, cadence)
       const { error: ruleErr } = await sb.from('benefit_rules').insert({
         benefit_id: benefit!.id,
         topup_cadence: cadence,
@@ -162,6 +186,7 @@ export default async (req: Request, _ctx: Context) => {
         per_order_min: eurToCentsOpt(b.per_order_min_eur),
         per_order_max: eurToCentsOpt(b.per_order_max_eur),
         days_of_week: normDays(b.days_of_week),
+        ...anchor,
       })
       if (ruleErr) {
         await sb.from('benefits').delete().eq('id', benefit!.id) // roll back orphan
@@ -202,6 +227,7 @@ export default async (req: Request, _ctx: Context) => {
       if (upErr) throw new Error(upErr.message)
 
       // upsert the rule (one per benefit, unique benefit_id)
+      const anchor = normAnchor(b, cadence)
       const { error: ruleErr } = await sb.from('benefit_rules').upsert({
         benefit_id: b.id,
         topup_cadence: cadence,
@@ -211,6 +237,7 @@ export default async (req: Request, _ctx: Context) => {
         per_order_min: eurToCentsOpt(b.per_order_min_eur),
         per_order_max: eurToCentsOpt(b.per_order_max_eur),
         days_of_week: normDays(b.days_of_week),
+        ...anchor,
       }, { onConflict: 'benefit_id' })
       if (ruleErr) throw new Error(`benefit_rules: ${ruleErr.message}`)
 

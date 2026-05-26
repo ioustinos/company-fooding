@@ -16,6 +16,8 @@ type Rule = {
   topup_cadence: Cadence; carryover: Carryover
   daily_cap: number | null; per_order_min: number | null; per_order_max: number | null
   days_of_week: number[] | null
+  topup_dom: number | null; topup_dom_eom: boolean | null
+  topup_dow: number | null; topup_time: string | null
 }
 type Benefit = {
   id: string; name_el: string; name_en: string
@@ -102,6 +104,10 @@ export default function BenefitEditPage() {
           setCadence(rule.topup_cadence); setCarryover(rule.carryover)
           setDailyCap(centsToEur(rule.daily_cap)); setPerOrderMin(centsToEur(rule.per_order_min)); setPerOrderMax(centsToEur(rule.per_order_max))
           if (rule.days_of_week && rule.days_of_week.length) setDays(new Set(rule.days_of_week))
+          if (rule.topup_dom != null) setDom(rule.topup_dom)
+          if (rule.topup_dom_eom) setDomEom(true)
+          if (rule.topup_dow != null) setDow(rule.topup_dow)
+          if (rule.topup_time) setTime(rule.topup_time.slice(0, 5))
         }
         setValidFrom(b.valid_from); setValidTo(b.valid_to || '')
         const assigned: string[] = d.assignedEmployeeIds ?? []
@@ -160,6 +166,11 @@ export default function BenefitEditPage() {
       days_of_week: [...days].sort((a, b) => a - b),
       valid_from: validFrom || undefined,
       valid_to: validTo || null,
+      // anchor (cf-benefits picks the relevant fields based on cadence)
+      topup_dom: dom,
+      topup_dom_eom: domEom,
+      topup_dow: dow,
+      topup_time: time,
     }
     try {
       const r = await fetch('/api/cf-benefits', {

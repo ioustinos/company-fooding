@@ -26,6 +26,46 @@ export default async (req: Request, _ctx: Context) => {
 
     if (req.method === 'GET') {
       const url = new URL(req.url)
+      const id = url.searchParams.get('id')
+
+      // ---- single employee + their active benefits + recent orders ----
+      if (id) {
+        const { data: e, error: empErr } = await sb
+          .from('employees')
+          .select('id, company_id, display_name, email, external_ref, status, group_id, default_office_id, created_at, ' +
+                  'company_offices:default_office_id(label_el, label_en)')
+          .eq('id', id)
+          .maybeSingle()
+        if (empErr) throw new Error(empErr.message)
+        if (!e) return badRequest('employee not found')
+        const emp = e as unknown as { company_id: string; company_offices: { label_el: string | null; label_en: string | null } | null } & Record<string, unknown>
+        if (caller.role === 'company_admin' && emp.company_id !== caller.companyId) return forbidden('Not your employee')
+
+        // active benefit assignments with benefit name
+        const { data: assigns } = await sb
+          .from('benefit_assignments')
+          .select('id, benefit_id, assigned_at, gonnaorder_voucher_code, ' +
+                  'benefits(name_el, name_en, credit_amount, status, ' +
+                  'benefit_rules(topup_cadence))')
+          .eq('employee_id', id)
+          .is('unassigned_at', null)
+
+        // recent orders (last 30)
+        const { data: orders } = await sb
+          .from('orders')
+          .select('id, delivery_date, subtotal, benefit_applied, topup_amount, vendors(name)')
+          .eq('employee_id', id)
+          .order('delivery_date', { ascending: false })
+          .limit(30)
+
+        const office = { label_el: emp.company_offices?.label_el ?? null, label_en: emp.company_offices?.label_en ?? null }
+        return ok({
+          employee: { ...emp, office, company_offices: undefined },
+          assignments: assigns ?? [],
+          orders: orders ?? [],
+        })
+      }
+
       const companyId = resolveCompany(url.searchParams.get('companyId'))
       if (!companyId) return badRequest('companyId required')
 
