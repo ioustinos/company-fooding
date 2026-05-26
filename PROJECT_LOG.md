@@ -20,6 +20,56 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-05-26 (round 2) — Demo benefits seeded, dashboard chart fixed, Employees + Vendors rebuilt to spec
+
+**Status:** Done (live on main)
+
+**Why:** Ioustinos opened the site and saw two issues — the dashboard "only
+pulled a few days" of data, and there were no benefits visible — plus he
+explicitly asked to keep building ("you should not have paused before doing
+employees… build as much as you can").
+
+**What:**
+- **Demo benefits seeded** (direct SQL, atomic CTE, idempotent): one
+  *"Καθημερινό γεύμα / Daily meal · €5/day, Mon–Fri, reset"* benefit per
+  company (Queensway, Vsltec, Paricom) + rule rows + active assignments to all
+  active employees (63 total). Matches the observed €4.67–€5 avg benefit per
+  order in the synced data. So the Benefits page now shows a real card per
+  company and the roster shows `1` in the benefits column.
+- **Dashboard chart fixed.** Was hardcoded to last-30-days from today; data
+  spans Mar 2 → May 25 (51 days with orders). Rebuilt as `buildSeries(trend,
+  from)`: continuous daily window from the earliest order date through today,
+  zero-filled. Window total + date labels follow the real range.
+- **EmployeesPage** rebuilt to `page_co_employees`: header w/ Invite + Import
+  CSV buttons, segmented status tabs (All/Active/Invited/Inactive with live
+  counts), search, sortable table (name + avatar + email, office, benefits
+  count chip, lifetime-used spend, status pill), row click → edit, status
+  toggle inline, empty state, footer summing the filtered spend.
+- **EmployeeEditPage** (new) at `/company/employees/new` and `/:id`:
+  One-person form + CSV-import mode toggle (also via `?mode=csv`). Edit mode
+  loads the employee, adds a Status section (Active/Deactivate) and a Summary
+  card (active benefits + total used). Uses PATCH for updates.
+- **VendorsPage** rebuilt to `page_co_vendors`: 3 KPI cards
+  (partners/active/GO-connected with %), search, 2-col card grid with shop
+  icon, legal name, toned tag chips, big discount % with applies-to caption,
+  delivery windows, sticker mode, containers, GO store id, connected/pending
+  pill.
+- **cf-employees GET** now joins `company_offices` and aggregates
+  `benefits_count` + lifetime `spend` per employee — so the roster table is
+  real data, not stubbed.
+- **cf-dashboard GET** now returns `recent[]` (already shipped earlier this
+  day, used by the dashboard activity feed).
+
+**Notes:**
+- Three deploys to main today: `855bdf6`, `be538ad`, `a021df5` — all green.
+- Branding: header reads "orexi" (matches spec). Confirmed by Ioustinos.
+- Migration 16 (anchor cols) still local-only, awaiting approval.
+- Groups still placeholder; system needs a groups table + UI to graduate the
+  "Specific group" benefit-assignment mode.
+- Per-row checkboxes in the roster are visual only — no bulk-action toolbar yet.
+
+---
+
 ## 2026-05-26 — Matched the orexi spec for real: design-system primitives + spec-faithful Dashboard, Benefits list & full Benefit editor
 
 **Status:** Done (live on main) · one follow-up needing approval (migration 16)
