@@ -32,6 +32,9 @@ export default function EmployeesPage() {
   const [tab, setTab] = useState<StatusTab>('all')
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'name' | 'spend' | 'benefits'>('name')
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null)
 
   async function load() {
     if (!token || !selectedId) return
@@ -54,6 +57,32 @@ export default function EmployeesPage() {
       body: JSON.stringify({ id: emp.id, status: next }),
     })
     if (r.ok) setRows((rs) => rs.map((x) => (x.id === emp.id ? { ...x, status: next } : x)))
+  }
+
+  function togglePick(id: string) {
+    setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  async function bulkSetStatus(next: 'active' | 'inactive') {
+    if (!token || picked.size === 0) return
+    setBulkBusy(true); setBulkMsg(null)
+    let ok = 0, fail = 0
+    // sequential to keep things gentle on Supabase + give clear ordering
+    for (const id of picked) {
+      try {
+        const r = await fetch('/api/cf-employees', {
+          method: 'PATCH',
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ id, status: next }),
+        })
+        if (r.ok) { ok++; setRows((rs) => rs.map((x) => (x.id === id ? { ...x, status: next } : x))) }
+        else fail++
+      } catch { fail++ }
+    }
+    setPicked(new Set())
+    setBulkBusy(false)
+    setBulkMsg(L(`${ok} ενημερώθηκαν${fail ? ` · ${fail} απέτυχαν` : ''}`, `${ok} updated${fail ? ` · ${fail} failed` : ''}`))
+    setTimeout(() => setBulkMsg(null), 4000)
   }
 
   const counts = useMemo(() => {
@@ -135,7 +164,16 @@ export default function EmployeesPage() {
           <table className="w-full text-[14px]">
             <thead className="bg-bg/40 border-b border-line">
               <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">
-                <th className="px-5 py-3 w-10"><input type="checkbox" className="accent-brand w-4 h-4" /></th>
+                <th className="px-5 py-3 w-10">
+                  <input type="checkbox" className="accent-brand w-4 h-4"
+                    checked={filtered.length > 0 && filtered.every((e) => picked.has(e.id))}
+                    onChange={(ev) => {
+                      const next = new Set(picked)
+                      if (ev.target.checked) filtered.forEach((e) => next.add(e.id))
+                      else filtered.forEach((e) => next.delete(e.id))
+                      setPicked(next)
+                    }} />
+                </th>
                 <th className="px-5 py-3 cursor-pointer select-none" onClick={() => setSortBy('name')}>{L('Όνομα', 'Name')}{sortBy === 'name' && ' ↓'}</th>
                 <th className="px-5 py-3">{L('Γραφείο', 'Office')}</th>
                 <th className="px-5 py-3 text-center cursor-pointer select-none" onClick={() => setSortBy('benefits')}>{L('Παροχές', 'Benefits')}{sortBy === 'benefits' && ' ↓'}</th>
@@ -156,7 +194,12 @@ export default function EmployeesPage() {
                         if ((ev.target as HTMLElement).closest('input,button,a')) return
                         navigate(`/company/employees/${e.id}`)
                       }}>
-                    <td className="px-5 py-3"><input type="checkbox" className="accent-brand w-4 h-4" onClick={(ev) => ev.stopPropagation()} /></td>
+                    <td className="px-5 py-3">
+                      <input type="checkbox" className="accent-brand w-4 h-4"
+                        checked={picked.has(e.id)}
+                        onChange={() => togglePick(e.id)}
+                        onClick={(ev) => ev.stopPropagation()} />
+                    </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-brand-soft text-brand flex items-center justify-center text-[11px] font-semibold shrink-0">{initials(e.display_name)}</div>
@@ -190,6 +233,29 @@ export default function EmployeesPage() {
           </div>
         )}
       </div>
+
+      {bulkMsg && <div className="rounded-md border border-success/40 bg-success/5 px-4 py-3 text-sm text-success">{bulkMsg}</div>}
+
+      {/* Floating action bar — visible when ≥1 selected */}
+      {picked.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-ink text-white shadow-lg rounded-md px-4 py-2.5">
+          <span className="text-[13px] font-medium"><span className="num">{picked.size}</span> {L('επιλεγμένοι', 'selected')}</span>
+          <span className="w-px h-5 bg-white/20"></span>
+          <button onClick={() => void bulkSetStatus('active')} disabled={bulkBusy}
+            className="text-[13px] font-medium px-2.5 py-1 rounded hover:bg-white/10 disabled:opacity-50">
+            {L('Ενεργοποίηση', 'Activate')}
+          </button>
+          <button onClick={() => void bulkSetStatus('inactive')} disabled={bulkBusy}
+            className="text-[13px] font-medium px-2.5 py-1 rounded hover:bg-white/10 disabled:opacity-50">
+            {L('Απενεργοποίηση', 'Deactivate')}
+          </button>
+          <span className="w-px h-5 bg-white/20"></span>
+          <button onClick={() => setPicked(new Set())} disabled={bulkBusy}
+            className="text-[12.5px] text-white/70 hover:text-white px-2 py-1 rounded">
+            {L('Καθαρισμός', 'Clear')}
+          </button>
+        </div>
+      )}
     </section>
   )
 }

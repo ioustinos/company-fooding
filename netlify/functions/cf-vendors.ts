@@ -31,10 +31,66 @@ export default async (req: Request, _ctx: Context) => {
       return forbidden('Admins only')
     }
     const url = new URL(req.url)
+    const id = url.searchParams.get('id')
+
+    const sb = supabaseAdmin()
+
+    // ---- single agreement detail: ?id=<agreementId> ----
+    if (id) {
+      const { data: a, error: aErr } = await sb
+        .from('matchmaking_agreements')
+        .select(
+          'id, company_id, status, sticker_mode, reusable_containers, start_date, end_date, ' +
+          'vendors(id, name, legal_name, discount_percentage, discount_applies_to, tags), ' +
+          'agreement_offices(delivery_time_from, delivery_time_to), ' +
+          'agreement_shops(gonnaorder_shop_id)',
+        )
+        .eq('id', id).maybeSingle()
+      if (aErr) throw new Error(aErr.message)
+      const agreement = a as unknown as ({ company_id: string; vendors: { id: string } | null } & Record<string, unknown>) | null
+      if (!agreement) return badRequest('agreement not found')
+      if (caller.role === 'company_admin' && agreement.company_id !== caller.companyId) {
+        return forbidden('Not your agreement')
+      }
+      const vendorId = agreement.vendors?.id ?? null
+
+      // last 90 days of orders for this vendor + this company
+      const to = new Date(); const from = new Date(); from.setDate(to.getDate() - 90)
+      const { data: orders } = vendorId
+        ? await sb.from('orders')
+            .select('id, delivery_date, subtotal, benefit_applied, topup_amount, employees(display_name, external_ref)')
+            .eq('company_id', agreement.company_id)
+            .eq('vendor_id', vendorId)
+            .gte('delivery_date', from.toISOString().slice(0, 10))
+            .order('delivery_date', { ascending: false })
+            .limit(500)
+        : { data: [] as Array<Record<string, unknown>> }
+
+      // aggregate
+      const totals = { orders: 0, gross: 0, benefit: 0, employees: new Set<string>() }
+      const byEmp = new Map<string, { name: string; orders: number; gross: number }>()
+      for (const o of (orders ?? []) as Array<{ subtotal: number; benefit_applied: number; employees: { display_name: string | null; external_ref: string | null } | null }>) {
+        totals.orders++; totals.gross += o.subtotal; totals.benefit += o.benefit_applied
+        const name = o.employees?.display_name ?? o.employees?.external_ref ?? '—'
+        if (o.employees?.external_ref) totals.employees.add(o.employees.external_ref)
+        const e = byEmp.get(name) ?? { name, orders: 0, gross: 0 }
+        e.orders++; e.gross += o.subtotal
+        byEmp.set(name, e)
+      }
+      const topEmployees = [...byEmp.values()].sort((a, b) => b.gross - a.gross).slice(0, 10)
+
+      return ok({
+        agreement,
+        totals: { orders: totals.orders, gross: totals.gross, benefit: totals.benefit, employees: totals.employees.size },
+        topEmployees,
+        orders: orders ?? [],
+      })
+    }
+
+    // ---- list ----
     const companyId = caller.role === 'company_admin' ? caller.companyId : url.searchParams.get('companyId')
     if (!companyId) return badRequest('companyId required')
 
-    const sb = supabaseAdmin()
     const { data, error } = await sb
       .from('matchmaking_agreements')
       .select(

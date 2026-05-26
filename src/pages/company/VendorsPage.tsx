@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
@@ -95,7 +96,7 @@ export default function VendorsPage() {
               : L('στο σύνολο', 'on total')
             const windows = v.deliveryWindows.map((w) => `${w.from.slice(0, 5)}–${w.to.slice(0, 5)}`).join(', ')
             return (
-              <div key={v.agreementId} className="group bg-surface border border-line rounded-md shadow-sm p-5 hover:border-ink-soft transition">
+              <Link key={v.agreementId} to={`/company/vendors/${v.agreementId}`} className="group bg-surface border border-line rounded-md shadow-sm p-5 hover:border-ink-soft transition block">
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -153,7 +154,7 @@ export default function VendorsPage() {
                     <div className="font-mono text-ink mt-0.5">{v.shopIds.join(', ') || '—'}</div>
                   </div>
                 </div>
-              </div>
+              </Link>
             )
           })}
         </div>

@@ -8,10 +8,12 @@ import type { IconName } from './lib/specui'
 import CompanyDashboard from './pages/company/CompanyDashboard'
 import EmployeesPage from './pages/company/EmployeesPage'
 import EmployeeEditPage from './pages/company/EmployeeEditPage'
+import GroupsPage from './pages/company/GroupsPage'
 import BenefitsPage from './pages/company/BenefitsPage'
 import BenefitEditPage from './pages/company/BenefitEditPage'
 import CompanyReportsPage from './pages/company/CompanyReportsPage'
 import VendorsPage from './pages/company/VendorsPage'
+import VendorDetailPage from './pages/company/VendorDetailPage'
 import SettingsPage from './pages/company/SettingsPage'
 
 function TopBar() {
@@ -104,6 +106,7 @@ function SideNav() {
     { label: L('Διαχείριση', 'Management'), items: [
       { to: '/company/benefits', label: L('Παροχές', 'Benefits'), icon: 'wallet' },
       { to: '/company/employees', label: L('Υπάλληλοι', 'Employees'), icon: 'users' },
+      { to: '/company/groups', label: L('Ομάδες', 'Groups'), icon: 'office' },
       { to: '/company/vendors', label: L('Συνεργάτες', 'Vendors'), icon: 'handshake' },
     ] },
     { label: L('Οικονομικά', 'Finance'), items: [
@@ -179,10 +182,12 @@ export default function CompanyApp() {
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="employees/new" element={<EmployeeEditPage />} />
             <Route path="employees/:id" element={<EmployeeEditPage />} />
+            <Route path="groups" element={<GroupsPage />} />
             <Route path="benefits" element={<BenefitsPage />} />
             <Route path="benefits/new" element={<BenefitEditPage />} />
             <Route path="benefits/:id" element={<BenefitEditPage />} />
             <Route path="vendors" element={<VendorsPage />} />
+            <Route path="vendors/:id" element={<VendorDetailPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/company" replace />} />
           </Routes>

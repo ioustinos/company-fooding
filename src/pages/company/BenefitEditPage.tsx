@@ -12,6 +12,7 @@ type Cadence = 'monthly' | 'weekly' | 'daily' | 'one_time'
 type Carryover = 'reset' | 'accumulate'
 type AssignMode = 'all' | 'group' | 'pick'
 type Employee = { id: string; display_name: string; email: string | null; external_ref: string | null; status: string; group_id: string | null }
+type Group = { id: string; code: string; name_el: string; name_en: string; status: 'active' | 'archived'; is_system: boolean; people?: number }
 type Rule = {
   topup_cadence: Cadence; carryover: Carryover
   daily_cap: number | null; per_order_min: number | null; per_order_max: number | null
@@ -64,6 +65,8 @@ export default function BenefitEditPage() {
   // assignment
   const [assignMode, setAssignMode] = useState<AssignMode>('all')
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [pickedGroups, setPickedGroups] = useState<Set<string>>(new Set())
+  const [groups, setGroups] = useState<Group[]>([])
   const [search, setSearch] = useState('')
   // validity
   const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10))
@@ -81,8 +84,12 @@ export default function BenefitEditPage() {
     if (!token || !selectedId) return
     ;(async () => {
       try {
-        const r = await fetch(`/api/cf-employees?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
-        if (r.ok) { const d = await r.json(); setEmployees((d.employees ?? []).filter((e: Employee) => e.status === 'active')) }
+        const [empRes, grpRes] = await Promise.all([
+          fetch(`/api/cf-employees?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } }),
+          fetch(`/api/cf-groups?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } }),
+        ])
+        if (empRes.ok) { const d = await empRes.json(); setEmployees((d.employees ?? []).filter((e: Employee) => e.status === 'active')) }
+        if (grpRes.ok) { const d = await grpRes.json(); setGroups((d.groups ?? []).filter((g: Group) => g.status === 'active' && !g.is_system)) }
       } catch { /* ignore */ }
     })()
   }, [token, selectedId])
@@ -119,7 +126,17 @@ export default function BenefitEditPage() {
 
   // ── derived ──
   const amountCents = Math.round((Number(amount) || 0) * 100)
-  const peopleCount = assignMode === 'all' ? employees.length : assignMode === 'pick' ? picked.size : 0
+  const groupMemberIds = (() => {
+    if (assignMode !== 'group' || pickedGroups.size === 0) return new Set<string>()
+    const ids = new Set<string>()
+    for (const e of employees) if (e.group_id && pickedGroups.has(e.group_id)) ids.add(e.id)
+    return ids
+  })()
+  const peopleCount = assignMode === 'all'
+    ? employees.length
+    : assignMode === 'pick'
+      ? picked.size
+      : groupMemberIds.size
   const cycleCost = peopleCount * amountCents
 
   const cadenceLabel: Record<Cadence, string> = {
@@ -187,6 +204,8 @@ export default function BenefitEditPage() {
           await fetch('/api/cf-benefit-assign', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ benefitId, target: 'all' }) })
         } else if (assignMode === 'pick' && picked.size > 0) {
           await fetch('/api/cf-benefit-assign', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ benefitId, target: 'employees', employeeIds: [...picked] }) })
+        } else if (assignMode === 'group' && groupMemberIds.size > 0) {
+          await fetch('/api/cf-benefit-assign', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ benefitId, target: 'employees', employeeIds: [...groupMemberIds] }) })
         }
       }
       navigate('/company/benefits')
@@ -394,10 +413,31 @@ export default function BenefitEditPage() {
             )}
 
             {assignMode === 'group' && (
-              <div className="mt-4 bg-bg/50 border border-line rounded p-6 text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-accent-soft text-accent mb-3"><Icon name="users" /></div>
-                <div className="font-display text-[18px] font-semibold">{L('Οι ομάδες έρχονται σύντομα', 'Groups are coming soon')}</div>
-                <div className="text-[13px] text-ink-soft mt-1">{L('Προς το παρόν, αναθέστε σε όλους ή σε επιλεγμένα άτομα.', 'For now, assign to everyone or to specific people.')}</div>
+              <div className="mt-4 bg-bg/50 border border-line rounded p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-[12.5px] font-semibold text-ink">{L('Επιλέξτε ομάδες', 'Pick groups')}</div>
+                  <a href="/company/groups" className="text-[12px] text-brand font-medium hover:underline">{L('Διαχείριση ομάδων →', 'Manage groups →')}</a>
+                </div>
+                {groups.length === 0 ? (
+                  <div className="text-[13px] text-ink-faint">{L('Δεν υπάρχουν ομάδες ακόμη. Δημιουργήστε ομάδα στη σελίδα Ομάδες, ή αναθέστε με "Επιλεγμένα άτομα".', 'No groups yet. Create one on the Groups page, or use "Specific people".')}</div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {groups.map((g) => {
+                      const on = pickedGroups.has(g.id)
+                      return (
+                        <label key={g.id} className="cursor-pointer">
+                          <input type="checkbox" className="hidden" checked={on} onChange={() => { setPickedGroups((s) => { const n = new Set(s); n.has(g.id) ? n.delete(g.id) : n.add(g.id); return n }); touch() }} />
+                          <span className={`inline-flex items-center gap-2 px-3 h-9 border rounded-sm text-[12.5px] font-semibold transition ${on ? 'border-brand bg-brand text-white' : 'border-line bg-surface text-ink-soft hover:text-ink'}`}>
+                            <span className={`num text-[10.5px] ${on ? 'text-white/80' : 'text-ink-faint'}`}>{g.code}</span>
+                            <span>{lang === 'el' ? g.name_el : g.name_en}</span>
+                            <span className={`num text-[11px] ${on ? 'text-white/70' : 'text-ink-faint'}`}>·</span>
+                            <span className={`num text-[11px] ${on ? 'text-white/70' : 'text-ink-faint'}`}>{g.people ?? 0}</span>
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
