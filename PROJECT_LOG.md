@@ -20,6 +20,51 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-05-26 (round 4) — Reports v2 + bulk actions + Vendor detail + Groups end-to-end
+
+**Status:** Done (live on main, commit `6abaca5`)
+
+**What:**
+- **Reports v2** — KPI cards (orders / total spend / benefit % / extra),
+  date-range filter with 7/30/90-day presets, three tabs (Overview per-day,
+  Per employee, Orders), search on the latter two, footers that sum the
+  filtered values. Same `cf-report` data contract.
+- **Bulk actions on Employees roster** — row checkboxes are real now; header
+  checkbox toggles all visible; floating dark action bar appears with
+  Activate / Deactivate / Clear; sequential PATCH with success/failure
+  summary.
+- **Vendor detail page** — `cf-vendors` got `GET ?id=` returning the agreement
+  + 90-day totals + top 10 orderers + recent orders for that
+  (company × vendor) pair. New `VendorDetailPage` at `/company/vendors/:id`
+  with header card, 4 KPIs (orders / spend / benefit % / active users),
+  Agreement details + Top orderers side panels, Recent orders table. Vendor
+  cards on the index now link to it.
+- **Groups end-to-end** —
+  - **Migration 17 applied** to Supabase (groups table per-company, unique
+    code, name_el/en, status, is_system; FK from employees.group_id; seeded
+    one `ALL` is_system row per company). Saved locally as
+    `supabase/migrations/17_groups.sql`.
+  - `cf-groups` endpoint: GET (list w/ people counts; `ALL` auto-counts all
+    active employees), POST, PATCH, DELETE (soft-archive). System groups
+    protected.
+  - `GroupsPage` (new) at `/company/groups` — list with code chip, people
+    count, status pill; inline create form; archive button; system-group
+    lock.
+  - `BenefitEditPage` — "Specific group" assignment is **real now**. Loads
+    cf-groups, shows multi-select chips with member counts. On save with
+    mode=group, expands selected groups → union of member employee ids and
+    posts via cf-benefit-assign target=`employees`. Removed "coming soon".
+  - SideNav: Groups entry added under Management.
+
+**Notes:**
+- 14 functions now (`cf-groups` is new). `tsc -b` clean for all touched
+  files; esbuild bundle 2.24 MB.
+- Active employees still have `group_id = null` — once Ioustinos creates a
+  real group (e.g. ENG) and patches employees to it, the picker count will
+  reflect.
+
+---
+
 ## 2026-05-26 (round 3) — Top-up anchor persisted end-to-end, employee detail enriched, Settings to spec
 
 **Status:** Done (live on main, commit `7c4d70f`)
