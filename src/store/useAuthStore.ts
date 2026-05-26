@@ -25,6 +25,10 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   hydrate: () => Promise<void>
+  // Auth-flow helpers (Brevo-wired)
+  requestPasswordReset: (email: string) => Promise<void>
+  updatePassword: (newPassword: string) => Promise<void>
+  sendMagicLink: (email: string) => Promise<void>
 }
 
 // Resolve role + companyId via the server (cf-me). Role resolution runs with the
@@ -92,5 +96,33 @@ export const useAuthStore = create<AuthState>((set) => ({
   signOut: async () => {
     await supabase.auth.signOut()
     set({ session: null, user: null })
+  },
+
+  // Send a recovery email. Supabase delivers via Brevo SMTP (verified 2026-05-26).
+  // The email link lands on /reset-password where the user picks a new password.
+  requestPasswordReset: async (email) => {
+    set({ loading: true, error: null })
+    const redirectTo = `${window.location.origin}/reset-password`
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    if (error) { set({ loading: false, error: error.message }); throw error }
+    set({ loading: false })
+  },
+
+  // Update the signed-in user's password (used right after they click the recovery
+  // email — Supabase auto-signs them in via the token in the URL fragment).
+  updatePassword: async (newPassword) => {
+    set({ loading: true, error: null })
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) { set({ loading: false, error: error.message }); throw error }
+    set({ loading: false })
+  },
+
+  // Passwordless sign-in. Brevo delivers the magic link.
+  sendMagicLink: async (email) => {
+    set({ loading: true, error: null })
+    const emailRedirectTo = `${window.location.origin}/`
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo } })
+    if (error) { set({ loading: false, error: error.message }); throw error }
+    set({ loading: false })
   },
 }))
