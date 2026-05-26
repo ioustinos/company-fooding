@@ -230,7 +230,7 @@ export type GoVoucher = {
   orderMinAmount?: number
   initialValue?: number | null
   type?: 'MULTI_USE' | 'SINGLE_USE' | string
-  discountType?: 'PERCENTILE' | 'ABSOLUTE' | string
+  discountType?: 'PERCENTILE' | 'MONETARY' | string
   isActive?: boolean
   [k: string]: unknown
 }
@@ -239,7 +239,7 @@ export type CreateVoucherInput = {
   storeId: string
   code: string
   discount: number                  // % when discountType=PERCENTILE, EUR when ABSOLUTE
-  discountType?: 'PERCENTILE' | 'ABSOLUTE'
+  discountType?: 'PERCENTILE' | 'MONETARY'
   type?: 'MULTI_USE' | 'SINGLE_USE'
   startDate?: Date | string         // default: now
   endDate?: Date | string           // default: now + 6 months

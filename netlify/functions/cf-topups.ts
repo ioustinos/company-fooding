@@ -58,7 +58,32 @@ async function shopIdForCompany(sb: ReturnType<typeof supabaseAdmin>, companyId:
 }
 
 export default async (req: Request, _ctx: Context) => {
-  if (req.method !== 'POST') return methodNotAllowed(['POST'])
+  // GET: list recent top-up run history (Authorization: Bearer for company admins)
+  if (req.method === 'GET') {
+    const { getCaller } = await import('./_shared/auth')
+    const caller = await getCaller(req)
+    if (!caller || (caller.role !== 'super_admin' && caller.role !== 'company_admin')) {
+      return forbidden('Admins only')
+    }
+    const url = new URL(req.url)
+    const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit') ?? 100)))
+    const companyId = caller.role === 'company_admin' ? caller.companyId : url.searchParams.get('companyId')
+
+    const sb = supabaseAdmin()
+    let q = sb.from('benefit_topups')
+      .select('id, assignment_id, benefit_id, employee_id, scheduled_for, status, amount, ' +
+              'gonnaorder_voucher_code, applied_at, error_detail, ' +
+              'benefits(name_el, name_en, company_id), employees(display_name)')
+      .order('applied_at', { ascending: false, nullsFirst: false })
+      .limit(limit)
+    const { data, error } = await q
+    if (error) return errorResponse(error)
+    const rows = (data ?? []) as unknown as Array<Record<string, unknown> & { benefits: { name_el: string; name_en: string; company_id: string } | null }>
+    const filtered = companyId ? rows.filter((r) => r.benefits?.company_id === companyId) : rows
+    return ok({ topups: filtered })
+  }
+
+  if (req.method !== 'POST') return methodNotAllowed(['GET', 'POST'])
   const expected = process.env.CF_ADMIN_TOKEN
   const got = req.headers.get('x-cf-admin-token') ?? req.headers.get('X-CF-Admin-Token')
   if (!expected || got !== expected) return forbidden('admin token required')
@@ -114,10 +139,13 @@ export default async (req: Request, _ctx: Context) => {
       const now = new Date()
       const sixMo = new Date(now); sixMo.setMonth(sixMo.getMonth() + 6)
 
-      // What we'd CREATE if the voucher is missing
+      // What we'd CREATE if the voucher is missing.
+      // GO discountType enum (observed live, 2026-05-26):
+      //   MONETARY   → fixed-amount per redemption (CF 'absolute')
+      //   PERCENTILE → % off per redemption (CF 'percentile')
       const createPayload = voucherType === 'percentile'
         ? { discount: pct ?? 5, discountType: 'PERCENTILE' as const, initialValue: null }
-        : { discount: amountCents / 100, discountType: 'ABSOLUTE' as const, initialValue: amountCents / 100 }
+        : { discount: amountCents / 100, discountType: 'MONETARY' as const, initialValue: amountCents / 100 }
 
       if (dryRun) {
         result.action = existing ? 'WOULD UPDATE' : 'WOULD CREATE'

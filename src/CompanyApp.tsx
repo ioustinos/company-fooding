@@ -16,6 +16,9 @@ import VendorsPage from './pages/company/VendorsPage'
 import VendorDetailPage from './pages/company/VendorDetailPage'
 import InvoicesPage from './pages/company/InvoicesPage'
 import ActivityPage from './pages/company/ActivityPage'
+import TopupsPage from './pages/company/TopupsPage'
+import WebhookEventsPage from './pages/company/WebhookEventsPage'
+import ReconcilePage from './pages/company/ReconcilePage'
 import SettingsPage from './pages/company/SettingsPage'
 
 function TopBar() {
@@ -116,6 +119,11 @@ function SideNav() {
       { to: '/company/reports', label: L('Αναφορές', 'Reports'), icon: 'chart' },
       { to: '/company/invoices', label: L('Τιμολόγια', 'Invoices'), icon: 'file' },
     ] },
+    { label: L('Σύστημα', 'System'), items: [
+      { to: '/company/topups', label: L('Ανανεώσεις voucher', 'Top-ups'), icon: 'history' },
+      { to: '/company/webhooks', label: L('Webhooks', 'Webhooks'), icon: 'bell' },
+      { to: '/company/reconcile', label: L('Αντιστοίχιση GO', 'Reconcile GO'), icon: 'check' },
+    ] },
     { label: L('Ρυθμίσεις', 'Settings'), items: [
       { to: '/company/settings', label: L('Προφίλ εταιρείας', 'Company profile'), icon: 'gear' },
     ] },
@@ -194,6 +202,9 @@ export default function CompanyApp() {
             <Route path="vendors/:id" element={<VendorDetailPage />} />
             <Route path="invoices" element={<InvoicesPage />} />
             <Route path="activity" element={<ActivityPage />} />
+            <Route path="topups" element={<TopupsPage />} />
+            <Route path="webhooks" element={<WebhookEventsPage />} />
+            <Route path="reconcile" element={<ReconcilePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/company" replace />} />
           </Routes>

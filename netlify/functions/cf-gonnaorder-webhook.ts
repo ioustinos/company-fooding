@@ -25,7 +25,7 @@ import type { Context } from '@netlify/functions'
 import { ok, methodNotAllowed } from './_shared/errors'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
 import { parseOrder } from './_shared/parseGonnaOrder'
-import { getOrder } from './_shared/gonnaorder'
+import { getOrder, findVoucherByCode, updateVoucher } from './_shared/gonnaorder'
 import type { GoOrder } from './_shared/gonnaorder'
 
 const CANCEL_TYPES = new Set(['ORDER_CANCELLED', 'ORDER_CANCELED', 'ORDER_DELETED'])
@@ -33,6 +33,9 @@ const UPSERT_TYPES = new Set([
   'ORDER_SUBMITTED', 'ORDER_UPDATED', 'ORDER_CONFIRMED', 'ORDER_PAID',
   'ORDER_DELIVERED', 'ORDER_CLOSED', 'ORDER_PREPARING', 'ORDER_READY',
 ])
+// ORDER_RECEIVED = admin clicked the order in GO admin UI; irrelevant to us.
+// Per Ioustinos 2026-05-26.
+const IGNORE_TYPES = new Set(['ORDER_RECEIVED'])
 
 function bad(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -100,13 +103,18 @@ export default async (req: Request, _ctx: Context) => {
       return ok({ received: true, ignored: 'no external order id', dedupeKey })
     }
 
+    if (IGNORE_TYPES.has(eventType)) {
+      await sb.from('webhook_events').update({ processed: true, error: 'intentionally ignored event' }).eq('dedupe_key', dedupeKey)
+      return ok({ received: true, ignored: eventType })
+    }
+
     if (CANCEL_TYPES.has(eventType)) {
       // Soft cancel: flip status if row exists; if not, insert a stub row so
       // it's visible in the cancelled set when the order eventually syncs.
-      const { data: existing } = await sb.from('orders')
-        .select('id').eq('external_order_id', externalId).maybeSingle()
-      if (existing) {
-        await sb.from('orders').update({ status: 'cancelled' }).eq('id', existing.id)
+      const { data: existingOrder } = await sb.from('orders')
+        .select('id, voucher_code').eq('external_order_id', externalId).maybeSingle()
+      if (existingOrder) {
+        await sb.from('orders').update({ status: 'cancelled' }).eq('id', existingOrder.id)
       } else {
         await sb.from('orders').insert({
           source: 'gonnaorder',
@@ -117,8 +125,31 @@ export default async (req: Request, _ctx: Context) => {
           raw_payload: payload,
         })
       }
-      await sb.from('webhook_events').update({ processed: true }).eq('dedupe_key', dedupeKey)
-      return ok({ received: true, action: 'cancelled', externalId })
+
+      // Safety: re-enable the voucher so the budget is released for the next
+      // order. We never change discount / discountType / initialValue — just
+      // bump isActive=true. Best-effort; webhook still returns 200 on failure.
+      let voucherReenable: string | null = null
+      try {
+        const storeId = orderData.storeId != null ? String(orderData.storeId) : null
+        let voucherCode: string | null = existingOrder?.voucher_code ?? null
+        if (storeId && !voucherCode) {
+          const full = await getOrder(storeId, externalId).catch(() => null)
+          voucherCode = full?.voucherCode ?? null
+        }
+        if (storeId && voucherCode) {
+          const v = await findVoucherByCode(storeId, voucherCode)
+          if (v?.id) {
+            await updateVoucher({ storeId, voucherId: String(v.id), fields: { isActive: true } })
+            voucherReenable = `reenabled ${voucherCode}`
+          }
+        }
+      } catch (e) {
+        voucherReenable = `failed: ${e instanceof Error ? e.message : String(e)}`
+      }
+
+      await sb.from('webhook_events').update({ processed: true, error: voucherReenable }).eq('dedupe_key', dedupeKey)
+      return ok({ received: true, action: 'cancelled', externalId, voucher: voucherReenable })
     }
 
     if (UPSERT_TYPES.has(eventType)) {
