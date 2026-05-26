@@ -1,21 +1,24 @@
-import { useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, Btn, FormSection, Field, txtInputCls } from '../../lib/specui'
+import { Icon, Btn, FormSection, Field, Pill, txtInputCls, moneyFull } from '../../lib/specui'
 
 type Mode = 'one' | 'csv'
+type Employee = { id: string; display_name: string; email: string | null; external_ref: string | null; status: string; benefits_count?: number; spend?: number }
 
 export default function EmployeeEditPage() {
   const { session } = useAuthStore()
   const { selectedId } = useCompanyStore()
   const { lang } = useUIStore()
   const navigate = useNavigate()
+  const { id } = useParams()
+  const isEdit = Boolean(id)
   const L = (el: string, en: string) => (lang === 'el' ? el : en)
   const token = session?.access_token
   const [params] = useSearchParams()
-  const [mode, setMode] = useState<Mode>(params.get('mode') === 'csv' ? 'csv' : 'one')
+  const [mode, setMode] = useState<Mode>(isEdit ? 'one' : (params.get('mode') === 'csv' ? 'csv' : 'one'))
 
   // one-person fields
   const [firstName, setFirstName] = useState('')
@@ -23,37 +26,63 @@ export default function EmployeeEditPage() {
   const [email, setEmail] = useState('')
   const [empId, setEmpId] = useState('')
   const [voucher, setVoucher] = useState('')
+  const [status, setStatus] = useState<'active' | 'inactive'>('active')
+  const [meta, setMeta] = useState<{ benefits_count: number; spend: number } | null>(null)
+  const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const touch = () => setDirty(true)
+
+  // load existing employee when in edit mode
+  useEffect(() => {
+    if (!token || !isEdit || !selectedId) return
+    setLoading(true); setErr(null)
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/cf-employees?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
+        if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
+        const d = await r.json()
+        const e = (d.employees ?? []).find((x: Employee) => x.id === id) as Employee | undefined
+        if (!e) throw new Error(L('Δεν βρέθηκε ο υπάλληλος', 'Employee not found'))
+        const parts = (e.display_name || '').split(/\s+/)
+        setFirstName(parts[0] || '')
+        setLastName(parts.slice(1).join(' '))
+        setEmail(e.email || '')
+        setEmpId('')
+        setVoucher(e.external_ref || '')
+        setStatus(e.status === 'active' ? 'active' : 'inactive')
+        setMeta({ benefits_count: e.benefits_count ?? 0, spend: e.spend ?? 0 })
+        setDirty(false)
+      } catch (er) { setErr(er instanceof Error ? er.message : 'Failed to load') }
+      finally { setLoading(false) }
+    })()
+  }, [token, isEdit, id, selectedId])
 
   // csv
   const [csv, setCsv] = useState('')
   const [bulkMsg, setBulkMsg] = useState<string | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
 
-  async function createOne() {
+  async function saveOne() {
     if (!token || !selectedId) return
     const name = `${firstName} ${lastName}`.trim()
     if (!name) { setErr(L('Το ονοματεπώνυμο είναι υποχρεωτικό', 'Name is required')); return }
     if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setErr(L('Μη έγκυρο email', 'Invalid email')); return }
     setSaving(true); setErr(null)
     try {
+      const payload = isEdit
+        ? { id, display_name: name, email: email || '', external_ref: voucher || empId || '', status }
+        : { companyId: selectedId, display_name: name, email: email || undefined, external_ref: voucher || empId || undefined }
       const r = await fetch('/api/cf-employees', {
-        method: 'POST',
+        method: isEdit ? 'PATCH' : 'POST',
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          companyId: selectedId,
-          display_name: name,
-          email: email || undefined,
-          external_ref: voucher || empId || undefined,
-        }),
+        body: JSON.stringify(payload),
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`)
       navigate('/company/employees')
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to create') }
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to save') }
     finally { setSaving(false) }
   }
 
@@ -104,16 +133,33 @@ export default function EmployeeEditPage() {
         <Link to="/company/employees" className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink mb-5">
           <span className="rotate-180"><Icon name="chevron_r" /></span>{L('Υπάλληλοι', 'Employees')}
         </Link>
-        <div className="mb-6">
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Νέος υπάλληλος', 'New employee')}</h1>
-          <p className="text-ink-soft mt-2 text-[15px]">{L('Προσθέστε ένα άτομο ή κάντε μαζική εισαγωγή από CSV.', 'Add one person or bulk-import from CSV.')}</p>
+        <div className="mb-6 flex items-start justify-between gap-6">
+          <div>
+            <h1 className="font-display text-[36px] leading-[44px] font-semibold">
+              {isEdit ? `${firstName} ${lastName}`.trim() || L('Επεξεργασία υπαλλήλου', 'Edit employee') : L('Νέος υπάλληλος', 'New employee')}
+            </h1>
+            <p className="text-ink-soft mt-2 text-[15px]">
+              {isEdit
+                ? L('Επεξεργαστείτε τα στοιχεία ή απενεργοποιήστε τον λογαριασμό.', 'Edit details or deactivate the account.')
+                : L('Προσθέστε ένα άτομο ή κάντε μαζική εισαγωγή από CSV.', 'Add one person or bulk-import from CSV.')}
+            </p>
+          </div>
+          {isEdit && meta && (
+            <div className="flex items-center gap-2">
+              <Pill tone={status === 'active' ? 'success' : 'neutral'}>{status === 'active' ? L('Ενεργός', 'Active') : L('Ανενεργός', 'Inactive')}</Pill>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-0.5 bg-bg border border-line rounded p-0.5 mb-6 w-fit">
-          <button onClick={() => setMode('one')} className={`px-4 py-1.5 rounded-xs text-[13px] font-medium transition ${mode === 'one' ? 'bg-surface shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>{L('Ένα άτομο', 'One person')}</button>
-          <button onClick={() => setMode('csv')} className={`px-4 py-1.5 rounded-xs text-[13px] font-medium transition ${mode === 'csv' ? 'bg-surface shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>{L('Εισαγωγή CSV', 'Import CSV')}</button>
-        </div>
+        {!isEdit && (
+          <div className="flex items-center gap-0.5 bg-bg border border-line rounded p-0.5 mb-6 w-fit">
+            <button onClick={() => setMode('one')} className={`px-4 py-1.5 rounded-xs text-[13px] font-medium transition ${mode === 'one' ? 'bg-surface shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>{L('Ένα άτομο', 'One person')}</button>
+            <button onClick={() => setMode('csv')} className={`px-4 py-1.5 rounded-xs text-[13px] font-medium transition ${mode === 'csv' ? 'bg-surface shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>{L('Εισαγωγή CSV', 'Import CSV')}</button>
+          </div>
+        )}
       </section>
+
+      {isEdit && loading && <div className="p-8 max-w-[860px] text-ink-soft">{L('Φόρτωση…', 'Loading…')}</div>}
 
       <section className="p-8 pt-0 max-w-[860px] pb-40 space-y-4">
         {mode === 'one' ? (
@@ -140,6 +186,32 @@ export default function EmployeeEditPage() {
                 <input className={txtInputCls + ' font-mono'} value={voucher} onChange={(e) => { setVoucher(e.target.value); touch() }} placeholder="employee_name" />
               </Field>
             </FormSection>
+
+            {isEdit && (
+              <>
+                <FormSection title={L('Κατάσταση', 'Status')} sub={L('Ενεργός = παραγγελίες μετράνε προς την παροχή. Ανενεργός = αναστολή.', 'Active = orders count toward the benefit. Inactive = paused.')}>
+                  <div className="flex items-center gap-3">
+                    <Btn variant={status === 'active' ? 'primary' : 'secondary'} size="md" onClick={() => { setStatus('active'); touch() }}>{L('Ενεργός', 'Active')}</Btn>
+                    <Btn variant={status === 'inactive' ? 'danger' : 'secondary'} size="md" onClick={() => { setStatus('inactive'); touch() }}>{L('Απενεργοποίηση', 'Deactivate')}</Btn>
+                  </div>
+                </FormSection>
+
+                {meta && (
+                  <FormSection title={L('Σύνοψη', 'Summary')} sub={L('Τι έχει συμβεί μέχρι τώρα.', 'What has happened so far.')}>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">{L('Ενεργές παροχές', 'Active benefits')}</div>
+                        <div className="num text-[24px] font-semibold mt-1">{meta.benefits_count}</div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">{L('Συνολική χρήση', 'Total used')}</div>
+                        <div className="num text-[24px] font-semibold mt-1">{moneyFull(meta.spend, lang)}</div>
+                      </div>
+                    </div>
+                  </FormSection>
+                )}
+              </>
+            )}
 
             {err && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{err}</div>}
           </>
@@ -185,8 +257,8 @@ export default function EmployeeEditPage() {
                 <Icon name="check" /><span>{bulkBusy ? L('Εισαγωγή…', 'Importing…') : L('Εισαγωγή', 'Import')}</span>
               </Btn>
             ) : (
-              <Btn variant="primary" size="md" disabled={saving} onClick={createOne}>
-                <Icon name="check" /><span>{saving ? L('Αποθήκευση…', 'Saving…') : L('Δημιουργία υπαλλήλου', 'Create employee')}</span>
+              <Btn variant="primary" size="md" disabled={saving} onClick={saveOne}>
+                <Icon name="check" /><span>{saving ? L('Αποθήκευση…', 'Saving…') : (isEdit ? L('Αποθήκευση', 'Save changes') : L('Δημιουργία υπαλλήλου', 'Create employee'))}</span>
               </Btn>
             )}
           </div>
