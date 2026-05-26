@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, Pill, moneyFull } from '../../lib/specui'
+import { Icon, KPI, Pill, moneyFull } from '../../lib/specui'
 
 type Topup = {
   id: string
@@ -48,12 +48,37 @@ export default function TopupsPage() {
     failed: rows.filter((r) => r.status === 'failed').length,
     skipped: rows.filter((r) => r.status === 'skipped').length,
   }
+  // Last-7-day fail rate (anything that ran in the window)
+  const sevenAgo = Date.now() - 7 * 24 * 3600 * 1000
+  const recent = rows.filter((r) => r.applied_at && new Date(r.applied_at).getTime() >= sevenAgo)
+  const recentFailed = recent.filter((r) => r.status === 'failed').length
+  const failRate = recent.length > 0 ? Math.round((recentFailed / recent.length) * 100) : 0
+  const alert = recent.length >= 5 && failRate > 5
+  const lastApplied = rows.find((r) => r.applied_at)?.applied_at ?? null
 
   return (
     <section className="p-8 space-y-6 max-w-[1100px]">
       <div>
         <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Ιστορικό ανανεώσεων', 'Top-up history')}</h1>
         <p className="text-ink-soft mt-2 text-[15px]">{L('Πότε κάθε voucher ανανεώθηκε, με τι αποτέλεσμα. Πηγή: benefit_topups.', 'When each voucher was refreshed and the outcome. Source: benefit_topups.')}</p>
+      </div>
+
+      {alert && (
+        <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger flex items-start gap-2">
+          <Icon name="bell" />
+          <div>
+            <div className="font-semibold">{L(`Αυξημένο ποσοστό σφαλμάτων: ${failRate}% τις τελευταίες 7 ημέρες (${recentFailed}/${recent.length})`, `Elevated failure rate: ${failRate}% over the last 7 days (${recentFailed}/${recent.length})`)}</div>
+            <div className="text-[12px] mt-0.5 text-ink-soft">{L('Δείτε τις «Αποτυχημένες» παρακάτω για τα μηνύματα σφάλματος.', 'Filter "Failed" below to inspect the error messages.')}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KPI label={L('Σύνολο εγγραφών', 'Total runs')} value={rows.length} tone="brand" icon="history" />
+        <KPI label={L('Εφαρμοσμένα', 'Applied')} value={counts.applied} tone="success" icon="check" />
+        <KPI label={L('Αποτυχημένα (7 ημ)', 'Failed (7d)')} value={recentFailed} tone={recentFailed > 0 ? 'danger' : 'success'} icon="bell"
+          sub={recent.length > 0 ? `${failRate}% rate` : L('χωρίς δεδομένα', 'no data')} />
+        <KPI label={L('Τελευταία ανανέωση', 'Last refresh')} value={lastApplied ? new Date(lastApplied).toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB') : '—'} tone="accent" icon="wallet" sub={lastApplied ? new Date(lastApplied).toLocaleTimeString(lang === 'el' ? 'el-GR' : 'en-GB') : ''} />
       </div>
 
       <div className="flex items-center gap-0.5 bg-bg border border-line rounded p-0.5 w-fit">

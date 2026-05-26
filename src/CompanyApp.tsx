@@ -19,6 +19,7 @@ import ActivityPage from './pages/company/ActivityPage'
 import TopupsPage from './pages/company/TopupsPage'
 import WebhookEventsPage from './pages/company/WebhookEventsPage'
 import ReconcilePage from './pages/company/ReconcilePage'
+import VouchersHealthPage from './pages/company/VouchersHealthPage'
 import SettingsPage from './pages/company/SettingsPage'
 
 function TopBar() {
@@ -121,6 +122,7 @@ function SideNav() {
     ] },
     { label: L('Σύστημα', 'System'), items: [
       { to: '/company/topups', label: L('Ανανεώσεις voucher', 'Top-ups'), icon: 'history' },
+      { to: '/company/vouchers', label: L('Υγεία voucher', 'Voucher health'), icon: 'wallet' },
       { to: '/company/webhooks', label: L('Webhooks', 'Webhooks'), icon: 'bell' },
       { to: '/company/reconcile', label: L('Αντιστοίχιση GO', 'Reconcile GO'), icon: 'check' },
     ] },
@@ -205,6 +207,7 @@ export default function CompanyApp() {
             <Route path="topups" element={<TopupsPage />} />
             <Route path="webhooks" element={<WebhookEventsPage />} />
             <Route path="reconcile" element={<ReconcilePage />} />
+            <Route path="vouchers" element={<VouchersHealthPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/company" replace />} />
           </Routes>

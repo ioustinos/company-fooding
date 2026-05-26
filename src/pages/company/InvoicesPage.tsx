@@ -3,6 +3,7 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
 import { Icon, Btn, KPI, Pill, moneyFull } from '../../lib/specui'
+import { downloadInvoicePdf } from '../../lib/invoicePdf'
 
 type Invoice = { vendor_id: string | null; vendor_name: string; month: string; orders: number; gross: number; benefit: number; extra: number; status: 'open' | 'current' }
 type Data = { period: { from: string; to: string }; totals: { orders: number; gross: number; benefit: number; extra: number }; invoices: Invoice[] }
@@ -26,6 +27,7 @@ export default function InvoicesPage() {
   const [from, setFrom] = useState('2026-03-01')
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10))
   const [tab, setTab] = useState<'all' | 'open' | 'current'>('all')
+  const [company, setCompany] = useState<{ name: string; vat_number: string | null; billing_email: string | null } | null>(null)
 
   async function load() {
     if (!token || !selectedId) return
@@ -38,6 +40,27 @@ export default function InvoicesPage() {
     finally { setLoading(false) }
   }
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, selectedId])
+
+  // pull company profile for the PDF header
+  useEffect(() => {
+    if (!token || !selectedId) return
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/cf-company?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
+        if (r.ok) { const d = await r.json(); setCompany(d.company) }
+      } catch { /* ignore */ }
+    })()
+  }, [token, selectedId])
+
+  function exportPdf(inv: Invoice) {
+    if (!company) return
+    downloadInvoicePdf({
+      company,
+      vendor: { name: inv.vendor_name, legal_name: null },
+      invoice: { vendor_name: inv.vendor_name, month: inv.month, orders: inv.orders, gross: inv.gross, benefit: inv.benefit, extra: inv.extra },
+      lang,
+    })
+  }
 
   const grouped = useMemo(() => {
     if (!data) return [] as { month: string; rows: Invoice[]; total: { gross: number; benefit: number; extra: number; orders: number } }[]
@@ -119,6 +142,7 @@ export default function InvoicesPage() {
                         <th className="px-5 py-2.5 text-right">{L('Παροχή', 'Benefit')}</th>
                         <th className="px-5 py-2.5 text-right">{L('Επιπλέον', 'Extra')}</th>
                         <th className="px-5 py-2.5">{L('Κατάσταση', 'Status')}</th>
+                        <th className="px-5 py-2.5 text-right">{L('PDF', 'PDF')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
@@ -130,6 +154,12 @@ export default function InvoicesPage() {
                           <td className="px-5 py-2.5 text-right num text-brand font-semibold">{moneyFull(inv.benefit, lang)}</td>
                           <td className="px-5 py-2.5 text-right num text-ink-soft">{moneyFull(inv.extra, lang)}</td>
                           <td className="px-5 py-2.5"><Pill tone={inv.status === 'current' ? 'accent' : 'warn'}>{inv.status === 'current' ? L('τρέχον', 'current') : L('εκκρεμές', 'open')}</Pill></td>
+                          <td className="px-5 py-2.5 text-right">
+                            <button onClick={() => exportPdf(inv)} disabled={!company} title={L('Κατέβασμα PDF', 'Download PDF')}
+                              className="text-ink-faint hover:text-brand disabled:opacity-30 inline-flex items-center justify-center w-7 h-7 rounded hover:bg-brand-soft/40">
+                              <Icon name="file" size={14} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
