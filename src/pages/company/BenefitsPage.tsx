@@ -38,18 +38,29 @@ export default function BenefitsPage() {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<'active' | 'archived'>('active')
 
-  useEffect(() => {
+  async function load() {
     if (!token || !selectedId) return
     setLoading(true); setError(null)
-    ;(async () => {
-      try {
-        const r = await fetch(`/api/cf-benefits?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
-        if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
-        const d = await r.json(); setRows(d.benefits ?? [])
-      } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
-      finally { setLoading(false) }
-    })()
-  }, [token, selectedId])
+    try {
+      const r = await fetch(`/api/cf-benefits?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
+      if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
+      const d = await r.json(); setRows(d.benefits ?? [])
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, selectedId])
+
+  async function setStatus(id: string, status: 'active' | 'archived') {
+    if (!token) return
+    const verb = status === 'archived' ? L('Αρχειοθέτηση', 'Archive') : L('Επαναφορά', 'Reactivate')
+    if (!confirm(`${verb}?`)) return
+    const r = await fetch('/api/cf-benefits', {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    })
+    if (r.ok) setRows((rs) => rs.map((b) => (b.id === id ? { ...b, status } : b)))
+  }
 
   const cadenceLabel: Record<Cadence, string> = {
     monthly: L('κάθε μήνα', 'every month'), weekly: L('κάθε εβδομάδα', 'every week'),
@@ -108,7 +119,14 @@ export default function BenefitsPage() {
             const cad = rule?.topup_cadence
             const nt = nextTopup(cad, b.valid_from)
             return (
-              <Link key={b.id} to={`/company/benefits/${b.id}`} className="group bg-surface border border-line rounded-md shadow-sm p-5 hover:border-ink-soft transition block">
+              <div key={b.id} className="group bg-surface border border-line rounded-md shadow-sm p-5 hover:border-ink-soft transition relative">
+                {/* Archive / reactivate (visible on hover, top-right) */}
+                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); void setStatus(b.id, b.status === 'active' ? 'archived' : 'active') }}
+                  title={b.status === 'active' ? L('Αρχειοθέτηση', 'Archive') : L('Επαναφορά', 'Reactivate')}
+                  className="absolute top-3 right-3 w-7 h-7 rounded text-ink-faint hover:text-ink hover:bg-bg flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-10">
+                  <Icon name={b.status === 'active' ? 'x' : 'check'} size={14} />
+                </button>
+                <Link to={`/company/benefits/${b.id}`} className="block">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 text-[11.5px] uppercase tracking-[0.08em] text-ink-faint font-semibold">
@@ -136,7 +154,8 @@ export default function BenefitsPage() {
                     <div className="font-mono text-[12.5px] mt-0.5">{nt ? new Date(nt + 'T00:00:00').toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</div>
                   </div>
                 </div>
-              </Link>
+                </Link>
+              </div>
             )
           })}
         </div>

@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
 import { Icon, Btn, Pill, moneyFull } from '../../lib/specui'
+import { downloadCsv } from '../../lib/csv'
 
 type Employee = {
   id: string; display_name: string; email: string | null
@@ -12,6 +13,7 @@ type Employee = {
   office_label_el: string | null; office_label_en: string | null
   benefits_count: number; spend: number
 }
+type Benefit = { id: string; name_el: string; name_en: string; status: string; credit_amount: number }
 
 type StatusTab = 'all' | 'active' | 'invited' | 'inactive'
 
@@ -35,6 +37,8 @@ export default function EmployeesPage() {
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkMsg, setBulkMsg] = useState<string | null>(null)
+  const [benefits, setBenefits] = useState<Benefit[]>([])
+  const [assignOpen, setAssignOpen] = useState(false)
 
   async function load() {
     if (!token || !selectedId) return
@@ -47,6 +51,35 @@ export default function EmployeesPage() {
     finally { setLoading(false) }
   }
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, selectedId])
+
+  // load active benefits for the bulk-assign dropdown
+  useEffect(() => {
+    if (!token || !selectedId) return
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/cf-benefits?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
+        if (r.ok) { const d = await r.json(); setBenefits((d.benefits ?? []).filter((b: Benefit) => b.status === 'active')) }
+      } catch { /* ignore */ }
+    })()
+  }, [token, selectedId])
+
+  async function bulkAssignBenefit(benefitId: string) {
+    if (!token || picked.size === 0) return
+    setBulkBusy(true); setAssignOpen(false); setBulkMsg(null)
+    try {
+      const r = await fetch('/api/cf-benefit-assign', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ benefitId, target: 'employees', employeeIds: [...picked] }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`)
+      setBulkMsg(L(`Ανατέθηκε σε ${d.assigned ?? picked.size} (παράβλεψη ${d.skipped ?? 0})`, `Assigned to ${d.assigned ?? picked.size} (skipped ${d.skipped ?? 0})`))
+      setPicked(new Set())
+      await load()
+    } catch (e) { setBulkMsg(e instanceof Error ? e.message : 'Failed') }
+    finally { setBulkBusy(false); setTimeout(() => setBulkMsg(null), 4000) }
+  }
 
   async function toggleStatus(emp: Employee) {
     if (!token) return
@@ -117,6 +150,11 @@ export default function EmployeesPage() {
           <p className="text-ink-soft mt-2 text-[15px] max-w-xl">{L('Όσοι λαμβάνουν παροχές από την εταιρεία σας.', 'Everyone receiving a benefit from your company.')}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Btn variant="secondary" size="md" onClick={() => downloadCsv(
+            `employees-${new Date().toISOString().slice(0, 10)}.csv`,
+            ['display_name', 'email', 'voucher_code', 'office', 'status', 'active_benefits', 'lifetime_used_eur'],
+            filtered.map((e) => [e.display_name, e.email ?? '', e.external_ref ?? '', (lang === 'el' ? e.office_label_el : e.office_label_en) ?? '', e.status, e.benefits_count ?? 0, ((e.spend ?? 0) / 100).toFixed(2)]),
+          )}><Icon name="file" /><span>{L('Εξαγωγή CSV', 'Export CSV')}</span></Btn>
           <Link to="/company/employees/new?mode=csv">
             <Btn variant="secondary" size="md"><Icon name="file" /><span>{L('Εισαγωγή CSV', 'Import CSV')}</span></Btn>
           </Link>
@@ -240,6 +278,30 @@ export default function EmployeesPage() {
       {picked.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-ink text-white shadow-lg rounded-md px-4 py-2.5">
           <span className="text-[13px] font-medium"><span className="num">{picked.size}</span> {L('επιλεγμένοι', 'selected')}</span>
+          <span className="w-px h-5 bg-white/20"></span>
+          <div className="relative">
+            <button onClick={() => setAssignOpen((o) => !o)} disabled={bulkBusy || benefits.length === 0}
+              title={benefits.length === 0 ? L('Δεν υπάρχουν ενεργές παροχές', 'No active benefits') : ''}
+              className="text-[13px] font-medium px-2.5 py-1 rounded hover:bg-white/10 disabled:opacity-50 inline-flex items-center gap-1">
+              {L('Ανάθεση παροχής', 'Assign benefit')} <Icon name="chevron_d" size={14} />
+            </button>
+            {assignOpen && (
+              <>
+                <div className="fixed inset-0 z-0" onClick={() => setAssignOpen(false)} />
+                <div className="absolute bottom-full mb-2 left-0 z-10 w-72 bg-surface text-ink border border-line rounded-md shadow-xl p-1.5 max-h-72 overflow-auto">
+                  <div className="px-2 pt-1 pb-1.5 text-[10.5px] uppercase tracking-[0.08em] text-ink-faint font-semibold">{L('Επιλέξτε παροχή', 'Pick a benefit')}</div>
+                  {benefits.map((b) => (
+                    <button key={b.id} onClick={() => void bulkAssignBenefit(b.id)} disabled={bulkBusy}
+                      className="w-full flex items-center gap-2 px-2 py-2 text-[13px] hover:bg-brand-soft/40 rounded-xs text-left">
+                      <Icon name="wallet" />
+                      <span className="flex-1 truncate">{lang === 'el' ? b.name_el : b.name_en}</span>
+                      <span className="text-[11px] text-ink-faint num">{(b.credit_amount / 100).toFixed(2)}€</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <span className="w-px h-5 bg-white/20"></span>
           <button onClick={() => void bulkSetStatus('active')} disabled={bulkBusy}
             className="text-[13px] font-medium px-2.5 py-1 rounded hover:bg-white/10 disabled:opacity-50">

@@ -15,6 +15,7 @@ import type { Context } from '@netlify/functions'
 import { ok, badRequest, forbidden, methodNotAllowed, errorResponse } from './_shared/errors'
 import { getCaller } from './_shared/auth'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
+import { logActivity } from './_shared/activity'
 
 export default async (req: Request, _ctx: Context) => {
   if (req.method !== 'POST' && req.method !== 'DELETE') return methodNotAllowed(['POST', 'DELETE'])
@@ -40,6 +41,11 @@ export default async (req: Request, _ctx: Context) => {
       const { error } = await sbDel.from('benefit_assignments')
         .update({ unassigned_at: new Date().toISOString() }).eq('id', d.assignmentId)
       if (error) throw new Error(error.message)
+      void logActivity(sbDel, caller, r.benefits?.company_id ?? null, 'benefit.unassigned', {
+        target_type: 'assignment', target_id: d.assignmentId,
+        summary_el: 'Παροχή ακυρώθηκε για υπάλληλο',
+        summary_en: 'Benefit unassigned from employee',
+      })
       return ok({ unassigned: 1 })
     }
     const b = (await req.json().catch(() => ({}))) as
@@ -96,6 +102,15 @@ export default async (req: Request, _ctx: Context) => {
         .from('benefit_assignments').insert(toInsert, { count: 'exact' })
       if (insErr) throw new Error(insErr.message)
       assigned = count ?? toInsert.length
+    }
+
+    if (assigned > 0) {
+      void logActivity(sb, caller, benefit.company_id, target === 'all' ? 'benefit.assigned_all' : 'benefit.assigned_employees', {
+        target_type: 'benefit', target_id: b.benefitId,
+        summary_el: `Παροχή ανατέθηκε σε ${assigned} ${assigned === 1 ? 'υπάλληλο' : 'υπαλλήλους'}`,
+        summary_en: `Benefit assigned to ${assigned} ${assigned === 1 ? 'employee' : 'employees'}`,
+        payload: { target, assigned, skipped: (emps?.length ?? 0) - toInsert.length },
+      })
     }
 
     return ok({ assigned, skipped: (emps?.length ?? 0) - toInsert.length, target })

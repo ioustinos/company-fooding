@@ -14,6 +14,8 @@ import BenefitEditPage from './pages/company/BenefitEditPage'
 import CompanyReportsPage from './pages/company/CompanyReportsPage'
 import VendorsPage from './pages/company/VendorsPage'
 import VendorDetailPage from './pages/company/VendorDetailPage'
+import InvoicesPage from './pages/company/InvoicesPage'
+import ActivityPage from './pages/company/ActivityPage'
 import SettingsPage from './pages/company/SettingsPage'
 
 function TopBar() {
@@ -102,6 +104,7 @@ function SideNav() {
   const groups: { label: string; items: { to: string; label: string; icon: IconName; end?: boolean }[] }[] = [
     { label: L('Επισκόπηση', 'Overview'), items: [
       { to: '/company', label: L('Πίνακας', 'Dashboard'), icon: 'home', end: true },
+      { to: '/company/activity', label: L('Δραστηριότητα', 'Activity'), icon: 'history' },
     ] },
     { label: L('Διαχείριση', 'Management'), items: [
       { to: '/company/benefits', label: L('Παροχές', 'Benefits'), icon: 'wallet' },
@@ -111,6 +114,7 @@ function SideNav() {
     ] },
     { label: L('Οικονομικά', 'Finance'), items: [
       { to: '/company/reports', label: L('Αναφορές', 'Reports'), icon: 'chart' },
+      { to: '/company/invoices', label: L('Τιμολόγια', 'Invoices'), icon: 'file' },
     ] },
     { label: L('Ρυθμίσεις', 'Settings'), items: [
       { to: '/company/settings', label: L('Προφίλ εταιρείας', 'Company profile'), icon: 'gear' },
@@ -188,6 +192,8 @@ export default function CompanyApp() {
             <Route path="benefits/:id" element={<BenefitEditPage />} />
             <Route path="vendors" element={<VendorsPage />} />
             <Route path="vendors/:id" element={<VendorDetailPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="activity" element={<ActivityPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/company" replace />} />
           </Routes>

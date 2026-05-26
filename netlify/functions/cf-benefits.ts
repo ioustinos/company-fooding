@@ -19,6 +19,7 @@ import type { Context } from '@netlify/functions'
 import { ok, badRequest, forbidden, methodNotAllowed, errorResponse } from './_shared/errors'
 import { getCaller } from './_shared/auth'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
+import { logActivity } from './_shared/activity'
 
 const CADENCES = ['daily', 'weekly', 'monthly', 'one_time']
 const CARRYOVERS = ['reset', 'accumulate']
@@ -192,6 +193,12 @@ export default async (req: Request, _ctx: Context) => {
         await sb.from('benefits').delete().eq('id', benefit!.id) // roll back orphan
         throw new Error(`benefit_rules: ${ruleErr.message}`)
       }
+      void logActivity(sb, caller, companyId, 'benefit.created', {
+        target_type: 'benefit', target_id: benefit!.id,
+        summary_el: `Δημιουργήθηκε παροχή "${b.name_el!.trim()}" (${(cents / 100).toFixed(2)}€ ${cadence})`,
+        summary_en: `Created benefit "${b.name_en!.trim()}" (${(cents / 100).toFixed(2)}€ ${cadence})`,
+        payload: { name_el: b.name_el, name_en: b.name_en, credit_amount: cents, cadence, carryover },
+      })
       return ok({ benefit })
     }
 
@@ -241,10 +248,34 @@ export default async (req: Request, _ctx: Context) => {
       }, { onConflict: 'benefit_id' })
       if (ruleErr) throw new Error(`benefit_rules: ${ruleErr.message}`)
 
+      void logActivity(sb, caller, existing.company_id as string, 'benefit.updated', {
+        target_type: 'benefit', target_id: b.id,
+        summary_el: `Ενημερώθηκε παροχή "${b.name_el!.trim()}"`,
+        summary_en: `Updated benefit "${b.name_en!.trim()}"`,
+        payload: { name_el: b.name_el, name_en: b.name_en, credit_amount: cents, cadence, carryover },
+      })
       return ok({ id: b.id })
     }
 
-    return methodNotAllowed(['GET', 'POST', 'PUT'])
+    // ---- PATCH (status-only) — used by the Archive button on the benefits list ----
+    if (req.method === 'PATCH') {
+      const b = (await req.json().catch(() => ({}))) as { id?: string; status?: 'active' | 'archived' }
+      if (!b.id) return badRequest('id required')
+      if (!b.status || !['active', 'archived'].includes(b.status)) return badRequest("status must be 'active' or 'archived'")
+      const { data: existing } = await sb.from('benefits').select('id, company_id').eq('id', b.id).maybeSingle()
+      if (!existing) return badRequest('benefit not found')
+      if (caller.role === 'company_admin' && existing.company_id !== caller.companyId) return forbidden('Not your benefit')
+      const { error } = await sb.from('benefits').update({ status: b.status }).eq('id', b.id)
+      if (error) throw new Error(error.message)
+      void logActivity(sb, caller, existing.company_id as string, b.status === 'archived' ? 'benefit.archived' : 'benefit.reactivated', {
+        target_type: 'benefit', target_id: b.id,
+        summary_el: b.status === 'archived' ? 'Παροχή αρχειοθετήθηκε' : 'Παροχή ενεργοποιήθηκε',
+        summary_en: b.status === 'archived' ? 'Benefit archived' : 'Benefit reactivated',
+      })
+      return ok({ id: b.id, status: b.status })
+    }
+
+    return methodNotAllowed(['GET', 'POST', 'PUT', 'PATCH'])
   } catch (e) {
     return errorResponse(e)
   }

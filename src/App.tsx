@@ -1,13 +1,13 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
-import EmployeeHome from './pages/EmployeeHome'
 import NotFound from './pages/NotFound'
 import { RoleGuard } from './components/guards/RoleGuard'
 
-// Code-split the admin + company shells so the employee bundle stays lean.
+// Code-split the admin + company + employee shells so each role gets a lean bundle.
 const AdminApp = lazy(() => import('./AdminApp'))
 const CompanyApp = lazy(() => import('./CompanyApp'))
+const EmployeeApp = lazy(() => import('./EmployeeApp'))
 
 function Loading() {
   return <div style={{ padding: 24 }}>Loading…</div>
@@ -41,10 +41,12 @@ export default function App() {
       />
 
       <Route
-        path="/"
+        path="/*"
         element={
           <RoleGuard allow={['employee', 'company_owner', 'company_admin', 'super_admin']}>
-            <EmployeeHome />
+            <Suspense fallback={<Loading />}>
+              <EmployeeApp />
+            </Suspense>
           </RoleGuard>
         }
       />

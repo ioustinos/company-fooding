@@ -3,6 +3,8 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
 import { Icon, KPI, Btn, moneyFull } from '../../lib/specui'
+import { SpendChart } from '../../lib/specCharts'
+import { downloadCsv } from '../../lib/csv'
 
 type Report = {
   totals: { orders: number; gross: number; benefit: number; topup: number }
@@ -130,6 +132,19 @@ export default function CompanyReportsPage() {
           </div>
 
           {tab === 'overview' && (
+            <>
+              <div className="bg-surface border border-line rounded-md shadow-sm p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <h2 className="font-display text-[18px] font-semibold">{L('Δαπάνες στην περίοδο', 'Spend over period')}</h2>
+                  <div className="flex items-center gap-4 text-[11.5px] text-ink-soft">
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-brand"></span>{L('Παροχή', 'Benefit')}</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-accent"></span>{L('Επιπλέον', 'Extra')}</span>
+                  </div>
+                </div>
+                <SpendChart
+                  data={data.perDay.map((d) => ({ date: d.date, benefit: d.benefit, extra: Math.max(0, d.gross - d.benefit) }))}
+                  lang={lang} height={220} />
+              </div>
             <div className="bg-surface border border-line rounded-md shadow-sm">
               <div className="p-4 border-b border-line">
                 <h2 className="font-display text-[18px] font-semibold">{L('Ανά ημέρα', 'Per day')}</h2>
@@ -163,14 +178,29 @@ export default function CompanyReportsPage() {
                 </table>
               )}
             </div>
+            </>
           )}
 
           {(tab === 'employees' || tab === 'orders') && (
-            <div className="max-w-xs relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"><Icon name="search" /></span>
-              <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder={tab === 'employees' ? L('Αναζήτηση υπαλλήλου ή voucher…', 'Search employee or voucher…') : L('Αναζήτηση παραγγελίας…', 'Search order…')}
-                className="w-full h-10 pl-10 pr-3 bg-surface border border-line rounded-xs text-[14px] placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15" />
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="max-w-xs relative flex-1 min-w-[200px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"><Icon name="search" /></span>
+                <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
+                  placeholder={tab === 'employees' ? L('Αναζήτηση υπαλλήλου ή voucher…', 'Search employee or voucher…') : L('Αναζήτηση παραγγελίας…', 'Search order…')}
+                  className="w-full h-10 pl-10 pr-3 bg-surface border border-line rounded-xs text-[14px] placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15" />
+              </div>
+              <Btn variant="secondary" size="md" onClick={() => {
+                const stamp = `${from}-${to}`
+                if (tab === 'employees') {
+                  downloadCsv(`employees-${stamp}.csv`,
+                    ['name', 'voucher', 'orders', 'spend_eur', 'benefit_eur', 'topup_eur'],
+                    filteredEmployees.map((e) => [e.name, e.voucher, e.orders, (e.gross / 100).toFixed(2), (e.benefit / 100).toFixed(2), (e.topup / 100).toFixed(2)]))
+                } else {
+                  downloadCsv(`orders-${stamp}.csv`,
+                    ['date', 'token', 'voucher', 'employee', 'total_eur', 'benefit_eur', 'topup_eur'],
+                    filteredOrders.map((o) => [o.date ?? '', o.token ?? '', o.voucher ?? '', o.employee ?? '', (o.gross / 100).toFixed(2), (o.benefit / 100).toFixed(2), (o.topup / 100).toFixed(2)]))
+                }
+              }}><Icon name="file" /><span>{L('Εξαγωγή CSV', 'Export CSV')}</span></Btn>
             </div>
           )}
 

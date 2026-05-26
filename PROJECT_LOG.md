@@ -20,6 +20,92 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-05-26 (round 5) — GonnaOrder webhook, Employee portal, Invoices, Activity log, Recharts, CSV export
+
+**Status:** Done (live on main, multiple commits this round)
+
+**Why:** Ioustinos asked for a full sweep — turn the GO webhook on, build the
+half of the product employees see, derive invoices from benefit usage, add an
+audit log, swap the spec's CSS bar chart for a real chart library, and add
+CSV export. Plus an opinion on the webhook vs scheduler architecture.
+
+**What:**
+- **GonnaOrder webhook (live!)** — `cf-gonnaorder-webhook` endpoint at
+  `/api/cf-gonnaorder-webhook?key=<CF_WEBHOOK_KEY>`. Key set as non-secret
+  Netlify env var (scope=functions, all contexts). Handles ORDER_SUBMITTED /
+  UPDATED / CONFIRMED / PAID / DELIVERED / CLOSED (upsert via
+  `parseOrder`) and ORDER_CANCELLED / DELETED (status=`cancelled`, never
+  destructive). Idempotent via `webhook_events.dedupe_key`
+  (`gonnaorder|<event>|<external_id>`). Always 200 to GO (errors land on the
+  row instead, so no retry storms). GET is a health-check.
+- **Migration 18** applied: `activity_events` (audit feed) + `webhook_events`
+  (forensic dedupe store).
+- **Architectural decision (webhook vs scheduler):** keep both. Webhook is
+  push (instant, state transitions captured), scheduler is the daily
+  reconciliation pass that catches dropped webhooks. Per-cycle "used"
+  calculations *exclude* cancelled orders so the math stays clean.
+- **Employee portal** — new `EmployeeApp` shell (orexi top bar + sub-nav),
+  `cf-employee-home` endpoint (active benefits with current-cycle used /
+  remaining + recent orders + matched vendors), four pages: Home (greeting +
+  balance cards with cycle progress + vendor CTAs + recent orders),
+  Orders (full history table), Vendors (card grid linking out to GO),
+  Profile (details + lang toggle + sign-out).
+  Cycle window helper handles monthly / weekly / daily / one_time.
+- **Invoices** — `cf-invoices` derives (vendor × month) buckets from
+  `orders.benefit_applied` (excluding cancelled). `InvoicesPage` at
+  `/company/invoices` with KPI cards + monthly groups + per-vendor rows +
+  current/open status pills. Side-nav entry added under Finance.
+- **Bulk assign-benefit** — Employees roster floating toolbar now has an
+  "Assign benefit" dropdown listing active benefits; click → POSTs
+  `cf-benefit-assign target=employees` for selected ids.
+- **Archive button on benefit cards** — hover-reveal × on each card flips
+  status via new `cf-benefits PATCH { status }`. Archive tab already filters.
+- **Recharts swap** — added `recharts@^2.13.0`, new `src/lib/specCharts.tsx`
+  with `SpendChart` (stacked benefit + extra bar chart, custom orexi-styled
+  tooltip). Replaces Sparkbars on Dashboard, also added to Reports Overview
+  tab.
+- **Activity log** — `_shared/activity.ts` helper (fire-and-forget),
+  `cf-activity` endpoint (GET list). Instrumented: benefit created/updated/
+  archived/reactivated, benefit assigned (all + employees) / unassigned,
+  employee created / updated / activated / deactivated / bulk_imported,
+  group created / updated / archived. Dashboard's Activity card now shows
+  these events (falls back to recent orders if none yet). New
+  `/company/activity` page with full feed.
+- **CSV export** — `src/lib/csv.ts` (UTF-8 BOM, proper quoting). Buttons
+  added on Employees roster (filtered) + Reports Per-employee + Reports
+  Orders.
+
+**Notes for next session:**
+- **Real top-up scheduler (deferred deliberately):** with the webhook now
+  feeding orders in real time, the scheduler's role shifts to (a) creating
+  / updating GO vouchers based on benefit_rules and (b) daily reconciliation
+  vs GO's order set. I'm holding the flip of `CF_TOPUPS_DRY_RUN` until
+  Ioustinos has wired the webhook on the Queensway store and we've observed
+  a few real ORDER_* payload shapes — the actual GO event field names firm
+  up the parser without guesswork. Plan when ready:
+  1. Observe 10-20 real webhook payloads in `webhook_events`.
+  2. Refine `parseOrder` field-name fallbacks if needed.
+  3. Implement GO voucher CRUD client (mint / top-up / read balance) in
+     `_shared/gonnaorder.ts` (currently only orders search exists).
+  4. Refactor `cf-scheduled-sync` from "pull orders" to "two passes —
+     reconcile orders + mint/top-up vouchers from `benefit_rules` anchor".
+  5. Test on one Queensway employee for 1 cycle with `CF_TOPUPS_DRY_RUN=true`
+     (already on). Diff intended vs actual.
+  6. Flip flag for that one employee, observe for 24h.
+  7. Roll out company-wide.
+- **Auth gap (Brevo not wired):** the `setup-transactional-emails` skill has
+  the full Brevo + Supabase walkthrough (~15 min hands-on + 24h DNS). CF
+  currently uses Supabase's built-in mailer which only delivers to team
+  members. Plus: login page is bare-bones, no forgot-password, no magic-link.
+  Punch list documented in the round-5 chat response.
+
+**Verify:** 4 deploys this round push. `tsc -b` clean for every touched file
+(only pre-existing `cf-explain.ts` error remains). Esbuild bundle 3.3 MB
+(recharts adds ~1 MB; still acceptable for B2B desktop). Migration 18 + 17 +
+16 applied in earlier rounds today.
+
+---
+
 ## 2026-05-26 (round 4) — Reports v2 + bulk actions + Vendor detail + Groups end-to-end
 
 **Status:** Done (live on main, commit `6abaca5`)

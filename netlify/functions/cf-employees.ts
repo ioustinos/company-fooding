@@ -12,6 +12,7 @@ import type { Context } from '@netlify/functions'
 import { ok, badRequest, forbidden, methodNotAllowed, errorResponse } from './_shared/errors'
 import { getCaller } from './_shared/auth'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
+import { logActivity } from './_shared/activity'
 
 type InRow = { display_name?: string; email?: string; external_ref?: string }
 
@@ -135,6 +136,14 @@ export default async (req: Request, _ctx: Context) => {
             else results.errors.push(`${r.display_name}: ${error.message}`)
           } else results.inserted++
         }
+        if (results.inserted > 0) {
+          void logActivity(sb, caller, companyId, 'employee.bulk_imported', {
+            target_type: 'employee',
+            summary_el: `Εισάχθηκαν ${results.inserted} υπάλληλοι από CSV (${results.skipped} διπλοί)`,
+            summary_en: `Imported ${results.inserted} employees from CSV (${results.skipped} duplicates)`,
+            payload: results,
+          })
+        }
         return ok({ bulk: results })
       }
 
@@ -149,6 +158,11 @@ export default async (req: Request, _ctx: Context) => {
         }
         throw new Error(error.message)
       }
+      void logActivity(sb, caller, companyId, 'employee.created', {
+        target_type: 'employee', target_id: data.id,
+        summary_el: `Προστέθηκε υπάλληλος ${data.display_name}`,
+        summary_en: `Added employee ${data.display_name}`,
+      })
       return ok({ employee: data })
     }
 
@@ -171,11 +185,17 @@ export default async (req: Request, _ctx: Context) => {
       if (Object.keys(patch).length === 0) return badRequest('nothing to update')
 
       const { data, error } = await sb.from('employees').update(patch).eq('id', b.id)
-        .select('id, display_name, email, external_ref, status').single()
+        .select('id, display_name, email, external_ref, status, company_id').single()
       if (error) {
         if (error.code === '23505') return badRequest('Voucher code already used by another employee')
         throw new Error(error.message)
       }
+      const kind = b.status === 'active' ? 'employee.activated' : b.status === 'inactive' ? 'employee.deactivated' : 'employee.updated'
+      void logActivity(sb, caller, data.company_id, kind, {
+        target_type: 'employee', target_id: data.id,
+        summary_el: kind === 'employee.deactivated' ? `Απενεργοποιήθηκε υπάλληλος ${data.display_name}` : kind === 'employee.activated' ? `Ενεργοποιήθηκε υπάλληλος ${data.display_name}` : `Ενημερώθηκε υπάλληλος ${data.display_name}`,
+        summary_en: kind === 'employee.deactivated' ? `Deactivated employee ${data.display_name}` : kind === 'employee.activated' ? `Activated employee ${data.display_name}` : `Updated employee ${data.display_name}`,
+      })
       return ok({ employee: data })
     }
 

@@ -13,6 +13,7 @@ import type { Context } from '@netlify/functions'
 import { ok, badRequest, forbidden, methodNotAllowed, errorResponse } from './_shared/errors'
 import { getCaller } from './_shared/auth'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
+import { logActivity } from './_shared/activity'
 
 type Body = { companyId?: string; id?: string; code?: string; name_el?: string; name_en?: string; status?: 'active' | 'archived' }
 
@@ -72,6 +73,11 @@ export default async (req: Request, _ctx: Context) => {
         if (error.code === '23505') return badRequest('A group with that code already exists')
         throw new Error(error.message)
       }
+      void logActivity(sb, caller, companyId, 'group.created', {
+        target_type: 'group', target_id: data.id,
+        summary_el: `Δημιουργήθηκε ομάδα "${data.code}"`,
+        summary_en: `Created group "${data.code}"`,
+      })
       return ok({ group: data })
     }
 
@@ -97,6 +103,11 @@ export default async (req: Request, _ctx: Context) => {
         if (error.code === '23505') return badRequest('A group with that code already exists')
         throw new Error(error.message)
       }
+      void logActivity(sb, caller, v.company_id, 'group.updated', {
+        target_type: 'group', target_id: b.id,
+        summary_el: `Ενημερώθηκε ομάδα "${data.code}"`,
+        summary_en: `Updated group "${data.code}"`,
+      })
       return ok({ group: data })
     }
 
@@ -108,6 +119,11 @@ export default async (req: Request, _ctx: Context) => {
       if (v.is_system) return badRequest('System groups cannot be archived')
       const { error } = await sb.from('groups').update({ status: 'archived' }).eq('id', b.id)
       if (error) throw new Error(error.message)
+      void logActivity(sb, caller, v.company_id, 'group.archived', {
+        target_type: 'group', target_id: b.id,
+        summary_el: 'Ομάδα αρχειοθετήθηκε',
+        summary_en: 'Group archived',
+      })
       return ok({ archived: 1 })
     }
 

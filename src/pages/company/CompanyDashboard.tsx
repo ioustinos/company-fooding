@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, KPI, Sparkbars, ActIcon, moneyFull } from '../../lib/specui'
+import { Icon, KPI, ActIcon, moneyFull } from '../../lib/specui'
 import type { IconName } from '../../lib/specui'
+import { SpendChart } from '../../lib/specCharts'
 
 type Recent = { kind: 'order'; who: string; where: string; amount: number; at: string | null }
 type Dash = {
@@ -12,6 +13,7 @@ type Dash = {
   trend: { date: string; gross: number; benefit: number; orders: number }[]
   recent: Recent[]
 }
+type ActivityEvent = { id: string; kind: string; actor_email: string | null; summary_el: string | null; summary_en: string | null; created_at: string }
 
 // Build a continuous daily series from the earliest order day (or `fromIso`
 // if the trend is empty) through today, zero-filling gaps so the chart reads
@@ -42,6 +44,7 @@ export default function CompanyDashboard() {
   const { lang } = useUIStore()
   const L = (el: string, en: string) => (lang === 'el' ? el : en)
   const [data, setData] = useState<Dash | null>(null)
+  const [activity, setActivity] = useState<ActivityEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,15 +56,33 @@ export default function CompanyDashboard() {
     setLoading(true); setError(null)
     ;(async () => {
       try {
-        const r = await fetch(`/api/cf-dashboard?companyId=${selectedId}&from=${from}&to=${to}`, {
-          headers: { authorization: `Bearer ${session.access_token}` },
-        })
-        if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
-        setData(await r.json())
+        const [dashRes, actRes] = await Promise.all([
+          fetch(`/api/cf-dashboard?companyId=${selectedId}&from=${from}&to=${to}`, { headers: { authorization: `Bearer ${session.access_token}` } }),
+          fetch(`/api/cf-activity?companyId=${selectedId}&limit=8`, { headers: { authorization: `Bearer ${session.access_token}` } }),
+        ])
+        if (!dashRes.ok) { const b = await dashRes.json().catch(() => ({})); throw new Error(b.error || `HTTP ${dashRes.status}`) }
+        setData(await dashRes.json())
+        if (actRes.ok) { const d = await actRes.json(); setActivity(d.events ?? []) }
       } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
       finally { setLoading(false) }
     })()
   }, [session?.access_token, selectedId])
+
+  function actKind(kind: string): 'order' | 'signup' | 'invoice' | 'benefit_start' | 'topup_failed' {
+    if (kind.startsWith('employee.')) return 'signup'
+    if (kind.startsWith('benefit.assigned')) return 'benefit_start'
+    if (kind.startsWith('benefit.')) return 'invoice'
+    if (kind.startsWith('group.') || kind.startsWith('company.')) return 'order'
+    return 'order'
+  }
+  function relTime(iso: string): string {
+    const t = new Date(iso).getTime(); const now = Date.now()
+    const diffMin = Math.round((now - t) / 60000)
+    if (diffMin < 1) return L('μόλις τώρα', 'just now')
+    if (diffMin < 60) return L(`πριν ${diffMin} λεπτά`, `${diffMin} min ago`)
+    const h = Math.round(diffMin / 60); if (h < 24) return L(`πριν ${h} ώρες`, `${h}h ago`)
+    const d = Math.round(h / 24); return L(`πριν ${d} μέρες`, `${d}d ago`)
+  }
 
   const firstName = (user?.fullName || user?.email || 'there').split(/[ @]/)[0]
   const greeting = (() => {
@@ -129,8 +150,8 @@ export default function CompanyDashboard() {
                   <div className="text-[11px] text-ink-faint">{L(`σύνολο ${series.length} ημερών`, `${series.length}-day total`)}</div>
                 </div>
               </div>
-              <Sparkbars series={series} />
-              <div className="flex justify-between mt-2 num text-[10px] text-ink-faint">
+              <SpendChart data={series} lang={lang} height={180} />
+              <div className="flex justify-between mt-1 num text-[10px] text-ink-faint">
                 <span>{seriesStart ? fmtShort(seriesStart, lang) : ''}</span>
                 <span>{seriesEnd ? fmtShort(seriesEnd, lang) : ''}</span>
               </div>
@@ -140,19 +161,26 @@ export default function CompanyDashboard() {
             <div className="bg-surface border border-line rounded-md shadow-sm">
               <div className="flex items-center justify-between p-5 border-b border-line">
                 <h2 className="font-display text-[20px] font-semibold">{L('Δραστηριότητα', 'Activity')}</h2>
-                <Link to="/company/reports" className="text-[12.5px] text-brand font-medium hover:underline">{L('Όλα', 'View all')}</Link>
+                <Link to="/company/activity" className="text-[12.5px] text-brand font-medium hover:underline">{L('Όλα', 'View all')}</Link>
               </div>
               <div className="divide-y divide-line">
-                {data.recent.length === 0 && (
+                {activity.length === 0 && data.recent.length === 0 && (
                   <div className="p-6 text-center text-[13px] text-ink-faint">{L('Καμία δραστηριότητα ακόμη', 'No activity yet')}</div>
                 )}
-                {data.recent.map((a, i) => (
-                  <div key={i} className="p-4 flex items-start gap-3">
+                {activity.map((a) => (
+                  <div key={a.id} className="p-4 flex items-start gap-3">
+                    <ActIcon kind={actKind(a.kind)} />
+                    <div className="flex-1 min-w-0 text-[13.5px] text-ink leading-[20px]">
+                      <div>{lang === 'el' ? (a.summary_el || a.kind) : (a.summary_en || a.kind)}</div>
+                      <div className="text-[11.5px] text-ink-faint font-mono mt-0.5">{relTime(a.created_at)} · {a.actor_email ?? 'system'}</div>
+                    </div>
+                  </div>
+                ))}
+                {activity.length === 0 && data.recent.map((a, i) => (
+                  <div key={`o-${i}`} className="p-4 flex items-start gap-3">
                     <ActIcon kind={a.kind} />
                     <div className="flex-1 min-w-0 text-[13.5px] text-ink leading-[20px]">
-                      <div>
-                        <b>{a.who}</b> {L('παραγγελία', 'ordered at')} <b>{a.where}</b> · <span className="num">{moneyFull(a.amount, lang)}</span>
-                      </div>
+                      <div><b>{a.who}</b> {L('παραγγελία', 'ordered at')} <b>{a.where}</b> · <span className="num">{moneyFull(a.amount, lang)}</span></div>
                       <div className="text-[11.5px] text-ink-faint font-mono mt-0.5">{a.at}</div>
                     </div>
                   </div>
