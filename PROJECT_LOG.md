@@ -20,6 +20,40 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-05-26 (round 3) — Top-up anchor persisted end-to-end, employee detail enriched, Settings to spec
+
+**Status:** Done (live on main, commit `7c4d70f`)
+
+**What:**
+- **Migration 16 applied** to Supabase (anchor cols on `benefit_rules`:
+  `topup_dom`, `topup_dom_eom`, `topup_dow`, `topup_time`). Ioustinos explicitly
+  approved by saying "go" in chat after the plan was listed.
+- **Anchor wired end-to-end.** `cf-benefits` POST + PUT now run
+  `normAnchor(cadence)` so only the fields relevant to the chosen cadence are
+  stored (monthly→dom or eom; weekly→dow; daily/one_time→time only). GET single
+  + list return the 4 cols. `BenefitEditPage` loads them on edit and includes
+  them in the save payload. The scheduler can now read the real anchor (still
+  in dry-run via `CF_TOPUPS_DRY_RUN`).
+- **Employee detail page is real.** `cf-employees` got a new `GET ?id=` that
+  returns the employee + active assignments (with benefit name + cadence) +
+  last 30 orders (with vendor name). `EmployeeEditPage` edit mode now loads
+  via that endpoint and shows: Status section (Active/Deactivate), Assigned
+  benefits list (× to unassign — live), Recent orders table (date / vendor /
+  total / benefit / extra). Office label rendered in the page header.
+- **`cf-benefit-assign` DELETE** — soft-unassigns (`unassigned_at = now()`)
+  with company-admin tenant check via `benefits.company_id`.
+- **SettingsPage** rebuilt to `page_co_profile`: FormSection-based Basic info
+  (name + VAT + status pill), Billing (email), Offices list with default pill
+  and address. Sticky save bar with dirty state and inline validation. Same
+  cf-company GET/PATCH contract, no schema change.
+
+**Notes:**
+- Three deploys in this run (`855bdf6` → `be538ad` → `a021df5` → `7c4d70f`),
+  all green; 13 functions live; `*/30` sync cron intact; secret scan clean
+  on each.
+
+---
+
 ## 2026-05-26 (round 2) — Demo benefits seeded, dashboard chart fixed, Employees + Vendors rebuilt to spec
 
 **Status:** Done (live on main)
