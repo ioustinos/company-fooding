@@ -13,22 +13,27 @@ type Dash = {
   recent: Recent[]
 }
 
-// Build a continuous N-day window ending today so the bar chart reads as a
-// proper 30-day strip even when some days had no orders.
-function buildWindow(trend: Dash['trend'], days: number) {
+// Build a continuous daily series from the earliest order day (or `fromIso`
+// if the trend is empty) through today, zero-filling gaps so the chart reads
+// as a real timeline rather than just the last N days.
+function buildSeries(trend: Dash['trend'], fromIso: string) {
   const byDate = new Map(trend.map((t) => [t.date, t]))
-  const out: { benefit: number; extra: number }[] = []
-  const today = new Date()
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(today.getDate() - i)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const startIso = trend.length > 0 ? trend[0].date : fromIso
+  const start = new Date(startIso + 'T00:00:00')
+  const out: { date: string; benefit: number; extra: number }[] = []
+  for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
     const iso = d.toISOString().slice(0, 10)
     const row = byDate.get(iso)
     const benefit = row?.benefit ?? 0
     const gross = row?.gross ?? 0
-    out.push({ benefit, extra: Math.max(0, gross - benefit) })
+    out.push({ date: iso, benefit, extra: Math.max(0, gross - benefit) })
   }
   return out
+}
+
+function fmtShort(iso: string, lang: 'el' | 'en') {
+  return new Date(iso + 'T00:00:00').toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { day: 'numeric', month: 'short' })
 }
 
 export default function CompanyDashboard() {
@@ -66,8 +71,10 @@ export default function CompanyDashboard() {
     return L('Καλό βράδυ', 'Good evening')
   })()
 
-  const series = data ? buildWindow(data.trend, 30) : []
+  const series = data ? buildSeries(data.trend, from) : []
   const windowTotal = series.reduce((a, d) => a + d.benefit + d.extra, 0)
+  const seriesStart = series[0]?.date
+  const seriesEnd = series[series.length - 1]?.date
   const benefitShare = data && data.totals.gross > 0
     ? Math.round((data.totals.benefit / data.totals.gross) * 100) : 0
   const orderDays = data ? data.trend.length : 0
@@ -111,7 +118,7 @@ export default function CompanyDashboard() {
             <div className="bg-surface border border-line rounded-md shadow-sm p-6">
               <div className="flex items-start justify-between mb-5">
                 <div>
-                  <h2 className="font-display text-[20px] font-semibold">{L('Δαπάνες · τελευταίες 30 μέρες', 'Spend · last 30 days')}</h2>
+                  <h2 className="font-display text-[20px] font-semibold">{L('Δαπάνες ανά ημέρα', 'Spend per day')}</h2>
                   <div className="flex items-center gap-4 mt-2">
                     <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-soft"><span className="w-2.5 h-2.5 rounded-xs bg-brand"></span>{L('Καλύπτεται από παροχή', 'Covered by benefit')}</span>
                     <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-soft"><span className="w-2.5 h-2.5 rounded-xs bg-accent"></span>{L('Επιπλέον από υπαλλήλους', 'Extra paid by employees')}</span>
@@ -119,12 +126,13 @@ export default function CompanyDashboard() {
                 </div>
                 <div className="text-right">
                   <div className="num text-[22px] font-semibold">{moneyFull(windowTotal, lang)}</div>
-                  <div className="text-[11px] text-ink-faint">{L('σύνολο 30 ημερών', '30-day total')}</div>
+                  <div className="text-[11px] text-ink-faint">{L(`σύνολο ${series.length} ημερών`, `${series.length}-day total`)}</div>
                 </div>
               </div>
               <Sparkbars series={series} />
               <div className="flex justify-between mt-2 num text-[10px] text-ink-faint">
-                <span>{L('πριν 30 μέρες', '30d ago')}</span><span>{L('τώρα', 'now')}</span>
+                <span>{seriesStart ? fmtShort(seriesStart, lang) : ''}</span>
+                <span>{seriesEnd ? fmtShort(seriesEnd, lang) : ''}</span>
               </div>
             </div>
 

@@ -28,13 +28,38 @@ export default async (req: Request, _ctx: Context) => {
       const url = new URL(req.url)
       const companyId = resolveCompany(url.searchParams.get('companyId'))
       if (!companyId) return badRequest('companyId required')
+
       const { data, error } = await sb
         .from('employees')
-        .select('id, display_name, email, external_ref, status, group_id, created_at')
+        .select('id, display_name, email, external_ref, status, group_id, default_office_id, created_at, ' +
+                'company_offices:default_office_id(label_el, label_en)')
         .eq('company_id', companyId)
         .order('display_name')
       if (error) throw new Error(error.message)
-      return ok({ employees: data ?? [] })
+      const emps = (data ?? []) as unknown as Array<{ id: string; default_office_id: string | null; company_offices: { label_el: string | null; label_en: string | null } | null } & Record<string, unknown>>
+
+      if (emps.length > 0) {
+        const ids = emps.map((e) => e.id)
+        // active benefit assignments per employee
+        const { data: aRows } = await sb.from('benefit_assignments')
+          .select('employee_id').in('employee_id', ids).is('unassigned_at', null)
+        const benefitsCount = new Map<string, number>()
+        for (const a of (aRows ?? []) as Array<{ employee_id: string }>) benefitsCount.set(a.employee_id, (benefitsCount.get(a.employee_id) ?? 0) + 1)
+        // lifetime spend per employee (orders.subtotal)
+        const { data: oRows } = await sb.from('orders')
+          .select('employee_id, subtotal').in('employee_id', ids)
+        const spend = new Map<string, number>()
+        for (const o of (oRows ?? []) as Array<{ employee_id: string; subtotal: number }>) spend.set(o.employee_id, (spend.get(o.employee_id) ?? 0) + (o.subtotal ?? 0))
+
+        for (const e of emps as Array<Record<string, unknown> & { id: string; company_offices: { label_el: string | null; label_en: string | null } | null }>) {
+          e.benefits_count = benefitsCount.get(e.id) ?? 0
+          e.spend = spend.get(e.id) ?? 0
+          e.office_label_el = e.company_offices?.label_el ?? null
+          e.office_label_en = e.company_offices?.label_en ?? null
+          delete (e as Record<string, unknown>).company_offices
+        }
+      }
+      return ok({ employees: emps })
     }
 
     if (req.method === 'POST') {

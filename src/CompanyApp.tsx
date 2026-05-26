@@ -7,6 +7,7 @@ import { Icon, PlateMark } from './lib/specui'
 import type { IconName } from './lib/specui'
 import CompanyDashboard from './pages/company/CompanyDashboard'
 import EmployeesPage from './pages/company/EmployeesPage'
+import EmployeeEditPage from './pages/company/EmployeeEditPage'
 import BenefitsPage from './pages/company/BenefitsPage'
 import BenefitEditPage from './pages/company/BenefitEditPage'
 import CompanyReportsPage from './pages/company/CompanyReportsPage'
@@ -176,6 +177,8 @@ export default function CompanyApp() {
             <Route index element={<CompanyDashboard />} />
             <Route path="reports" element={<CompanyReportsPage />} />
             <Route path="employees" element={<EmployeesPage />} />
+            <Route path="employees/new" element={<EmployeeEditPage />} />
+            <Route path="employees/:id" element={<EmployeeEditPage />} />
             <Route path="benefits" element={<BenefitsPage />} />
             <Route path="benefits/new" element={<BenefitEditPage />} />
             <Route path="benefits/:id" element={<BenefitEditPage />} />
