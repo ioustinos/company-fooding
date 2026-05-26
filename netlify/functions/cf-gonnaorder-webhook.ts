@@ -59,14 +59,17 @@ export default async (req: Request, _ctx: Context) => {
   let payload: Record<string, unknown> = {}
   try { payload = (await req.json()) as Record<string, unknown> } catch { /* keep empty */ }
 
+  // GO payload uses camelCase `eventType` and `uuid` as the canonical id.
+  // The order body is the payload itself (no wrapping), confirmed via the
+  // first real ORDER_UPDATED event on 2026-05-26.
   const eventType = String(
-    payload.event ?? payload.event_type ?? payload.type ?? 'UNKNOWN',
+    payload.eventType ?? payload.event_type ?? payload.event ?? payload.type ?? 'UNKNOWN',
   ).toUpperCase()
 
   // The order object may be the body itself or wrapped under `order` / `data`.
   const orderData = ((payload.order ?? payload.data ?? payload) as Record<string, unknown>) || {}
   const externalId = String(
-    orderData.orderId ?? orderData.id ?? orderData.uuid ?? '',
+    orderData.uuid ?? orderData.orderId ?? orderData.id ?? '',
   ) || null
 
   const dedupeKey = `gonnaorder|${eventType}|${externalId ?? 'none'}`

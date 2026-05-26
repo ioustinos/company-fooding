@@ -176,6 +176,132 @@ export async function listOrders(opts: ListOrdersOpts): Promise<GoOrder[]> {
   return all
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Customer vouchers (GO)
+//
+// Endpoints + payload shapes derived from the user's working n8n scripts
+// "Voucher Creation" + "Gonna Order Vouchers Update" (2026-05). Current
+// production model: per-store PERCENTILE discounts (e.g. 5%) on MULTI_USE
+// vouchers, refreshed daily via PUT (startDate→now, endDate→+6mo).
+//
+//   POST  /stores/{storeId}/customer-voucher              → create
+//   PUT   /stores/{storeId}/customer-voucher/{voucherId}  → update
+//   GET   /stores/{storeId}/customer-voucher?size=N       → list { data: [...] }
+// ────────────────────────────────────────────────────────────────────────────
+
+export type GoVoucher = {
+  id?: string
+  code?: string
+  startDate?: string
+  endDate?: string
+  discount?: number
+  orderMinAmount?: number
+  initialValue?: number | null
+  type?: 'MULTI_USE' | 'SINGLE_USE' | string
+  discountType?: 'PERCENTILE' | 'ABSOLUTE' | string
+  isActive?: boolean
+  [k: string]: unknown
+}
+
+export type CreateVoucherInput = {
+  storeId: string
+  code: string
+  discount: number                  // % when discountType=PERCENTILE, EUR when ABSOLUTE
+  discountType?: 'PERCENTILE' | 'ABSOLUTE'
+  type?: 'MULTI_USE' | 'SINGLE_USE'
+  startDate?: Date | string         // default: now
+  endDate?: Date | string           // default: now + 6 months
+  orderMinAmount?: number           // default 0
+  initialValue?: number | null      // default null (PERCENTILE) or EUR amount (ABSOLUTE-balance)
+  isActive?: boolean                // default true
+}
+
+async function requestWithAuth(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<Response> {
+  let { jwt, base } = await ensureToken()
+  const init = (j: string): RequestInit => ({
+    method,
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${j}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  let res = await fetch(`${base}${path}`, init(jwt))
+  if (res.status === 401) {
+    cachedJwt = null
+    jwt = await authenticate()
+    res = await fetch(`${base}${path}`, init(jwt))
+  }
+  return res
+}
+
+function isoOrString(v: Date | string | undefined, fallback: Date): string {
+  if (!v) return fallback.toISOString()
+  return typeof v === 'string' ? v : v.toISOString()
+}
+
+export async function createVoucher(input: CreateVoucherInput): Promise<GoVoucher> {
+  const now = new Date()
+  const sixMo = new Date(now); sixMo.setMonth(sixMo.getMonth() + 6)
+  const body = {
+    code: input.code,
+    startDate: isoOrString(input.startDate, now),
+    endDate: isoOrString(input.endDate, sixMo),
+    discount: input.discount,
+    orderMinAmount: input.orderMinAmount ?? 0,
+    initialValue: input.initialValue ?? null,
+    type: input.type ?? 'MULTI_USE',
+    discountType: input.discountType ?? 'PERCENTILE',
+    isActive: input.isActive ?? true,
+    categoryIds: null,
+    scheduleId: 'null',           // GO accepts the string "null" per n8n convention; null also works
+    externalId: null,
+    durationInMonths: null,
+  }
+  const res = await requestWithAuth('POST', `/stores/${encodeURIComponent(input.storeId)}/customer-voucher`, body)
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`GO createVoucher failed (${res.status}): ${txt.slice(0, 300)}`)
+  }
+  return (await res.json()) as GoVoucher
+}
+
+export type UpdateVoucherInput = {
+  storeId: string
+  voucherId: string
+  fields: Partial<Pick<GoVoucher, 'code' | 'startDate' | 'endDate' | 'discount' | 'isActive' | 'initialValue' | 'type' | 'discountType' | 'orderMinAmount'>>
+}
+
+export async function updateVoucher(input: UpdateVoucherInput): Promise<GoVoucher> {
+  const res = await requestWithAuth(
+    'PUT',
+    `/stores/${encodeURIComponent(input.storeId)}/customer-voucher/${encodeURIComponent(input.voucherId)}`,
+    input.fields,
+  )
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`GO updateVoucher failed (${res.status}): ${txt.slice(0, 300)}`)
+  }
+  return (await res.json()) as GoVoucher
+}
+
+export async function listVouchers(storeId: string, pageSize = 100): Promise<GoVoucher[]> {
+  const res = await requestWithAuth('GET', `/stores/${encodeURIComponent(storeId)}/customer-voucher?size=${pageSize}`)
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`GO listVouchers failed (${res.status}): ${txt.slice(0, 300)}`)
+  }
+  const json = await res.json() as { data?: GoVoucher[] } | GoVoucher[]
+  if (Array.isArray(json)) return json
+  return json.data ?? []
+}
+
+/**
+ * Find an existing voucher by exact `code` match. Case-sensitive — GO appears
+ * to preserve case. Returns null if no voucher with that code exists.
+ */
+export async function findVoucherByCode(storeId: string, code: string): Promise<GoVoucher | null> {
+  const all = await listVouchers(storeId)
+  return all.find((v) => v.code === code) ?? null
+}
+
 /**
  * Reset the cached JWT — exposed for tests / scripts that want a fresh login.
  */
