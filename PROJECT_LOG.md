@@ -20,6 +20,52 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-05-26 (round 6) — Per-benefit voucher style + webhook enrichment via getOrder
+
+**Status:** Done (live on main, commit `d34070d`).
+
+**What:**
+- Ioustinos clarified: voucher model is per-benefit. Some benefits = monetary
+  (€5/day for Queensway), others = percentage. The n8n scripts he shared
+  were API-shape references, not the canonical model.
+- **Migration 19** applied: `benefit_rules.voucher_discount_type`
+  ('absolute' | 'percentile') + `voucher_discount_pct`. Seeded the Queensway
+  benefit to `percentile/5` to match the live GO vouchers (which the n8n
+  daily refresh maintains as PERCENTILE 5% MULTI_USE). Other companies stay
+  on the 'absolute' default.
+- **cf-topups** now reads voucher_discount_type per benefit:
+  - `absolute` → CREATE w/ discountType=ABSOLUTE, discount + initialValue =
+    topup_amount/100 EUR.
+  - `percentile` → CREATE w/ discountType=PERCENTILE, discount = pct.
+  - The UPDATE branch **always preserves the existing voucher's discount +
+    discountType** — we refresh dates only, never silently change billing.
+    Queensway is safe.
+- **cf-benefits POST/PUT** persists voucher_discount_type + pct.
+- **BenefitEditPage**: 'Voucher style' radio in the Amount section — Fixed
+  amount per cycle / Percentage discount — with % field when percentile.
+- **getOrder(storeId, uuid)** added to `_shared/gonnaorder.ts`. Tries
+  `GET /stores/{id}/orders/{uuid}` first, falls back to scanning a few search
+  pages.
+- **cf-gonnaorder-webhook** now enriches every UPSERT-style event via
+  getOrder before upserting — webhook UPDATE payloads omit voucherCode,
+  voucherDiscount, and orderItems, but the detail endpoint includes them.
+  Records `error: 'enrichment via getOrder failed…'` on the
+  webhook_events row when fallback to slim payload was used (for forensics).
+
+**Open queue:**
+- **Test cycle** for Panagiotis Kastrinos (Queensway) — assignment
+  `9463ef69-ace9-4885-85e3-a96a2887a516`, voucher code `p.kastrinos`,
+  store 5677. Dry-run via cf-topups → expected action **WOULD UPDATE**
+  (voucher exists), preserving the existing PERCENTILE 5% values, just
+  refreshing startDate=now / endDate=+6mo / isActive=true.
+- **Disable n8n refresh on Queensway** before flipping `cf-topups`
+  dryRun:false (otherwise both will PUT the same vouchers daily). Owner:
+  Ioustinos, when ready.
+- **Brevo SMTP wiring** — pending, will tackle when Ioustinos picks
+  sending domain (wecook.gr / orexi.gr / …).
+
+---
+
 ## 2026-05-26 (round 5) — GonnaOrder webhook, Employee portal, Invoices, Activity log, Recharts, CSV export
 
 **Status:** Done (live on main, multiple commits this round)
