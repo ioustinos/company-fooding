@@ -38,6 +38,7 @@ import { listOrders, type GoOrder } from './_shared/gonnaorder'
 
 type CfOrder = {
   external_order_id: string
+  external_uuid: string | null
   voucher_code: string | null
   subtotal: number
   benefit_applied: number
@@ -134,15 +135,20 @@ export default async (req: Request, _ctx: Context) => {
     }
 
     // --- CF side: orders for THIS company in window ---
+    // Key by external_uuid because that's what we read from GO (`o.uuid`).
+    // CF stores BOTH external_order_id (numeric GO orderId) and external_uuid
+    // (GO's canonical cross-store id). Earlier versions of this file keyed
+    // by external_order_id while GO returned uuid → 0 matches. All current
+    // rows have external_uuid populated; rows without are skipped.
     const { data: cfRows } = await sb.from('orders')
-      .select('external_order_id, voucher_code, subtotal, benefit_applied, status, delivery_date')
+      .select('external_order_id, external_uuid, voucher_code, subtotal, benefit_applied, status, delivery_date')
       .eq('company_id', companyId)
       .gte('delivery_date', from)
       .lte('delivery_date', to)
       .limit(20000)
     const cfMap = new Map<string, CfOrder>()
     for (const r of (cfRows ?? []) as CfOrder[]) {
-      if (r.external_order_id) cfMap.set(r.external_order_id, r)
+      if (r.external_uuid) cfMap.set(r.external_uuid, r)
     }
 
     // --- GO side: pull all final-state orders for each store since `from` ---
@@ -286,14 +292,14 @@ export default async (req: Request, _ctx: Context) => {
 
     // Bucket 7: in CF, not in GO (should be ~zero with the tightened query)
     let missingInGoSubtotal = 0, missingInGoBenefit = 0
-    for (const [id, c] of cfMap) {
-      if (goMap.has(id)) continue
-      // Don't surface CF rows in cancelled state — they're expected to not
-      // be returned by listOrders(['CLOSED','DELIVERED']).
+    for (const [uuid, c] of cfMap) {
+      if (goMap.has(uuid)) continue
+      // Don't surface CF rows in cancelled state — GO listOrders with
+      // status:['CLOSED'] won't return them, so the "miss" is expected.
       if ((c.status ?? '').toLowerCase() === 'cancelled') continue
       if (missingInGo.length < ROW_CAP) {
         missingInGo.push({
-          id, voucher_code: c.voucher_code, employee_name: null,
+          id: uuid, voucher_code: c.voucher_code, employee_name: null,
           date: c.delivery_date, subtotal_cents: c.subtotal, benefit_cents: c.benefit_applied,
           cf_status: c.status,
         })
