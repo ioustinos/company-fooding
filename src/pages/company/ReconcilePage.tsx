@@ -42,27 +42,35 @@ export default function ReconcilePage() {
     finally { setLoading(false) }
   }
 
-  // Backfill from GO. Runs the same sync that the cron does, but for the
-  // 'from' date the user has selected — so they can target a specific gap.
+  // Backfill from GO. Calls the BACKGROUND function (15-min Netlify timeout
+  // ceiling — sync functions only get 26s, multi-store paginated GO pulls
+  // bust that). Background returns 202 immediately; reconcile re-runs after
+  // a short delay to pick up the new rows.
   async function backfill() {
     if (!token) return
-    setSyncing(true); setSyncMsg(null)
+    setSyncing(true); setSyncMsg(L('Backfill ξεκίνησε — τρέχει στο παρασκήνιο. Θα ανανεωθεί σε 60s…', 'Backfill started — running in background. Will refresh in 60s…'))
     try {
-      const r = await fetch('/api/cf-sync-trigger', {
+      const r = await fetch('/api/cf-sync-trigger-background', {
         method: 'POST',
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
         body: JSON.stringify({ since: from, dryRun: false }),
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`)
-      const t = d.summary?.totals
-      setSyncMsg(t
-        ? `Sync ok — inserted ${t.inserted ?? 0}, updated ${t.updated ?? 0}, skipped ${t.skipped ?? 0} (${t.scanned ?? 0} scanned).`
-        : 'Sync ok.')
-      // refresh reconcile after the sync lands
-      await run()
-    } catch (e) { setSyncMsg(`Sync failed: ${e instanceof Error ? e.message : 'unknown'}`) }
-    finally { setSyncing(false) }
+      // Background functions always return 202; pre-check errors (400/403/405)
+      // come back with a JSON body.
+      if (r.status !== 202 && !r.ok) {
+        const d = await r.json().catch(() => ({}))
+        throw new Error(d.error || `HTTP ${r.status}`)
+      }
+      // Poll: re-run reconcile after 60s to see the new rows.
+      setTimeout(async () => {
+        await run()
+        setSyncMsg(L('Backfill ολοκληρώθηκε — ελέγξτε τα αποτελέσματα παρακάτω.', 'Backfill done — check results below.'))
+        setSyncing(false)
+      }, 60000)
+    } catch (e) {
+      setSyncMsg(`Sync failed: ${e instanceof Error ? e.message : 'unknown'}`)
+      setSyncing(false)
+    }
   }
 
   return (
