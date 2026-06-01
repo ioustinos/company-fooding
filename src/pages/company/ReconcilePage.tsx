@@ -92,12 +92,15 @@ type Data = {
 }
 
 // Headline card. Big number + subline. Click to expand body.
+// `valueNode` overrides the default count rendering — used by "To bill"
+// to show the gross benefit money as the headline instead of an orders count.
 function HeadlineCard(props: {
   tone: 'success' | 'warn' | 'info'
   icon: 'check' | 'bell' | 'history'
   title: string
   count: number
   subline: string
+  valueNode?: React.ReactNode
   expanded: boolean
   onToggle: () => void
   children?: React.ReactNode
@@ -121,9 +124,11 @@ function HeadlineCard(props: {
           <Icon name={props.icon} size={18} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-3">
+          <div className="flex items-baseline gap-3 flex-wrap">
             <span className="font-display text-[20px] font-semibold">{props.title}</span>
-            <span className={`font-mono text-[28px] leading-none font-semibold ${toneText} num`}>{props.count}</span>
+            {props.valueNode ?? (
+              <span className={`font-mono text-[28px] leading-none font-semibold ${toneText} num`}>{props.count}</span>
+            )}
           </div>
           <p className="text-[12.5px] text-ink-soft mt-1">{props.subline}</p>
         </div>
@@ -379,21 +384,26 @@ export default function ReconcilePage() {
       {data && summary && (
         <div className="space-y-3">
           {/* TO BILL — the green pile.
-              Headline number = NET benefit (after vendor discount).
-              Subline shows the gross + discount for transparency. */}
+              Headline number = GROSS benefit spent (the "benefit spend" amount).
+              Subline = "X after Y% discount · N orders" — net + order count. */}
           <HeadlineCard
             tone="success"
             icon="check"
             title={L('Προς τιμολόγηση', 'To bill')}
             count={data.headline.toBill.count}
+            valueNode={
+              <span className="font-mono text-[28px] leading-none font-semibold text-success num">
+                {moneyFull(data.headline.toBill.benefit_gross_cents, lang)}
+              </span>
+            }
             subline={data.headline.toBill.discount_cents > 0
               ? L(
-                  `Καθαρή παροχή ${moneyFull(data.headline.toBill.benefit_net_cents, lang)} · μικτό ${moneyFull(data.headline.toBill.benefit_gross_cents, lang)} − έκπτωση ${data.discount?.pct ?? 0}% (${moneyFull(data.headline.toBill.discount_cents, lang)})`,
-                  `Net benefit ${moneyFull(data.headline.toBill.benefit_net_cents, lang)} · gross ${moneyFull(data.headline.toBill.benefit_gross_cents, lang)} − ${data.discount?.pct ?? 0}% discount (${moneyFull(data.headline.toBill.discount_cents, lang)})`
+                  `${moneyFull(data.headline.toBill.benefit_net_cents, lang)} μετά την έκπτωση ${data.discount?.pct ?? 0}% · ${data.headline.toBill.count} παραγγελίες`,
+                  `${moneyFull(data.headline.toBill.benefit_net_cents, lang)} after ${data.discount?.pct ?? 0}% discount · ${data.headline.toBill.count} orders`
                 )
               : L(
-                  `Παροχή ${summary.toBillTotal} · σύνολο ${moneyFull(data.headline.toBill.subtotal_cents, lang)}`,
-                  `Benefit ${summary.toBillTotal} · subtotal ${moneyFull(data.headline.toBill.subtotal_cents, lang)}`
+                  `${data.headline.toBill.count} παραγγελίες · σύνολο ${moneyFull(data.headline.toBill.subtotal_cents, lang)}`,
+                  `${data.headline.toBill.count} orders · subtotal ${moneyFull(data.headline.toBill.subtotal_cents, lang)}`
                 )
             }
             expanded={expanded.bill}
