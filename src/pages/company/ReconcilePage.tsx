@@ -28,6 +28,8 @@ export default function ReconcilePage() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
 
   async function run() {
     if (!token || !selectedId) return
@@ -38,6 +40,29 @@ export default function ReconcilePage() {
       setData(await r.json())
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to run') }
     finally { setLoading(false) }
+  }
+
+  // Backfill from GO. Runs the same sync that the cron does, but for the
+  // 'from' date the user has selected — so they can target a specific gap.
+  async function backfill() {
+    if (!token) return
+    setSyncing(true); setSyncMsg(null)
+    try {
+      const r = await fetch('/api/cf-sync-trigger', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ since: from, dryRun: false }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`)
+      const t = d.summary?.totals
+      setSyncMsg(t
+        ? `Sync ok — inserted ${t.inserted ?? 0}, updated ${t.updated ?? 0}, skipped ${t.skipped ?? 0} (${t.scanned ?? 0} scanned).`
+        : 'Sync ok.')
+      // refresh reconcile after the sync lands
+      await run()
+    } catch (e) { setSyncMsg(`Sync failed: ${e instanceof Error ? e.message : 'unknown'}`) }
+    finally { setSyncing(false) }
   }
 
   return (
@@ -59,9 +84,13 @@ export default function ReconcilePage() {
           <Btn variant="primary" size="md" disabled={loading} onClick={run}>
             <Icon name="check" /><span>{loading ? L('Εκτέλεση…', 'Running…') : L('Σύγκριση', 'Reconcile')}</span>
           </Btn>
+          <Btn variant="secondary" size="md" disabled={syncing} onClick={backfill}>
+            <Icon name="history" /><span>{syncing ? L('Backfill…', 'Backfilling…') : L('Backfill από GO', 'Backfill from GO')}</span>
+          </Btn>
         </div>
       </div>
 
+      {syncMsg && <div className={`rounded-md border px-4 py-3 text-sm ${syncMsg.startsWith('Sync failed') ? 'border-danger/40 bg-danger/5 text-danger' : 'border-success/40 bg-success/5 text-success'}`}>{syncMsg}</div>}
       {error && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
 
       {!data && !loading && (

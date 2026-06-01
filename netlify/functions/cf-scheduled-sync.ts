@@ -7,14 +7,16 @@
 // scheduler, not via the public URL, so there's no caller to authenticate.
 // It calls the SAME runSync() core as the manual cf-sync-gonnaorder endpoint.
 //
-// Lookback window: 3 days. Orders for a given day's lunch are placed that
-// morning, but a 3-day window cheaply covers late-arriving or amended orders.
-// runSync is idempotent (upsert ON CONFLICT), so the overlap is harmless.
+// Lookback window: 30 days. Widened from 3 days after the 2026-05-18→22
+// outage: scheduled-sync was broken for ~5 days and once it recovered, the
+// 3-day window meant 18–22 were forever outside reach. 30d gives plenty of
+// slack to forgive a week-long outage. runSync is idempotent (upsert ON
+// CONFLICT external_order_id), so the overlap costs ~1s of GO paging.
 
 import type { Config } from '@netlify/functions'
 import { runSync } from './_shared/syncGonnaOrder'
 
-const LOOKBACK_DAYS = 3
+const LOOKBACK_DAYS = 30
 
 export default async () => {
   const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 3600 * 1000)
