@@ -73,9 +73,11 @@ const cents = (eur: unknown) => {
 const lowerOrNull = (s: string | null | undefined) =>
   s && s.length > 0 ? s.toLowerCase() : null
 
-// GO statuses we treat as "happened, invoiceable". Maps 1:1 to CF
-// status='delivered' via parseGonnaOrder.STATUS_MAP.
-const GO_FINAL_STATUSES = ['CLOSED', 'DELIVERED']
+// GO statuses we treat as "happened, invoiceable". Only 'CLOSED' is accepted
+// by the GO /orders/search endpoint — passing 'DELIVERED' returns
+// HTTP 400 "Failed to read request" (Bad Request). CLOSED is what the
+// scheduled sync uses too (listOrders default), so we match it.
+const GO_FINAL_STATUSES = ['CLOSED']
 
 const ROW_CAP = 250
 
