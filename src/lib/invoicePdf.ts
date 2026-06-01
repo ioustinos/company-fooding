@@ -12,7 +12,11 @@ type InvoiceRow = {
   month: string                 // YYYY-MM
   orders: number
   gross: number                 // cents
-  benefit: number               // cents — what's billable
+  benefit: number               // cents — gross benefit (legacy alias)
+  benefit_gross?: number        // cents — explicit gross (CF-97)
+  discount_cents?: number       // cents — vendor discount applied to benefit
+  benefit_net?: number          // cents — net invoiceable (gross − discount)
+  discount_pct?: number         // 0..100
   extra: number                 // cents — paid by employees, not billed
 }
 type Company = { name: string; vat_number: string | null; billing_email: string | null }
@@ -79,19 +83,31 @@ export function downloadInvoicePdf(opts: {
   doc.text(L('Περίοδος: ', 'Period: ') + monthLabel(invoice.month, lang), margin, y)
   y += 8
 
-  // Summary block
+  // Summary block — show gross, discount (if any), net total.
+  const benefitGross = invoice.benefit_gross ?? invoice.benefit
+  const discount = invoice.discount_cents ?? 0
+  const benefitNet = invoice.benefit_net ?? benefitGross
+  const pct = invoice.discount_pct ?? 0
+  const body: (string | number)[][] = [[
+    L(`Παροχή σίτισης για ${invoice.vendor_name}`, `Food benefit usage at ${invoice.vendor_name}`),
+    String(invoice.orders),
+    moneyFull(benefitGross, lang),
+  ]]
+  if (discount > 0) {
+    body.push([
+      L(`Έκπτωση συνεργάτη (${pct}%)`, `Vendor discount (${pct}%)`),
+      '',
+      '−' + moneyFull(discount, lang),
+    ])
+  }
   autoTable(doc, {
     startY: y,
-    head: [[L('Περιγραφή', 'Description'), L('Παραγγελίες', 'Orders'), L('Χρέωση παροχής', 'Billable benefit')]],
-    body: [[
-      L(`Παροχή σίτισης για ${invoice.vendor_name}`, `Food benefit usage at ${invoice.vendor_name}`),
-      String(invoice.orders),
-      moneyFull(invoice.benefit, lang),
-    ]],
+    head: [[L('Περιγραφή', 'Description'), L('Παραγγελίες', 'Orders'), L('Ποσό', 'Amount')]],
+    body,
     foot: [[
       L('Σύνολο προς πληρωμή', 'Total payable'),
       '',
-      moneyFull(invoice.benefit, lang),
+      moneyFull(benefitNet, lang),
     ]],
     headStyles: { fillColor: [45, 79, 60], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [232, 237, 231], textColor: [26, 46, 36], fontStyle: 'bold' },

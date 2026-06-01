@@ -5,8 +5,26 @@ import { useUIStore } from '../../store/useUIStore'
 import { Icon, Btn, KPI, Pill, moneyFull } from '../../lib/specui'
 import { downloadInvoicePdf } from '../../lib/invoicePdf'
 
-type Invoice = { vendor_id: string | null; vendor_name: string; month: string; orders: number; gross: number; benefit: number; extra: number; status: 'open' | 'current' }
-type Data = { period: { from: string; to: string }; totals: { orders: number; gross: number; benefit: number; extra: number }; invoices: Invoice[] }
+type Invoice = {
+  vendor_id: string | null; vendor_name: string; month: string; orders: number;
+  gross: number;
+  benefit: number              // legacy alias = gross
+  benefit_gross: number
+  discount_cents: number
+  benefit_net: number
+  discount_pct: number
+  discount_applies_to: string | null
+  extra: number; status: 'open' | 'current'
+}
+type Data = {
+  period: { from: string; to: string }
+  totals: {
+    orders: number; gross: number;
+    benefit: number; benefit_gross: number; discount_cents: number; benefit_net: number;
+    extra: number
+  }
+  invoices: Invoice[]
+}
 
 const monthLabel = (m: string, lang: 'el' | 'en') => {
   const [y, mo] = m.split('-')
@@ -57,19 +75,36 @@ export default function InvoicesPage() {
     downloadInvoicePdf({
       company,
       vendor: { name: inv.vendor_name, legal_name: null },
-      invoice: { vendor_name: inv.vendor_name, month: inv.month, orders: inv.orders, gross: inv.gross, benefit: inv.benefit, extra: inv.extra },
+      invoice: {
+        vendor_name: inv.vendor_name,
+        month: inv.month,
+        orders: inv.orders,
+        gross: inv.gross,
+        benefit: inv.benefit_gross,
+        benefit_gross: inv.benefit_gross,
+        discount_cents: inv.discount_cents,
+        benefit_net: inv.benefit_net,
+        discount_pct: inv.discount_pct,
+        extra: inv.extra,
+      },
       lang,
     })
   }
 
   const grouped = useMemo(() => {
-    if (!data) return [] as { month: string; rows: Invoice[]; total: { gross: number; benefit: number; extra: number; orders: number } }[]
-    const map = new Map<string, { month: string; rows: Invoice[]; total: { gross: number; benefit: number; extra: number; orders: number } }>()
+    type Total = { gross: number; benefit_gross: number; discount_cents: number; benefit_net: number; extra: number; orders: number }
+    if (!data) return [] as { month: string; rows: Invoice[]; total: Total }[]
+    const map = new Map<string, { month: string; rows: Invoice[]; total: Total }>()
     for (const inv of data.invoices) {
       if (tab !== 'all' && inv.status !== tab) continue
-      const g = map.get(inv.month) ?? { month: inv.month, rows: [], total: { gross: 0, benefit: 0, extra: 0, orders: 0 } }
+      const g = map.get(inv.month) ?? { month: inv.month, rows: [], total: { gross: 0, benefit_gross: 0, discount_cents: 0, benefit_net: 0, extra: 0, orders: 0 } }
       g.rows.push(inv)
-      g.total.gross += inv.gross; g.total.benefit += inv.benefit; g.total.extra += inv.extra; g.total.orders += inv.orders
+      g.total.gross += inv.gross
+      g.total.benefit_gross += inv.benefit_gross
+      g.total.discount_cents += inv.discount_cents
+      g.total.benefit_net += inv.benefit_net
+      g.total.extra += inv.extra
+      g.total.orders += inv.orders
       map.set(inv.month, g)
     }
     return [...map.values()].sort((a, b) => b.month.localeCompare(a.month))
@@ -101,7 +136,15 @@ export default function InvoicesPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <KPI label={L('Σύνολο τιμολογίων', 'Invoices')} value={data.invoices.length} tone="brand" icon="file" />
             <KPI label={L('Δαπάνη', 'Spend')} value={moneyFull(data.totals.gross, lang)} tone="accent" icon="wallet" />
-            <KPI label={L('Παροχή (τιμολόγηση)', 'Benefit (billable)')} value={moneyFull(data.totals.benefit, lang)} tone="success" icon="chart" sub={L('αυτό χρεώνεται η εταιρεία', "this is what the company is billed")} />
+            <KPI
+              label={L('Καθαρό προς τιμολόγηση', 'Net to invoice')}
+              value={moneyFull(data.totals.benefit_net, lang)}
+              tone="success" icon="chart"
+              sub={data.totals.discount_cents > 0
+                ? L(`μικτό ${moneyFull(data.totals.benefit_gross, lang)} − έκπτωση ${moneyFull(data.totals.discount_cents, lang)}`,
+                     `gross ${moneyFull(data.totals.benefit_gross, lang)} − discount ${moneyFull(data.totals.discount_cents, lang)}`)
+                : L('αυτό χρεώνεται η εταιρεία', "this is what the company is billed")}
+            />
             <KPI label={L('Από υπαλλήλους', 'Paid by employees')} value={moneyFull(data.totals.extra, lang)} tone="warn" icon="users" sub={L('εκτός παροχής', 'beyond the benefit')} />
           </div>
 
@@ -129,8 +172,13 @@ export default function InvoicesPage() {
                       {g.month === new Date().toISOString().slice(0, 7) && <Pill tone="accent">{L('τρέχων', 'current')}</Pill>}
                     </h2>
                     <div className="text-right text-[12.5px]">
-                      <div className="num text-[16px] font-semibold">{moneyFull(g.total.benefit, lang)}</div>
-                      <div className="text-ink-faint">{L('παροχή προς τιμολόγηση', 'billable benefit')}</div>
+                      <div className="num text-[16px] font-semibold">{moneyFull(g.total.benefit_net, lang)}</div>
+                      <div className="text-ink-faint">
+                        {g.total.discount_cents > 0
+                          ? L(`καθαρό προς τιμολόγηση · μικτό ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`,
+                               `net to invoice · gross ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`)
+                          : L('παροχή προς τιμολόγηση', 'billable benefit')}
+                      </div>
                     </div>
                   </div>
                   <table className="w-full text-[14px]">
@@ -139,7 +187,9 @@ export default function InvoicesPage() {
                         <th className="px-5 py-2.5">{L('Συνεργάτης', 'Vendor')}</th>
                         <th className="px-5 py-2.5 text-right">{L('Παρ.', 'Ord.')}</th>
                         <th className="px-5 py-2.5 text-right">{L('Δαπάνη', 'Spend')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('Παροχή', 'Benefit')}</th>
+                        <th className="px-5 py-2.5 text-right">{L('Παροχή μικτή', 'Benefit gross')}</th>
+                        <th className="px-5 py-2.5 text-right">{L('Έκπτωση', 'Discount')}</th>
+                        <th className="px-5 py-2.5 text-right">{L('Παροχή καθαρή', 'Benefit net')}</th>
                         <th className="px-5 py-2.5 text-right">{L('Επιπλέον', 'Extra')}</th>
                         <th className="px-5 py-2.5">{L('Κατάσταση', 'Status')}</th>
                         <th className="px-5 py-2.5 text-right">{L('PDF', 'PDF')}</th>
@@ -151,7 +201,13 @@ export default function InvoicesPage() {
                           <td className="px-5 py-2.5"><div className="flex items-center gap-2"><Icon name="shop" /><span className="font-medium">{inv.vendor_name}</span></div></td>
                           <td className="px-5 py-2.5 text-right num">{inv.orders}</td>
                           <td className="px-5 py-2.5 text-right num">{moneyFull(inv.gross, lang)}</td>
-                          <td className="px-5 py-2.5 text-right num text-brand font-semibold">{moneyFull(inv.benefit, lang)}</td>
+                          <td className="px-5 py-2.5 text-right num">{moneyFull(inv.benefit_gross, lang)}</td>
+                          <td className="px-5 py-2.5 text-right num text-ink-soft">
+                            {inv.discount_cents > 0
+                              ? <>−{moneyFull(inv.discount_cents, lang)} <span className="text-[10.5px] text-ink-faint">({inv.discount_pct}%)</span></>
+                              : '—'}
+                          </td>
+                          <td className="px-5 py-2.5 text-right num text-brand font-semibold">{moneyFull(inv.benefit_net, lang)}</td>
                           <td className="px-5 py-2.5 text-right num text-ink-soft">{moneyFull(inv.extra, lang)}</td>
                           <td className="px-5 py-2.5"><Pill tone={inv.status === 'current' ? 'accent' : 'warn'}>{inv.status === 'current' ? L('τρέχον', 'current') : L('εκκρεμές', 'open')}</Pill></td>
                           <td className="px-5 py-2.5 text-right">

@@ -108,6 +108,20 @@ export default async (req: Request, _ctx: Context) => {
       .filter((v, i, arr) => v && arr.indexOf(v) === i)
     if (storeIds.length === 0) return badRequest('no GO shops for this company')
 
+    // --- Vendor discount lookup (CF-97) ---
+    // Today the schema has one discount per VENDOR (not per agreement). For
+    // the headline "To bill" we apply the discount of the FIRST vendor in
+    // this company's active agreements. In practice every company uses the
+    // single Wecook vendor, so this is unambiguous; if a company is ever
+    // matched with multiple vendors at different discounts we'll need to
+    // bucket per-vendor here (filed for future).
+    const { data: vendorAgs } = await sb.from('matchmaking_agreements')
+      .select('vendor:vendors!inner(id, discount_percentage, discount_applies_to)')
+      .eq('company_id', companyId).eq('status', 'active').limit(1)
+    const vendorRow = ((vendorAgs ?? [])[0] as unknown as { vendor: { discount_percentage: number | string | null; discount_applies_to: string | null } | null } | undefined)?.vendor
+    const discountPct = vendorRow && vendorRow.discount_percentage != null ? Number(vendorRow.discount_percentage) : 0
+    const discountAppliesTo = vendorRow?.discount_applies_to ?? null
+
     // --- Voucher → owner map (every CF voucher code → company + employee) ---
     // Lowercased keys (GO matching is case-insensitive per memory).
     // We pull ALL assignments globally, not just current-company, so we can
@@ -334,12 +348,31 @@ export default async (req: Request, _ctx: Context) => {
       counts.missingInGo++
     }
 
+    // Apply the company's vendor discount to the matched ("To bill") benefit
+    // so the headline shows the net invoiceable amount (CF-97).
+    const toBillDiscountCents = (discountPct > 0 && discountAppliesTo === 'benefit_price')
+      ? Math.round((toBillBenefit * discountPct) / 100)
+      : 0
+    const toBillBenefitNet = toBillBenefit - toBillDiscountCents
+
     return ok({
       period: { from, to },
       storeIds,
+      // Vendor discount context for the UI (so it can show "-10%" subline).
+      discount: {
+        pct: discountPct,
+        applies_to: discountAppliesTo,
+      },
       // Headline numbers — what the 3 cards on the page show.
       headline: {
-        toBill:        { count: counts.matched, subtotal_cents: toBillSubtotal, benefit_cents: toBillBenefit },
+        toBill:        {
+          count: counts.matched,
+          subtotal_cents: toBillSubtotal,
+          benefit_cents: toBillBenefit,          // gross (legacy)
+          benefit_gross_cents: toBillBenefit,
+          discount_cents: toBillDiscountCents,
+          benefit_net_cents: toBillBenefitNet,
+        },
         needsAttention: {
           count: counts.missingKnownVoucher + counts.missingAmountMismatch + counts.missingInGo,
           missingKnownVoucher_count: counts.missingKnownVoucher,
