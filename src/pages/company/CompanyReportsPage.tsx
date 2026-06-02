@@ -7,10 +7,10 @@ import { SpendChart } from '../../lib/specCharts'
 import { downloadCsv } from '../../lib/csv'
 
 type Report = {
-  totals: { orders: number; gross: number; benefit: number; topup: number }
-  perEmployee: { name: string; voucher: string; orders: number; gross: number; benefit: number; topup: number }[]
-  perDay: { date: string; orders: number; employees: number; gross: number; benefit: number; topup: number }[]
-  orders: { date: string | null; token: string | null; voucher: string | null; employee: string | null; gross: number; benefit: number; topup: number; status?: string }[]
+  totals: { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number }
+  perEmployee: { name: string; voucher: string; orders: number; gross: number; benefit: number; net_benefit?: number; topup: number }[]
+  perDay: { date: string; orders: number; employees: number; gross: number; benefit: number; net_benefit?: number; topup: number }[]
+  orders: { date: string | null; token: string | null; voucher: string | null; employee: string | null; gross: number; benefit: number; net_benefit?: number; topup: number; status?: string }[]
   orderCountTotal: number
 }
 
@@ -136,8 +136,27 @@ export default function CompanyReportsPage() {
               tone="warn" icon="shop" sub={L(`μ.ό. ${moneyFull(avgPerOrder, lang)}/παρ.`, `${moneyFull(avgPerOrder, lang)} avg/order`)} />
             <KPI label={L('Συνολική δαπάνη', 'Total spend')} value={moneyFull(data.totals.gross, lang)}
               tone="accent" icon="wallet" sub={`${from} → ${to}`} />
-            <KPI label={L('Καλύφθηκε από παροχή', 'Covered by benefit')} value={moneyFull(data.totals.benefit, lang)}
-              tone="success" icon="chart" sub={`${benefitShare}%`} />
+            {(() => {
+              // Big number = gross benefit covered. Subline = % covered, plus
+              // the post-discount amount when a vendor discount applies.
+              // Discount % is derived from gross vs net so we don't have to
+              // round-trip another field; if mixed vendors, this is a blended
+              // average (informational).
+              const gross = data.totals.benefit
+              const net = data.totals.net_benefit ?? gross
+              const hasDiscount = gross > 0 && net < gross
+              const discountPct = hasDiscount ? Math.round(((gross - net) / gross) * 100) : 0
+              const sub = hasDiscount
+                ? L(
+                    `${benefitShare}% · ${moneyFull(net, lang)} μετά την έκπτωση ${discountPct}%`,
+                    `${benefitShare}% · ${moneyFull(net, lang)} after ${discountPct}% discount`
+                  )
+                : `${benefitShare}%`
+              return (
+                <KPI label={L('Καλύφθηκε από παροχή', 'Covered by benefit')} value={moneyFull(gross, lang)}
+                  tone="success" icon="chart" sub={sub} />
+              )
+            })()}
             <KPI label={L('Πληρωμή υπαλλήλων', 'Employees paid')} value={moneyFull(data.totals.topup, lang)}
               tone="brand" icon="users" sub={L('επιπλέον της παροχής', 'extra beyond benefit')} />
           </div>
