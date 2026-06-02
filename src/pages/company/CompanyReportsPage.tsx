@@ -49,6 +49,18 @@ export default function CompanyReportsPage() {
     setFrom(f.toISOString().slice(0, 10)); setTo(t.toISOString().slice(0, 10))
   }
 
+  // Month presets: offset 0 = this month, -1 = past (previous) month, etc.
+  // Always covers the full month (1st through last day), regardless of today.
+  function setMonthPreset(offset: number) {
+    const now = new Date()
+    const first = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+    const last = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)
+    // Normalize to YYYY-MM-DD in local time to avoid TZ off-by-one.
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    setFrom(fmt(first))
+    setTo(fmt(last))
+  }
+
   const benefitShare = data && data.totals.gross > 0
     ? Math.round((data.totals.benefit / data.totals.gross) * 100) : 0
   const avgPerOrder = data && data.totals.orders > 0
@@ -89,8 +101,18 @@ export default function CompanyReportsPage() {
         </div>
       </div>
 
-      {/* date presets */}
+      {/* date presets — month presets first (most useful for invoicing),
+          then rolling-window presets */}
       <div className="flex items-center gap-1.5 flex-wrap">
+        <button onClick={() => setMonthPreset(0)}
+          className="h-8 px-3 border border-line bg-surface rounded-xs text-[12.5px] font-medium text-ink-soft hover:text-ink hover:border-ink-soft">
+          {L('Τρέχων μήνας', 'This month')}
+        </button>
+        <button onClick={() => setMonthPreset(-1)}
+          className="h-8 px-3 border border-line bg-surface rounded-xs text-[12.5px] font-medium text-ink-soft hover:text-ink hover:border-ink-soft">
+          {L('Προηγούμενος μήνας', 'Past month')}
+        </button>
+        <span className="text-ink-faint text-[11px] mx-1">·</span>
         {([
           [L('Τελευταίες 7 ημέρες', 'Last 7 days'), 7],
           [L('Τελευταίες 30 ημέρες', 'Last 30 days'), 30],
