@@ -1,0 +1,6 @@
+# Always revalidate the HTML so a new deploy is picked up immediately
+# (hashed JS/CSS assets keep their long cache — only the entry document revalidates).
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate

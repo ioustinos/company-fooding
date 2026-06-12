@@ -1,0 +1,9 @@
+# Orexis Event Builder — isolated, auth-free Netlify site.
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  # Bundle the system prompt so the streaming function can read it at runtime.
+  included_files = ["netlify/functions/system-prompt.txt"]
