@@ -9,6 +9,13 @@ export type Attachment =
 
 export type Msg = { role: "user" | "assistant"; text: string; attachment?: Attachment };
 
+/** Lead captured by the unlock survey (Company Fooding needs → warm Orexis lead). */
+export type LeadData = {
+  answers: Record<string, string | string[]>;
+  contact: { name: string; email: string; company: string };
+  at: string; // ISO timestamp
+};
+
 export const OPENING =
   "Hi — I'm here to turn your event into a brief our caterers can quote on. Tell me about it: what's the occasion, roughly when, how many people, and what you're picturing food-wise? Just describe it in your own words and I'll shape it from there.";
 
@@ -20,8 +27,11 @@ const apply = <T,>(u: Updater<T>, prev: T): T => (typeof u === "function" ? (u a
 type SessionState = {
   messages: Msg[];
   brief: BriefState;
+  unlocked: boolean; // full brief + PDF unlocked after the lead survey
+  lead: LeadData | null;
   setMessages: (u: Updater<Msg[]>) => void;
   setBrief: (u: Updater<BriefState>) => void;
+  setUnlocked: (lead: LeadData) => void;
   reset: () => void;
 };
 
@@ -30,9 +40,12 @@ export const useSessionStore = create<SessionState>()(
     (set) => ({
       messages: freshMessages(),
       brief: emptyBrief(),
+      unlocked: false,
+      lead: null,
       setMessages: (u) => set((s) => ({ messages: apply(u, s.messages) })),
       setBrief: (u) => set((s) => ({ brief: apply(u, s.brief) })),
-      reset: () => set({ messages: freshMessages(), brief: emptyBrief() }),
+      setUnlocked: (lead) => set({ unlocked: true, lead }),
+      reset: () => set({ messages: freshMessages(), brief: emptyBrief(), unlocked: false, lead: null }),
     }),
     {
       name: "caterplan-session-v1",
@@ -44,6 +57,8 @@ export const useSessionStore = create<SessionState>()(
           m.attachment ? { ...m, attachment: { ...m.attachment, data: "" } } : m
         ),
         brief: s.brief,
+        unlocked: s.unlocked,
+        lead: s.lead,
       }),
     }
   )

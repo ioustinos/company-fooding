@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { parseAssistant, visibleOf, mdToHtml, type Ask } from "./lib/brief";
-import { useSessionStore, type Msg, type Attachment } from "./store/useSessionStore";
+import { useSessionStore, type Msg, type Attachment, type LeadData } from "./store/useSessionStore";
+import { SURVEY } from "./lib/survey";
 
 /** Build the Anthropic messages array, expanding any attachment into content blocks. */
 function buildApiMessages(msgs: Msg[]) {
@@ -33,12 +34,19 @@ const MODELS: { id: string; label: string }[] = [
   { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
 ];
 
+// Slots shown in the locked (pre-survey) teaser — the at-a-glance. Everything
+// else is blurred until the user completes the unlock survey.
+const TEASER = new Set(["A|Occasion", "B|Date(s)", "C|Number of guests"]);
+const isTeaser = (secId: string, label: string) => TEASER.has(secId + "|" + label);
+
 export default function App() {
   const messages = useSessionStore((s) => s.messages);
   const setMessages = useSessionStore((s) => s.setMessages);
   const brief = useSessionStore((s) => s.brief);
   const setBrief = useSessionStore((s) => s.setBrief);
   const resetSession = useSessionStore((s) => s.reset);
+  const unlocked = useSessionStore((s) => s.unlocked);
+  const setUnlocked = useSessionStore((s) => s.setUnlocked);
   const [streaming, setStreaming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +56,11 @@ export default function App() {
   const [ask, setAsk] = useState<Ask | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
+  const [showSurvey, setShowSurvey] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [contact, setContact] = useState({ name: "", email: "", company: "" });
+  const [submitting, setSubmitting] = useState(false);
+  const [surveyError, setSurveyError] = useState<string | null>(null);
 
   const streamRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -200,10 +213,50 @@ export default function App() {
   }
 
   function exportPdf() {
+    if (!unlocked) {
+      setShowSurvey(true);
+      return;
+    }
     if (!brief.finalBriefMarkdown) return;
     const area = document.getElementById("print-area");
     if (area) area.innerHTML = mdToHtml(brief.finalBriefMarkdown);
     window.print();
+  }
+
+  async function submitSurvey() {
+    for (const q of SURVEY) {
+      if (q.required && !answers[q.id]) {
+        setSurveyError("Please answer every question.");
+        return;
+      }
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contact.email.trim())) {
+      setSurveyError("Enter a valid work email.");
+      return;
+    }
+    if (!contact.company.trim()) {
+      setSurveyError("Enter your company name.");
+      return;
+    }
+    setSurveyError(null);
+    setSubmitting(true);
+    const lead: LeadData = {
+      answers,
+      contact: { name: contact.name.trim(), email: contact.email.trim(), company: contact.company.trim() },
+      at: new Date().toISOString(),
+    };
+    try {
+      await fetch("/api/lead", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...lead, brief: { readiness: brief.readiness } }),
+      });
+    } catch {
+      /* don't block the unlock on the lead stub */
+    }
+    setUnlocked(lead); // persists; reveals full brief + enables export
+    setSubmitting(false);
+    setShowSurvey(false);
   }
 
   const { requiredMet, requiredTotal, completeness } = brief.readiness;
@@ -352,6 +405,15 @@ export default function App() {
                 </span>
               </div>
             </div>
+            {!unlocked && (
+              <button className="lock-banner" onClick={() => setShowSurvey(true)}>
+                <span className="lock-ico">🔒</span>
+                <span>
+                  <b>Full brief locked.</b> Answer 4 quick questions to reveal every detail and unlock the PDF for your caterers.
+                </span>
+                <span className="lock-cta">Unlock →</span>
+              </button>
+            )}
           </div>
 
           <div className="sections">
@@ -369,32 +431,35 @@ export default function App() {
                     </span>
                   </summary>
                   <div className="body">
-                    {sec.slots.map((s) => (
-                      <div className={"slot " + s.status} key={s.label}>
-                        <span className="led" />
-                        <span className="k">{s.label}</span>
-                        <span className="v">{s.value || "still needed"}</span>
-                        {s.status === "assumed" && (
-                          <span className="slot-actions">
-                            <button
-                              className="sa-btn ok"
-                              title="Confirm this assumption"
-                              disabled={busy}
-                              onClick={() => confirmAssumption(sec.id, s.label, s.value)}
-                            >
-                              ✓
-                            </button>
-                            <button
-                              className="sa-btn edit"
-                              title="Edit this assumption"
-                              onClick={() => editAssumption(s.label, s.value)}
-                            >
-                              ✎
-                            </button>
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                    {sec.slots.map((s) => {
+                      const locked = !unlocked && !isTeaser(sec.id, s.label) && s.status !== "gap" && !!s.value;
+                      return (
+                        <div className={"slot " + s.status} key={s.label}>
+                          <span className="led" />
+                          <span className="k">{s.label}</span>
+                          <span className={"v" + (locked ? " locked" : "")}>{s.value || "still needed"}</span>
+                          {!locked && s.status === "assumed" && (
+                            <span className="slot-actions">
+                              <button
+                                className="sa-btn ok"
+                                title="Confirm this assumption"
+                                disabled={busy}
+                                onClick={() => confirmAssumption(sec.id, s.label, s.value)}
+                              >
+                                ✓
+                              </button>
+                              <button
+                                className="sa-btn edit"
+                                title="Edit this assumption"
+                                onClick={() => editAssumption(s.label, s.value)}
+                              >
+                                ✎
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </details>
               );
@@ -402,9 +467,15 @@ export default function App() {
           </div>
 
           <div className="panel-foot">
-            <button className="export" onClick={exportPdf} disabled={!exportReady}>
-              Export brief (PDF)
-            </button>
+            {!unlocked ? (
+              <button className="export unlock" onClick={() => setShowSurvey(true)}>
+                🔒 Unlock full brief + PDF
+              </button>
+            ) : (
+              <button className="export" onClick={exportPdf} disabled={!exportReady}>
+                Export brief (PDF)
+              </button>
+            )}
             <div className="legend">
               <span>
                 <i style={{ background: "var(--ok)" }} />
@@ -429,6 +500,53 @@ export default function App() {
           </div>
         </aside>
       </main>
+
+      {showSurvey && (
+        <div className="modal-overlay" onClick={() => !submitting && setShowSurvey(false)}>
+          <div className="survey" onClick={(e) => e.stopPropagation()}>
+            <button className="survey-x" onClick={() => setShowSurvey(false)} disabled={submitting} title="Close">
+              ×
+            </button>
+            <h3>Unlock your full brief</h3>
+            <p className="survey-sub">
+              Four quick questions about how your team eats — then the full brief and the PDF for your caterers are yours.
+            </p>
+
+            {SURVEY.map((q) => (
+              <div className="q" key={q.id}>
+                <div className="q-label">{q.question}</div>
+                <div className="q-opts">
+                  {q.options.map((opt) => (
+                    <button
+                      key={opt}
+                      className={"q-opt" + (answers[q.id] === opt ? " on" : "")}
+                      onClick={() => setAnswers((a) => ({ ...a, [q.id]: opt }))}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <div className="q">
+              <div className="q-label">Where should we send it?</div>
+              <div className="contact">
+                <input placeholder="Full name" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} />
+                <input placeholder="Work email *" type="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} />
+                <input placeholder="Company *" value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} />
+              </div>
+            </div>
+
+            {surveyError && <div className="survey-err">⚠ {surveyError}</div>}
+
+            <button className="survey-submit" onClick={submitSurvey} disabled={submitting}>
+              {submitting ? "Unlocking…" : "Unlock full brief"}
+            </button>
+            <div className="survey-fine">No spam — this helps Orexis tailor food options for your team.</div>
+          </div>
+        </div>
+      )}
 
       <div id="print-area" />
     </>

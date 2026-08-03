@@ -125,6 +125,41 @@ details.sec[open] .chev { transform:rotate(90deg); }
 .sa-btn.edit:hover { border-color:var(--brand); color:var(--brand-ink); background:var(--brand-soft); }
 .sa-btn:disabled { opacity:.4; cursor:not-allowed; }
 
+/* Lock / survey gate */
+.lock-banner { display:flex; align-items:center; gap:10px; width:100%; text-align:left; margin-top:12px;
+  background:var(--amber-soft); border:1px solid #e7d09a; border-radius:12px; padding:11px 13px;
+  color:#7a5b12; font-size:12.5px; cursor:pointer; line-height:1.35; }
+.lock-banner:hover { background:#f3e4c2; }
+.lock-banner .lock-ico { font-size:16px; flex:none; }
+.lock-banner b { color:#5f4610; }
+.lock-banner .lock-cta { margin-left:auto; font-weight:800; color:var(--brand-ink); white-space:nowrap; }
+.slot .v.locked { filter:blur(4.5px); user-select:none; pointer-events:none; opacity:.85; }
+.export.unlock { background:var(--brand); }
+
+.modal-overlay { position:fixed; inset:0; background:rgba(28,26,20,.5); display:flex; align-items:center;
+  justify-content:center; z-index:50; padding:20px; }
+.survey { position:relative; background:var(--surface); border-radius:18px; box-shadow:var(--shadow);
+  width:min(520px,100%); max-height:90vh; overflow-y:auto; padding:26px 26px 22px; }
+.survey-x { position:absolute; top:14px; right:16px; border:none; background:none; font-size:24px; line-height:1; color:var(--muted); }
+.survey h3 { margin:0 0 4px; font-size:20px; color:var(--brand-ink); }
+.survey-sub { margin:0 0 18px; color:var(--muted); font-size:13.5px; }
+.q { margin-bottom:16px; }
+.q-label { font-size:13.5px; font-weight:700; margin-bottom:8px; }
+.q-opts { display:flex; flex-wrap:wrap; gap:8px; }
+.q-opt { border:1.5px solid var(--line); background:var(--bg); color:var(--ink); border-radius:999px;
+  padding:8px 14px; font-size:13px; font-weight:600; }
+.q-opt:hover { border-color:var(--brand); }
+.q-opt.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+.contact { display:flex; flex-direction:column; gap:8px; }
+.contact input { border:1px solid var(--line); border-radius:10px; padding:11px 13px; font-family:inherit;
+  font-size:14px; background:var(--bg); }
+.contact input:focus { outline:none; border-color:var(--brand); background:#fff; }
+.survey-err { color:var(--danger); font-size:13px; margin:2px 0 10px; }
+.survey-submit { width:100%; background:var(--accent); color:#fff; border:none; border-radius:12px; padding:14px;
+  font-weight:800; font-size:15px; margin-top:6px; }
+.survey-submit:disabled { opacity:.6; cursor:not-allowed; }
+.survey-fine { text-align:center; color:var(--muted); font-size:11px; margin-top:9px; }
+
 .panel-foot { padding:12px; border-top:1px solid var(--line); }
 .export { width:100%; background:var(--accent); color:#fff; border:none; border-radius:12px; padding:12px;
   font-weight:700; font-size:13.5px; }
