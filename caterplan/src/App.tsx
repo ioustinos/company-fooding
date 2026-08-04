@@ -39,6 +39,11 @@ const MODELS: { id: string; label: string }[] = [
 const TEASER = new Set(["A|Occasion", "B|Date(s)", "C|Number of guests"]);
 const isTeaser = (secId: string, label: string) => TEASER.has(secId + "|" + label);
 
+// Owner-controlled gate. OFF by default — everyone gets the full brief + PDF.
+// To turn the lead-gen lock ON: set the Netlify env var VITE_CATERPLAN_LOCK="on"
+// and redeploy. Set it to anything else (or remove it) to turn the lock off.
+const LOCK_ENABLED = import.meta.env.VITE_CATERPLAN_LOCK === "on";
+
 export default function App() {
   const messages = useSessionStore((s) => s.messages);
   const setMessages = useSessionStore((s) => s.setMessages);
@@ -47,6 +52,7 @@ export default function App() {
   const resetSession = useSessionStore((s) => s.reset);
   const unlocked = useSessionStore((s) => s.unlocked);
   const setUnlocked = useSessionStore((s) => s.setUnlocked);
+  const gated = LOCK_ENABLED && !unlocked; // true only when the owner lock is on AND not yet unlocked
   const [streaming, setStreaming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -213,7 +219,7 @@ export default function App() {
   }
 
   function exportPdf() {
-    if (!unlocked) {
+    if (gated) {
       setShowSurvey(true);
       return;
     }
@@ -405,7 +411,7 @@ export default function App() {
                 </span>
               </div>
             </div>
-            {!unlocked && (
+            {gated && (
               <button className="lock-banner" onClick={() => setShowSurvey(true)}>
                 <span className="lock-ico">🔒</span>
                 <span>
@@ -432,7 +438,7 @@ export default function App() {
                   </summary>
                   <div className="body">
                     {sec.slots.map((s) => {
-                      const locked = !unlocked && !isTeaser(sec.id, s.label) && s.status !== "gap" && !!s.value;
+                      const locked = gated && !isTeaser(sec.id, s.label) && s.status !== "gap" && !!s.value;
                       return (
                         <div className={"slot " + s.status} key={s.label}>
                           <span className="led" />
@@ -467,7 +473,7 @@ export default function App() {
           </div>
 
           <div className="panel-foot">
-            {!unlocked ? (
+            {gated ? (
               <button className="export unlock" onClick={() => setShowSurvey(true)}>
                 🔒 Unlock full brief + PDF
               </button>
