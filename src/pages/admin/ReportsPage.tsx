@@ -3,10 +3,10 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useUIStore } from '../../store/useUIStore'
 import { fmtMoney } from '../../lib/helpers'
 
-type Totals = { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number; loyalty?: number; billed?: number; min_topup?: number }
+type Totals = { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number; loyalty?: number; vendor_discount?: number; billed?: number; min_topup?: number }
 type CompanyRow = {
   company: string; orders: number; employees: number; gross: number; benefit: number; topup: number
-  net_benefit?: number; loyalty?: number; billed?: number; min_topup?: number; billed_days?: number; daily_minimum?: number | null
+  net_benefit?: number; loyalty?: number; vendor_discount?: number; billed?: number; min_topup?: number; billed_days?: number; daily_minimum?: number | null
 }
 type EmployeeRow = { company: string; name: string; voucher: string; orders: number; gross: number; benefit: number; topup: number }
 type DayRow = { date: string; orders: number; employees: number; gross: number; benefit: number; topup: number; billed?: number; min_topup?: number }
@@ -14,6 +14,7 @@ type OrderRow = {
   date: string | null; token: string | null; voucher: string | null
   employee: string | null; company: string | null
   gross: number; benefit: number; topup: number; status: string
+  loyalty?: number; vendor_discount?: number
 }
 type ReportData = {
   scope: string
@@ -73,6 +74,7 @@ export default function ReportsPage() {
   const m = (c: number) => fmtMoney(c, lang)
   const hasFloor = !!data && (data.totals.min_topup ?? 0) > 0
   const hasLoyalty = !!data && (data.totals.loyalty ?? 0) > 0
+  const hasVendorDisc = !!data && (data.totals.vendor_discount ?? 0) > 0
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
@@ -117,6 +119,7 @@ export default function ReportsPage() {
                 <thead><tr>
                   <th style={th}>Company</th><th style={thR}>Employees</th><th style={thR}>Orders</th>
                   <th style={thR}>Gross</th><th style={thR}>Benefit</th><th style={thR}>Top-up</th>
+                  {hasVendorDisc && <th style={thR}>Vendor discount</th>}
                   {hasLoyalty && <th style={thR}>Vendor loyalty</th>}
                   {hasFloor && <><th style={thR}>Daily min. top-up</th><th style={thR}>Billed</th></>}
                 </tr></thead>
@@ -129,6 +132,7 @@ export default function ReportsPage() {
                       <td style={tdR}>{m(c.gross)}</td>
                       <td style={tdR}>{m(c.benefit)}</td>
                       <td style={tdR}>{m(c.topup)}</td>
+                      {hasVendorDisc && <td style={tdR}>{c.vendor_discount ? m(c.vendor_discount) : '—'}</td>}
                       {hasLoyalty && <td style={tdR}>{c.loyalty ? m(c.loyalty) : '—'}</td>}
                       {hasFloor && <><td style={tdR}>{c.min_topup ? m(c.min_topup) : '—'}</td><td style={{ ...tdR, fontWeight: 600 }}>{m(c.billed ?? c.net_benefit ?? c.benefit)}</td></>}
                     </tr>
@@ -201,7 +205,11 @@ export default function ReportsPage() {
                 <thead><tr>
                   <th style={th}>Date</th><th style={th}>Token</th><th style={th}>Voucher</th>
                   <th style={th}>Employee</th><th style={th}>Company</th>
-                  <th style={thR}>Gross</th><th style={thR}>Benefit</th><th style={thR}>Top-up</th>
+                  <th style={thR}>Gross</th>
+                  {hasVendorDisc && <th style={thR}>Vendor disc.</th>}
+                  <th style={thR}>Benefit</th>
+                  {hasLoyalty && <th style={thR}>Loyalty</th>}
+                  <th style={thR}>Top-up</th>
                 </tr></thead>
                 <tbody>
                   {data.orders.map((o, i) => (
@@ -212,7 +220,9 @@ export default function ReportsPage() {
                       <td style={td}>{o.employee ?? '—'}</td>
                       <td style={td}>{o.company ?? '—'}</td>
                       <td style={tdR}>{m(o.gross)}</td>
+                      {hasVendorDisc && <td style={tdR}>{o.vendor_discount ? m(o.vendor_discount) : '—'}</td>}
                       <td style={tdR}>{m(o.benefit)}</td>
+                      {hasLoyalty && <td style={tdR}>{o.loyalty ? m(o.loyalty) : '—'}</td>}
                       <td style={tdR}>{m(o.topup)}</td>
                     </tr>
                   ))}

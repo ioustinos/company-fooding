@@ -20,6 +20,40 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-10-02 (round 2) — Store who funds each part of the discount (benefit / vendor loyalty / vendor discount)
+
+**Status:** Done (migration 21 applied, pushed to main)
+
+**Why:** GO gives one combined member-code discount per order. For HarborLab it
+holds the €3 company benefit AND Wecook's loyalty (€1 per €20). Round 1 split
+them only inside cf-report; every other page (invoices, dashboard, reconcile,
+employee pages) still read the raw €4 as "benefit" and would bill it.
+
+**What:**
+- **Migration 21:** `orders.vendor_discount`, `orders.vendor_loyalty` (cents, default 0).
+- **`_shared/billingSplit.ts`:** at write time, for agreements with
+  `settings.billing.excess_over_cap = 'vendor_loyalty'`:
+  benefit_applied = min(GO discount, day's daily cap — respecting valid_from/to
+  and days_of_week), vendor_loyalty = the rest. Benefit is consumed first
+  (confirmed with Ioustinos). vendor_discount = subtotal − GO discount − paid
+  (the 15% item discount) for every order. Invariant:
+  subtotal = vendor_discount + benefit_applied + vendor_loyalty + topup_amount.
+- Used by `syncGonnaOrder.ts` and `cf-gonnaorder-webhook.ts` (webhook uses the
+  company/agreement the sync already attached).
+- **cf-report:** reads the stored split (no read-time recalculation).
+- **cf-reconcile:** owner = CF's matched employee → voucher code → email;
+  GO discount compared against benefit + loyalty; "to bill" = capped benefit;
+  vendor discount % skipped when `vendor_discount_applies = false`.
+- **Report pages:** "Vendor discount" (15% + loyalty on the company page) column
+  so rows add up to what the employee paid.
+
+**Notes:**
+- Dry run before backfill: every one of 2,642 orders satisfies the invariant;
+  only HarborLab rows change.
+- Daily minimum (€50) is applied in cf-report only — not yet in reconcile/invoices.
+- Deal rules live in `matchmaking_agreements.settings.billing` (DB) but have no
+  admin UI yet; vendor discount % lives on `vendors.discount_percentage`.
+
 ## 2026-10-02 — HarborLab onboarding + sync fixes (matching, batching) + per-agreement billing rules
 
 **Status:** Done (pushed to dev + main)

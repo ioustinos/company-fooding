@@ -25,6 +25,7 @@ import type { Context } from '@netlify/functions'
 import { ok, methodNotAllowed } from './_shared/errors'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
 import { parseOrder } from './_shared/parseGonnaOrder'
+import { loadBillingSplitter } from './_shared/billingSplit'
 import { getOrder, findVoucherByCode, updateVoucher } from './_shared/gonnaorder'
 import type { GoOrder } from './_shared/gonnaorder'
 
@@ -168,7 +169,21 @@ export default async (req: Request, _ctx: Context) => {
         // works. The webhook-only fallback may have epoch-ms times; parseOrder
         // accepts ISO strings or numbers via new Date().
         const parsed = parseOrder({ ...source, orderId: source.orderId ?? source.uuid ?? externalId })
-        await sb.from('orders').upsert(parsed.order, { onConflict: 'external_order_id' })
+        // Keep the benefit / loyalty / vendor-discount split consistent with the
+        // sync. The webhook doesn't resolve employees, so use the company and
+        // agreement the sync already attached to this order (if any).
+        const { data: prev } = await sb.from('orders')
+          .select('company_id, agreement_id').eq('external_order_id', parsed.order.external_order_id).maybeSingle()
+        const splitter = await loadBillingSplitter(sb)
+        const money = splitter.split({
+          agreement_id: (prev?.agreement_id as string | null) ?? null,
+          company_id: (prev?.company_id as string | null) ?? null,
+          delivery_date: parsed.order.delivery_date,
+          subtotal: parsed.order.subtotal,
+          voucher_discount: parsed.order.benefit_applied,
+          topup_amount: parsed.order.topup_amount,
+        })
+        await sb.from('orders').upsert({ ...parsed.order, ...money }, { onConflict: 'external_order_id' })
       } catch {
         // Last-resort slim upsert so we at least record the event
         await sb.from('orders').upsert({

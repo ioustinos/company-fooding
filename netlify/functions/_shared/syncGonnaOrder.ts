@@ -26,6 +26,7 @@
 import { supabaseAdmin } from './supabaseAdmin'
 import { listOrders, type GoOrder } from './gonnaorder'
 import { dedupGoOrders, parseOrder } from './parseGonnaOrder'
+import { loadBillingSplitter, type BillingSplitter } from './billingSplit'
 
 export type SyncSummary = {
   dryRun: boolean
@@ -123,6 +124,9 @@ export async function runSync(args: {
   }
   const vendorId = (vendors[0] as VendorRow).id
 
+  // Splits GO's combined discount into company benefit / vendor loyalty / vendor discount.
+  const splitter = await loadBillingSplitter(sb)
+
   // 3. Per-shop fetch + map + upsert.
   const summary: SyncSummary = {
     dryRun: args.dryRun, since: sinceIso, shops: [],
@@ -144,7 +148,7 @@ export async function runSync(args: {
       const deduped = dedupGoOrders(raw)
       shopOut.fetched = deduped.length
       const r = await applyShopOrders({
-        sb, orders: deduped, shopId, vendorId, empLookup, agByCompanyVendor, dryRun: args.dryRun,
+        sb, orders: deduped, shopId, vendorId, empLookup, agByCompanyVendor, splitter, dryRun: args.dryRun,
       })
       shopOut.matched = r.matched
       shopOut.unmatched = r.unmatched
@@ -176,9 +180,10 @@ async function applyShopOrders(args: {
   vendorId: string
   empLookup: EmployeeLookup
   agByCompanyVendor: Map<string, { id: string; company_id: string; vendor_id: string }>
+  splitter: BillingSplitter
   dryRun: boolean
 }): Promise<{ matched: number; unmatched: number; written: number }> {
-  const { sb, orders, shopId, vendorId, empLookup, agByCompanyVendor, dryRun } = args
+  const { sb, orders, shopId, vendorId, empLookup, agByCompanyVendor, splitter, dryRun } = args
 
   const rows: Array<Record<string, unknown>> = []
   const itemsByExtId = new Map<string, ReturnType<typeof parseOrder>['items']>()
@@ -199,6 +204,14 @@ async function applyShopOrders(args: {
       })
     }
     const agreement = employee ? agByCompanyVendor.get(`${employee.company_id}::${vendorId}`) ?? null : null
+    const money = splitter.split({
+      agreement_id: agreement?.id ?? null,
+      company_id: employee?.company_id ?? null,
+      delivery_date: order.delivery_date,
+      subtotal: order.subtotal,
+      voucher_discount: order.benefit_applied,
+      topup_amount: order.topup_amount,
+    })
 
     rows.push({
       source: order.source,
@@ -212,7 +225,9 @@ async function applyShopOrders(args: {
       agreement_id: agreement?.id ?? null,
       office_id:    employee?.default_office_id ?? null,
       subtotal:        order.subtotal,
-      benefit_applied: order.benefit_applied,
+      benefit_applied: money.benefit_applied,
+      vendor_loyalty:  money.vendor_loyalty,
+      vendor_discount: money.vendor_discount,
       topup_amount:    order.topup_amount,
       total:           order.total,
       delivery_date: order.delivery_date,

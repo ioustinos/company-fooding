@@ -42,6 +42,9 @@ type CfOrder = {
   voucher_code: string | null
   subtotal: number
   benefit_applied: number
+  vendor_loyalty: number | null
+  employee_id: string | null
+  employees: { display_name: string | null } | { display_name: string | null }[] | null
   status: string
   delivery_date: string | null
 }
@@ -119,7 +122,12 @@ export default async (req: Request, _ctx: Context) => {
       .select('vendor:vendors!inner(id, discount_percentage, discount_applies_to)')
       .eq('company_id', companyId).eq('status', 'active').limit(1)
     const vendorRow = ((vendorAgs ?? [])[0] as unknown as { vendor: { discount_percentage: number | string | null; discount_applies_to: string | null } | null } | undefined)?.vendor
-    const discountPct = vendorRow && vendorRow.discount_percentage != null ? Number(vendorRow.discount_percentage) : 0
+    // Per-agreement override (matchmaking_agreements.settings.billing.vendor_discount_applies).
+    const { data: agSettings } = await sb.from('matchmaking_agreements')
+      .select('settings').eq('company_id', companyId).eq('status', 'active')
+    const vendorDiscountOff = ((agSettings ?? []) as Array<{ settings: { billing?: { vendor_discount_applies?: boolean } } | null }>)
+      .some((a) => a.settings?.billing?.vendor_discount_applies === false)
+    const discountPct = !vendorDiscountOff && vendorRow && vendorRow.discount_percentage != null ? Number(vendorRow.discount_percentage) : 0
     const discountAppliesTo = vendorRow?.discount_applies_to ?? null
 
     // --- Voucher → owner map (every CF voucher code → company + employee) ---
@@ -148,6 +156,21 @@ export default async (req: Request, _ctx: Context) => {
       }
     }
 
+    // --- Email → owner map (GO member-code orders carry no voucher code, only
+    // the customer's email; same fallback the sync uses). Emails claimed by
+    // more than one employee are dropped.
+    const { data: emailRows } = await sb.from('employees')
+      .select('id, company_id, display_name, email').not('email', 'is', null).limit(50000)
+    const emailMap = new Map<string, VoucherOwner | null>()
+    for (const e of (emailRows ?? []) as Array<{ id: string; company_id: string; display_name: string | null; email: string | null }>) {
+      const k = lowerOrNull(e.email?.trim() ?? null)
+      if (!k) continue
+      const prev = emailMap.get(k)
+      if (prev === undefined) emailMap.set(k, { employee_id: e.id, company_id: e.company_id, display_name: e.display_name })
+      else if (prev && prev.employee_id !== e.id) emailMap.set(k, null)
+    }
+
+
     // --- CF side: orders for THIS company in window ---
     // Key by external_uuid because that's what we read from GO (`o.uuid`).
     // CF stores BOTH external_order_id (numeric GO orderId) and external_uuid
@@ -155,19 +178,34 @@ export default async (req: Request, _ctx: Context) => {
     // by external_order_id while GO returned uuid → 0 matches. All current
     // rows have external_uuid populated; rows without are skipped.
     const { data: cfRows } = await sb.from('orders')
-      .select('external_order_id, external_uuid, voucher_code, subtotal, benefit_applied, status, delivery_date')
+      .select('external_order_id, external_uuid, voucher_code, subtotal, benefit_applied, vendor_loyalty, employee_id, employees(display_name), status, delivery_date')
       .eq('company_id', companyId)
       .gte('delivery_date', from)
       .lte('delivery_date', to)
       .limit(20000)
     const cfMap = new Map<string, CfOrder>()
-    for (const r of (cfRows ?? []) as CfOrder[]) {
+    for (const r of (cfRows ?? []) as unknown as CfOrder[]) {
       if (r.external_uuid) cfMap.set(r.external_uuid, r)
+    }
+
+    // Owner of a GO order: the employee CF's sync already attached (for this
+    // company's orders), else the voucher code's owner, else the email's owner.
+    const ownerOf = (g: { id: string; voucher: string | null; email: string | null }): VoucherOwner | undefined => {
+      const cf = cfMap.get(g.id)
+      if (cf && cf.employee_id) {
+        const emp = Array.isArray(cf.employees) ? cf.employees[0] : cf.employees
+        return { employee_id: cf.employee_id, company_id: companyId, display_name: emp?.display_name ?? null }
+      }
+      const vk = lowerOrNull(g.voucher)
+      const byVoucher = vk ? voucherMap.get(vk) : undefined
+      if (byVoucher) return byVoucher
+      const ek = lowerOrNull(g.email?.trim() ?? null)
+      return (ek ? emailMap.get(ek) : undefined) ?? undefined
     }
 
     // --- GO side: pull all final-state orders for each store since `from` ---
     const since = new Date(from + 'T00:00:00Z')
-    const goAll: Array<{ raw: GoOrder; id: string; voucher: string | null; subtotal: number; benefit: number; date: string | null; status: string }> = []
+    const goAll: Array<{ raw: GoOrder; id: string; voucher: string | null; email: string | null; subtotal: number; benefit: number; date: string | null; status: string }> = []
     for (const sid of storeIds) {
       const orders = await listOrders({ storeId: sid, since, status: GO_FINAL_STATUSES, pageSize: 100 })
       for (const o of orders) {
@@ -181,6 +219,7 @@ export default async (req: Request, _ctx: Context) => {
           raw: o,
           id,
           voucher: (o.voucherCode ?? null) as string | null,
+          email: typeof o.customerEmail === 'string' ? o.customerEmail : null,
           subtotal: cents(o.totalNonDiscountedPrice),
           benefit: cents(o.voucherDiscount),
           date: dateRaw,
@@ -211,10 +250,10 @@ export default async (req: Request, _ctx: Context) => {
 
     for (const g of goAll) {
       const voucherKey = lowerOrNull(g.voucher)
-      const owner = voucherKey ? voucherMap.get(voucherKey) : undefined
+      const owner = ownerOf(g)
 
-      // Bucket 1: no voucher code at all
-      if (!voucherKey) {
+      // Bucket 1: no voucher code and no known owner (by CF match or email)
+      if (!voucherKey && !owner) {
         if (noVoucher.length < ROW_CAP) {
           noVoucher.push({
             id: g.id, voucher_code: null, employee_name: null,
@@ -278,8 +317,9 @@ export default async (req: Request, _ctx: Context) => {
       }
 
       // Bucket 5: matched on uuid; amount mismatch
+      // GO's discount = company benefit + vendor loyalty (split at sync time).
       const subDelta = cf.subtotal - g.subtotal
-      const benDelta = cf.benefit_applied - g.benefit
+      const benDelta = (cf.benefit_applied + (cf.vendor_loyalty ?? 0)) - g.benefit
       if (subDelta !== 0 || benDelta !== 0) {
         if (missingAmountMismatch.length < ROW_CAP) {
           missingAmountMismatch.push({
@@ -293,15 +333,15 @@ export default async (req: Request, _ctx: Context) => {
         continue
       }
 
-      // Bucket 6 (the happy path): TO BILL
+      // Bucket 6 (the happy path): TO BILL — only the company benefit part.
       if (matched.length < ROW_CAP) {
         matched.push({
           id: g.id, voucher_code: g.voucher, employee_name: owner.display_name,
-          date: g.date, subtotal_cents: g.subtotal, benefit_cents: g.benefit,
+          date: g.date, subtotal_cents: g.subtotal, benefit_cents: cf.benefit_applied,
         })
       }
       toBillSubtotal += g.subtotal
-      toBillBenefit += g.benefit
+      toBillBenefit += cf.benefit_applied
     }
 
     // Bucket 7: in CF, not in GO (should be ~zero with the tightened query)
@@ -331,14 +371,14 @@ export default async (req: Request, _ctx: Context) => {
     // (Re-derive counts by re-walking goAll — cheap, single loop, no DB hits.)
     for (const g of goAll) {
       const voucherKey = lowerOrNull(g.voucher)
-      const owner = voucherKey ? voucherMap.get(voucherKey) : undefined
-      if (!voucherKey) { counts.noVoucher++; continue }
+      const owner = ownerOf(g)
+      if (!voucherKey && !owner) { counts.noVoucher++; continue }
       if (!owner) { counts.orphanVoucher++; continue }
       if (owner.company_id !== companyId) { counts.crossCompany++; continue }
       const cf = cfMap.get(g.id)
       if (!cf) { counts.missingKnownVoucher++; continue }
       const subDelta = cf.subtotal - g.subtotal
-      const benDelta = cf.benefit_applied - g.benefit
+      const benDelta = (cf.benefit_applied + (cf.vendor_loyalty ?? 0)) - g.benefit
       if (subDelta !== 0 || benDelta !== 0) { counts.missingAmountMismatch++; continue }
       counts.matched++
     }

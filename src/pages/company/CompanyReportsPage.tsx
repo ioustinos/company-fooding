@@ -6,13 +6,18 @@ import { Icon, KPI, Btn, moneyFull } from '../../lib/specui'
 import { SpendChart } from '../../lib/specCharts'
 import { downloadCsv } from '../../lib/csv'
 
+// vendor_discount + loyalty = discounts funded by the vendor (not the company):
+// Αξία − Έκπτωση προμηθευτή − Παροχή = Πληρωμή υπαλλήλου.
+type VendorPart = { vendor_discount?: number; loyalty?: number }
 type Report = {
-  totals: { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number }
-  perEmployee: { name: string; voucher: string; orders: number; gross: number; benefit: number; net_benefit?: number; topup: number }[]
-  perDay: { date: string; orders: number; employees: number; gross: number; benefit: number; net_benefit?: number; topup: number }[]
-  orders: { date: string | null; token: string | null; voucher: string | null; employee: string | null; gross: number; benefit: number; net_benefit?: number; topup: number; status?: string }[]
+  totals: { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number } & VendorPart
+  perEmployee: ({ name: string; voucher: string; orders: number; gross: number; benefit: number; net_benefit?: number; topup: number } & VendorPart)[]
+  perDay: ({ date: string; orders: number; employees: number; gross: number; benefit: number; net_benefit?: number; topup: number } & VendorPart)[]
+  orders: ({ date: string | null; token: string | null; voucher: string | null; employee: string | null; gross: number; benefit: number; net_benefit?: number; topup: number; status?: string } & VendorPart)[]
   orderCountTotal: number
 }
+
+const vendorPart = (r: VendorPart) => (r.vendor_discount ?? 0) + (r.loyalty ?? 0)
 
 type Tab = 'overview' | 'employees' | 'orders'
 
@@ -61,6 +66,7 @@ export default function CompanyReportsPage() {
     setTo(fmt(last))
   }
 
+  const hasVendor = !!data && vendorPart(data.totals) > 0
   const benefitShare = data && data.totals.gross > 0
     ? Math.round((data.totals.benefit / data.totals.gross) * 100) : 0
   const avgPerOrder = data && data.totals.orders > 0
@@ -183,7 +189,7 @@ export default function CompanyReportsPage() {
                   </div>
                 </div>
                 <SpendChart
-                  data={data.perDay.map((d) => ({ date: d.date, benefit: d.benefit, extra: Math.max(0, d.gross - d.benefit) }))}
+                  data={data.perDay.map((d) => ({ date: d.date, benefit: d.benefit, extra: Math.max(0, d.gross - d.benefit - vendorPart(d)) }))}
                   lang={lang} height={220} />
               </div>
             <div className="bg-surface border border-line rounded-md shadow-sm">
@@ -200,6 +206,7 @@ export default function CompanyReportsPage() {
                       <th className="px-4 py-2.5 text-right">{L('Παρ.', 'Ord.')}</th>
                       <th className="px-4 py-2.5 text-right">{L('Υπάλληλοι', 'Employees')}</th>
                       <th className="px-4 py-2.5 text-right">{L('Δαπάνη', 'Spend')}</th>
+                      {hasVendor && <th className="px-4 py-2.5 text-right">{L('Έκπτωση προμηθευτή', 'Vendor discount')}</th>}
                       <th className="px-4 py-2.5 text-right">{L('Παροχή', 'Benefit')}</th>
                       <th className="px-4 py-2.5 text-right">{L('Επιπλέον', 'Extra')}</th>
                     </tr>
@@ -211,6 +218,7 @@ export default function CompanyReportsPage() {
                         <td className="px-4 py-2 text-right num">{d.orders}</td>
                         <td className="px-4 py-2 text-right num text-ink-soft">{d.employees}</td>
                         <td className="px-4 py-2 text-right num">{moneyFull(d.gross, lang)}</td>
+                        {hasVendor && <td className="px-4 py-2 text-right num text-ink-soft">{vendorPart(d) > 0 ? moneyFull(vendorPart(d), lang) : '—'}</td>}
                         <td className="px-4 py-2 text-right num text-brand">{moneyFull(d.benefit, lang)}</td>
                         <td className="px-4 py-2 text-right num text-ink-soft">{moneyFull(d.topup, lang)}</td>
                       </tr>
@@ -234,12 +242,12 @@ export default function CompanyReportsPage() {
                 const stamp = `${from}-${to}`
                 if (tab === 'employees') {
                   downloadCsv(`employees-${stamp}.csv`,
-                    ['name', 'voucher', 'orders', 'spend_eur', 'benefit_eur', 'topup_eur'],
-                    filteredEmployees.map((e) => [e.name, e.voucher, e.orders, (e.gross / 100).toFixed(2), (e.benefit / 100).toFixed(2), (e.topup / 100).toFixed(2)]))
+                    ['name', 'voucher', 'orders', 'spend_eur', 'vendor_discount_eur', 'benefit_eur', 'topup_eur'],
+                    filteredEmployees.map((e) => [e.name, e.voucher, e.orders, (e.gross / 100).toFixed(2), (vendorPart(e) / 100).toFixed(2), (e.benefit / 100).toFixed(2), (e.topup / 100).toFixed(2)]))
                 } else {
                   downloadCsv(`orders-${stamp}.csv`,
-                    ['date', 'token', 'voucher', 'employee', 'total_eur', 'benefit_eur', 'topup_eur'],
-                    filteredOrders.map((o) => [o.date ?? '', o.token ?? '', o.voucher ?? '', o.employee ?? '', (o.gross / 100).toFixed(2), (o.benefit / 100).toFixed(2), (o.topup / 100).toFixed(2)]))
+                    ['date', 'token', 'voucher', 'employee', 'total_eur', 'vendor_discount_eur', 'benefit_eur', 'topup_eur'],
+                    filteredOrders.map((o) => [o.date ?? '', o.token ?? '', o.voucher ?? '', o.employee ?? '', (o.gross / 100).toFixed(2), (vendorPart(o) / 100).toFixed(2), (o.benefit / 100).toFixed(2), (o.topup / 100).toFixed(2)]))
                 }
               }}><Icon name="file" /><span>{L('Εξαγωγή CSV', 'Export CSV')}</span></Btn>
             </div>
@@ -254,6 +262,7 @@ export default function CompanyReportsPage() {
                     <th className="px-4 py-2.5">{L('Voucher', 'Voucher')}</th>
                     <th className="px-4 py-2.5 text-right">{L('Παρ.', 'Ord.')}</th>
                     <th className="px-4 py-2.5 text-right">{L('Δαπάνη', 'Spend')}</th>
+                    {hasVendor && <th className="px-4 py-2.5 text-right">{L('Έκπτωση προμηθευτή', 'Vendor discount')}</th>}
                     <th className="px-4 py-2.5 text-right">{L('Παροχή', 'Benefit')}</th>
                     <th className="px-4 py-2.5 text-right">{L('Επιπλέον', 'Extra')}</th>
                   </tr>
@@ -265,12 +274,13 @@ export default function CompanyReportsPage() {
                       <td className="px-4 py-2 font-mono text-[12px] text-ink-soft">{e.voucher}</td>
                       <td className="px-4 py-2 text-right num">{e.orders}</td>
                       <td className="px-4 py-2 text-right num">{moneyFull(e.gross, lang)}</td>
+                      {hasVendor && <td className="px-4 py-2 text-right num text-ink-soft">{vendorPart(e) > 0 ? moneyFull(vendorPart(e), lang) : '—'}</td>}
                       <td className="px-4 py-2 text-right num text-brand">{moneyFull(e.benefit, lang)}</td>
                       <td className="px-4 py-2 text-right num text-ink-soft">{moneyFull(e.topup, lang)}</td>
                     </tr>
                   ))}
                   {filteredEmployees.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-faint">{L('Κανείς δεν παρήγγειλε ακόμη', 'Nobody ordered yet')}</td></tr>
+                    <tr><td colSpan={hasVendor ? 7 : 6} className="px-4 py-6 text-center text-ink-faint">{L('Κανείς δεν παρήγγειλε ακόμη', 'Nobody ordered yet')}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -290,6 +300,7 @@ export default function CompanyReportsPage() {
                     <th className="px-4 py-2.5">{L('Token', 'Token')}</th>
                     <th className="px-4 py-2.5">{L('Υπάλληλος', 'Employee')}</th>
                     <th className="px-4 py-2.5 text-right">{L('Σύνολο', 'Total')}</th>
+                    {hasVendor && <th className="px-4 py-2.5 text-right">{L('Έκπτωση προμηθευτή', 'Vendor discount')}</th>}
                     <th className="px-4 py-2.5 text-right">{L('Παροχή', 'Benefit')}</th>
                     <th className="px-4 py-2.5 text-right">{L('Επιπλέον', 'Extra')}</th>
                   </tr>
@@ -301,12 +312,13 @@ export default function CompanyReportsPage() {
                       <td className="px-4 py-2 font-mono text-[12px] text-ink-soft truncate">{o.token ?? '—'}</td>
                       <td className="px-4 py-2 truncate">{o.employee ?? (o.voucher ?? '—')}</td>
                       <td className="px-4 py-2 text-right num">{moneyFull(o.gross, lang)}</td>
+                      {hasVendor && <td className="px-4 py-2 text-right num text-ink-soft">{vendorPart(o) > 0 ? moneyFull(vendorPart(o), lang) : '—'}</td>}
                       <td className="px-4 py-2 text-right num text-brand">{moneyFull(o.benefit, lang)}</td>
                       <td className="px-4 py-2 text-right num text-ink-soft">{o.topup > 0 ? moneyFull(o.topup, lang) : '—'}</td>
                     </tr>
                   ))}
                   {filteredOrders.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-6 text-center text-ink-faint">{L('Καμία παραγγελία', 'No orders')}</td></tr>
+                    <tr><td colSpan={hasVendor ? 7 : 6} className="px-4 py-6 text-center text-ink-faint">{L('Καμία παραγγελία', 'No orders')}</td></tr>
                   )}
                 </tbody>
               </table>
