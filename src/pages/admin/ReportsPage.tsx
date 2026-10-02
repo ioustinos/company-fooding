@@ -3,10 +3,13 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useUIStore } from '../../store/useUIStore'
 import { fmtMoney } from '../../lib/helpers'
 
-type Totals = { orders: number; gross: number; benefit: number; topup: number }
-type CompanyRow = { company: string; orders: number; employees: number; gross: number; benefit: number; topup: number }
+type Totals = { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number; loyalty?: number; billed?: number; min_topup?: number }
+type CompanyRow = {
+  company: string; orders: number; employees: number; gross: number; benefit: number; topup: number
+  net_benefit?: number; loyalty?: number; billed?: number; min_topup?: number; billed_days?: number; daily_minimum?: number | null
+}
 type EmployeeRow = { company: string; name: string; voucher: string; orders: number; gross: number; benefit: number; topup: number }
-type DayRow = { date: string; orders: number; employees: number; gross: number; benefit: number; topup: number }
+type DayRow = { date: string; orders: number; employees: number; gross: number; benefit: number; topup: number; billed?: number; min_topup?: number }
 type OrderRow = {
   date: string | null; token: string | null; voucher: string | null
   employee: string | null; company: string | null
@@ -68,6 +71,8 @@ export default function ReportsPage() {
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [session?.access_token])
 
   const m = (c: number) => fmtMoney(c, lang)
+  const hasFloor = !!data && (data.totals.min_topup ?? 0) > 0
+  const hasLoyalty = !!data && (data.totals.loyalty ?? 0) > 0
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
@@ -96,6 +101,12 @@ export default function ReportsPage() {
             <div style={card}><div className="cf-muted" style={{ fontSize: 12 }}>Gross</div><div style={{ fontSize: 22, fontWeight: 700 }}>{m(data.totals.gross)}</div></div>
             <div style={card}><div className="cf-muted" style={{ fontSize: 12 }}>Benefit (invoice)</div><div style={{ fontSize: 22, fontWeight: 700, color: 'var(--cf-green, #16a34a)' }}>{m(data.totals.benefit)}</div></div>
             <div style={card}><div className="cf-muted" style={{ fontSize: 12 }}>Employee top-up</div><div style={{ fontSize: 22, fontWeight: 700 }}>{m(data.totals.topup)}</div></div>
+            {(data.totals.loyalty ?? 0) > 0 && (
+              <div style={card}><div className="cf-muted" style={{ fontSize: 12 }}>Vendor loyalty (not billed)</div><div style={{ fontSize: 22, fontWeight: 700 }}>{m(data.totals.loyalty ?? 0)}</div></div>
+            )}
+            {hasFloor && (
+              <div style={card}><div className="cf-muted" style={{ fontSize: 12 }}>Billed (incl. daily minimum)</div><div style={{ fontSize: 22, fontWeight: 700 }}>{m(data.totals.billed ?? 0)}</div></div>
+            )}
           </div>
 
           {/* Per company */}
@@ -106,16 +117,20 @@ export default function ReportsPage() {
                 <thead><tr>
                   <th style={th}>Company</th><th style={thR}>Employees</th><th style={thR}>Orders</th>
                   <th style={thR}>Gross</th><th style={thR}>Benefit</th><th style={thR}>Top-up</th>
+                  {hasLoyalty && <th style={thR}>Vendor loyalty</th>}
+                  {hasFloor && <><th style={thR}>Daily min. top-up</th><th style={thR}>Billed</th></>}
                 </tr></thead>
                 <tbody>
                   {data.perCompany.map((c) => (
                     <tr key={c.company}>
-                      <td style={td}>{c.company}</td>
+                      <td style={td}>{c.company}{c.daily_minimum ? <span className="cf-muted" style={{ fontSize: 11 }}> · min {m(c.daily_minimum)}/day</span> : null}</td>
                       <td style={tdR}>{c.employees}</td>
                       <td style={tdR}>{c.orders}</td>
                       <td style={tdR}>{m(c.gross)}</td>
                       <td style={tdR}>{m(c.benefit)}</td>
                       <td style={tdR}>{m(c.topup)}</td>
+                      {hasLoyalty && <td style={tdR}>{c.loyalty ? m(c.loyalty) : '—'}</td>}
+                      {hasFloor && <><td style={tdR}>{c.min_topup ? m(c.min_topup) : '—'}</td><td style={{ ...tdR, fontWeight: 600 }}>{m(c.billed ?? c.net_benefit ?? c.benefit)}</td></>}
                     </tr>
                   ))}
                 </tbody>
@@ -131,6 +146,7 @@ export default function ReportsPage() {
                 <thead><tr>
                   <th style={th}>Date</th><th style={thR}>Orders</th><th style={thR}>Employees</th>
                   <th style={thR}>Gross</th><th style={thR}>Benefit</th><th style={thR}>Top-up</th>
+                  {hasFloor && <><th style={thR}>Daily min. top-up</th><th style={thR}>Billed</th></>}
                 </tr></thead>
                 <tbody>
                   {data.perDay.map((d) => (
@@ -141,6 +157,7 @@ export default function ReportsPage() {
                       <td style={tdR}>{m(d.gross)}</td>
                       <td style={tdR}>{m(d.benefit)}</td>
                       <td style={tdR}>{m(d.topup)}</td>
+                      {hasFloor && <><td style={tdR}>{d.min_topup ? m(d.min_topup) : '—'}</td><td style={{ ...tdR, fontWeight: 600 }}>{m(d.billed ?? 0)}</td></>}
                     </tr>
                   ))}
                 </tbody>

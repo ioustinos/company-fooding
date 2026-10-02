@@ -20,6 +20,50 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-10-02 — HarborLab onboarding + sync fixes (matching, batching) + per-agreement billing rules
+
+**Status:** Done (pushed to dev + main)
+
+**Why:** New company HarborLab (GO store 7085, vendor Wecook). Their GO orders
+carry no voucher code for member-code orders (only `customerEmail`), older
+orders carry legacy voucher codes, and the HarborLab–Wecook deal has a €50/day
+minimum and no vendor discount. Separately, the scheduled sync was being cut
+off inside store 5677: Pollfish (5909) orders had not been refreshed since
+2026-10-01 22:15 UTC and 7085 was never reached.
+
+**What:**
+- **Data (Supabase, via MCP):** company HarborLab, office (address TBD), system
+  group ALL, agreement with Wecook → store 7085, benefits "Daily meal €2"
+  (14–30 Sep, archived) and "Daily meal €3" (from 1 Oct), both daily Mon–Fri,
+  reset; 83 employees (external_ref = GO member code HL-xxxx); both benefits
+  assigned to all. The €2 assignments carry the legacy voucher code (email
+  local part) in `gonnaorder_voucher_code`.
+- **Agreement billing rules** in `matchmaking_agreements.settings.billing`:
+  `daily_minimum_cents`, `vendor_discount_applies`, `excess_over_cap`. HarborLab:
+  5000 / false / 'vendor_loyalty'. Human-readable version in `notes`.
+- **syncGonnaOrder.ts:** employee resolution = voucher code vs external_ref →
+  voucher code vs any benefit_assignments code → customerEmail vs employee email.
+  Codes/emails claimed by two employees resolve to no match (verified: none today).
+  Shops now sync in parallel; orders upsert in chunks of 200; order_items only
+  replaced when the payload carries items; unmatched audit rows batched.
+- **cf-report.ts:** per-agreement billing — benefit capped at the day's daily cap
+  with excess reported as `loyalty` (vendor-funded, Wecook €1 per €20 spent),
+  vendor discount skipped when `vendor_discount_applies=false`, and
+  `billed = Σ(company, day with orders) max(daily_minimum, net benefit)`.
+  New fields: totals/perCompany/perDay `loyalty`, `billed`, `min_topup`.
+  Companies without settings are unchanged.
+- **Admin ReportsPage:** shows Vendor loyalty + Billed cards and columns only when present.
+
+**Notes:**
+- HarborLab Sep 14 – Oct 1 (pulled live from GO): 147 closed orders, 49 employees,
+  benefit €285 (after removing €23 loyalty), billed €700 (14 days × €50 floor).
+- GO `/orders/search` on 7085 returns no `voucherCode`; the order detail has it
+  only for legacy-voucher orders. Member-code orders have no code anywhere → email match.
+- `cf-report` still counts cancelled orders in its consumption totals (pre-existing);
+  billing excludes them.
+
+---
+
 ## 2026-05-26 (round 6) — Per-benefit voucher style + webhook enrichment via getOrder
 
 **Status:** Done (live on main, commit `d34070d`).
