@@ -3,8 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useUIStore } from '../../store/useUIStore'
 import { Icon, KPI, Pill, moneyFull } from '../../lib/specui'
+import DealTerms from './DealTerms'
 
-type Vendor = { id: string; name: string; legal_name: string | null; discount_percentage: number; discount_applies_to: string; tags: string[] | null }
+type Vendor = { id: string; name: string; legal_name: string | null; tags: string[] | null }
 type Window = { delivery_time_from: string; delivery_time_to: string }
 type Shop = { gonnaorder_shop_id: string }
 type Agreement = {
@@ -89,9 +90,6 @@ export default function VendorDetailPage() {
         <div className="bg-surface border border-line rounded-md shadow-sm">
           <div className="p-4 border-b border-line"><h2 className="font-display text-[18px] font-semibold">{L('Στοιχεία συμφωνίας', 'Agreement details')}</h2></div>
           <dl className="p-4 grid grid-cols-2 gap-y-3 gap-x-6 text-[13px]">
-            <dt className="text-ink-faint uppercase tracking-[0.06em] text-[10.5px] font-semibold">{L('Έκπτωση', 'Discount')}</dt>
-            <dd className="text-right text-ink num">{v?.discount_percentage ?? 0}% · {v?.discount_applies_to === 'benefit_price' ? L('στην παροχή', 'on benefit') : L('στο σύνολο', 'on total')}</dd>
-
             <dt className="text-ink-faint uppercase tracking-[0.06em] text-[10.5px] font-semibold">{L('Παράδοση', 'Delivery')}</dt>
             <dd className="text-right text-ink num">{windows || '—'}</dd>
 
@@ -126,6 +124,8 @@ export default function VendorDetailPage() {
           </div>
         </div>
       </div>
+
+      <DealTerms agreementId={agreement.id} />
 
       <div className="bg-surface border border-line rounded-md shadow-sm">
         <div className="p-4 border-b border-line">

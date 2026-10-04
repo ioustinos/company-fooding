@@ -2,16 +2,16 @@
 //
 // GET /api/cf-invoices?companyId=<uuid>&from=YYYY-MM-DD&to=YYYY-MM-DD
 //
-// The invoice rows are computed live from orders (no separate invoices table
-// yet — payment-tracking columns get added when we wire actual settlement).
-// Each row = one (vendor × YYYY-MM) bucket, gross + benefit + extra, excluding
-// cancelled orders. Status is "current" for the in-progress month, "open"
-// otherwise.
+// Computed live from orders (no invoices table yet). One row per (vendor × YYYY-MM),
+// excluding cancelled orders. Status "current" for the in-progress month, else "open".
 //
-// CF-97 (2026-06-01): now applies the vendor's discount_percentage when
-// `discount_applies_to = 'benefit_price'`. Returns benefit_gross,
-// discount_cents, benefit_net per row + totals so the UI / PDF can render the
-// breakdown.
+// Money follows the deal's dated rules (public.deal_rules) via computeInvoice:
+//   benefit_gross   Σ company benefit (vendor loyalty already excluded at sync)
+//   discount_cents  benefit-invoice discount
+//   benefit_net     benefit_gross − discount_cents
+//   minimum_topup   extra owed to reach the minimum commitment
+//   billed          what to invoice = Σ per period max(minimum, net)
+// A weekly/monthly minimum period is billed in the month its first day falls in.
 //
 // super_admin → any company; company_admin → own (companyId param ignored).
 
@@ -19,29 +19,23 @@ import type { Context } from '@netlify/functions'
 import { ok, badRequest, forbidden, methodNotAllowed, errorResponse } from './_shared/errors'
 import { getCaller } from './_shared/auth'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
+import { computeInvoice } from './_shared/dealRulesCore'
+import { loadBenefitCaps, loadCalendar, loadRules } from './_shared/dealRules'
 
 type Row = {
-  company_id: string | null
   vendor_id: string | null
+  agreement_id: string | null
+  employee_id: string | null
   subtotal: number
   benefit_applied: number
   topup_amount: number
   delivery_date: string | null
-  status: string
-  vendors: { name: string | null; discount_percentage: number | string | null; discount_applies_to: string | null } | null
+  vendors: { name: string | null } | null
 }
 
-// Round half-away-from-zero in cents so €0.005 → €0.01 (matches what most
-// accounting software expects for VAT-style discount math).
-function applyDiscount(benefitCents: number, pct: number, appliesTo: string | null) {
-  if (!pct || pct <= 0) return { discount_cents: 0, net_cents: benefitCents }
-  // Today we only know how to apply to benefit_price. Future: handle
-  // 'subtotal', 'total' etc. when product asks for them.
-  if (appliesTo !== 'benefit_price') return { discount_cents: 0, net_cents: benefitCents }
-  // benefitCents is integer cents, pct is 0..100. Multiply, divide by 100,
-  // round to nearest integer cent.
-  const discount_cents = Math.round((benefitCents * pct) / 100)
-  return { discount_cents, net_cents: benefitCents - discount_cents }
+function monthEnd(month: string): string {
+  const d = new Date(month + '-01T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(0)
+  return d.toISOString().slice(0, 10)
 }
 
 export default async (req: Request, _ctx: Context) => {
@@ -59,7 +53,7 @@ export default async (req: Request, _ctx: Context) => {
 
     const sb = supabaseAdmin()
     const { data, error } = await sb.from('orders')
-      .select('company_id, vendor_id, subtotal, benefit_applied, topup_amount, delivery_date, status, vendors(name, discount_percentage, discount_applies_to)')
+      .select('vendor_id, agreement_id, employee_id, subtotal, benefit_applied, topup_amount, delivery_date, vendors(name)')
       .eq('company_id', companyId)
       .neq('status', 'cancelled')
       .gte('delivery_date', from)
@@ -68,68 +62,73 @@ export default async (req: Request, _ctx: Context) => {
     if (error) throw new Error(error.message)
     const rows = (data ?? []) as unknown as Row[]
 
-    const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
-    type Bucket = {
-      vendor_id: string | null
-      vendor_name: string
-      month: string
-      orders: number
-      gross: number              // sum of subtotal (cents)
-      benefit_gross: number      // sum of benefit_applied (cents) — before discount
-      extra: number              // sum of topup_amount (cents)
-      discount_pct: number       // 0..100 from vendor row
-      discount_applies_to: string | null
-    }
+    // Deal per vendor for this company (orders without agreement_id fall back to it).
+    const { data: ags } = await sb.from('matchmaking_agreements')
+      .select('id, vendor_id').eq('company_id', companyId)
+    const dealByVendor = new Map(((ags ?? []) as Array<{ id: string; vendor_id: string }>).map((a) => [a.vendor_id, a.id]))
+    const agreementIds = [...new Set([...dealByVendor.values()])]
+    const [rulesByAgreement, caps] = await Promise.all([loadRules(sb, agreementIds), loadBenefitCaps(sb, [companyId])])
+    const needsCalendar = [...rulesByAgreement.values()].flat()
+      .some((r) => r.kind === 'minimum_commitment' && r.counts_on !== 'days_with_orders')
+    const calendar = needsCalendar ? await loadCalendar(sb, companyId, from, to) : undefined
+
+    const currentMonth = new Date().toISOString().slice(0, 7)
+    type Bucket = { vendor_id: string | null; vendor_name: string; month: string; agreement_id: string | null
+      orders: Row[]; gross: number; extra: number }
     const map = new Map<string, Bucket>()
     for (const r of rows) {
       if (!r.delivery_date) continue
       const month = r.delivery_date.slice(0, 7)
       const key = `${r.vendor_id ?? 'none'}::${month}`
-      const v = r.vendors
-      const pct = v && v.discount_percentage != null ? Number(v.discount_percentage) : 0
-      const bucket = map.get(key) ?? {
-        vendor_id: r.vendor_id,
-        vendor_name: v?.name ?? '—',
-        month,
-        orders: 0, gross: 0, benefit_gross: 0, extra: 0,
-        discount_pct: Number.isFinite(pct) ? pct : 0,
-        discount_applies_to: v?.discount_applies_to ?? null,
+      const b = map.get(key) ?? {
+        vendor_id: r.vendor_id, vendor_name: r.vendors?.name ?? '—', month,
+        agreement_id: r.agreement_id ?? (r.vendor_id ? dealByVendor.get(r.vendor_id) ?? null : null),
+        orders: [], gross: 0, extra: 0,
       }
-      bucket.orders += 1
-      bucket.gross += r.subtotal
-      bucket.benefit_gross += r.benefit_applied
-      bucket.extra += r.topup_amount
-      map.set(key, bucket)
+      b.orders.push(r); b.gross += r.subtotal; b.extra += r.topup_amount
+      map.set(key, b)
     }
 
-    // Apply discount at the bucket-aggregate level. (Per-row × N would also
-    // work and would differ from aggregate by <€0.01 due to rounding; the
-    // bucket-level math is what the company actually sees on the invoice.)
     const invoices = [...map.values()].map((b) => {
-      const { discount_cents, net_cents } = applyDiscount(b.benefit_gross, b.discount_pct, b.discount_applies_to)
+      const mFrom = b.month + '-01' < from ? from : b.month + '-01'
+      const mTo = monthEnd(b.month) > to ? to : monthEnd(b.month)
+      const inv = computeInvoice({
+        orders: b.orders.map((o) => ({ delivery_date: o.delivery_date as string, benefit_applied: o.benefit_applied, employee_id: o.employee_id })),
+        rules: b.agreement_id ? rulesByAgreement.get(b.agreement_id) ?? [] : [],
+        caps, companyId, from: mFrom, to: mTo, calendar,
+      })
       return {
-        ...b,
-        // Legacy alias so existing callers don't break: `benefit` === gross.
-        benefit: b.benefit_gross,
-        benefit_gross: b.benefit_gross,
-        discount_cents,
-        benefit_net: net_cents,
+        vendor_id: b.vendor_id,
+        vendor_name: b.vendor_name,
+        month: b.month,
+        orders: b.orders.length,
+        gross: b.gross,
+        extra: b.extra,
+        benefit: inv.benefit,              // legacy alias (= gross benefit)
+        benefit_gross: inv.benefit,
+        discount_cents: inv.discount,
+        discount_pct: inv.discount_pct ?? 0,
+        discount_mixed: inv.discount_pct === null,
+        benefit_net: inv.net,
+        minimum_topup: inv.minimum_topup,
+        billed: inv.billed,
         status: b.month === currentMonth ? 'current' : 'open',
       }
     }).sort((a, b) => b.month.localeCompare(a.month) || a.vendor_name.localeCompare(b.vendor_name))
 
-    // Totals on the visible window
     const totals = invoices.reduce(
       (acc, b) => ({
         orders: acc.orders + b.orders,
         gross: acc.gross + b.gross,
-        benefit: acc.benefit + b.benefit_gross,         // legacy alias
+        benefit: acc.benefit + b.benefit_gross,
         benefit_gross: acc.benefit_gross + b.benefit_gross,
         discount_cents: acc.discount_cents + b.discount_cents,
         benefit_net: acc.benefit_net + b.benefit_net,
+        minimum_topup: acc.minimum_topup + b.minimum_topup,
+        billed: acc.billed + b.billed,
         extra: acc.extra + b.extra,
       }),
-      { orders: 0, gross: 0, benefit: 0, benefit_gross: 0, discount_cents: 0, benefit_net: 0, extra: 0 },
+      { orders: 0, gross: 0, benefit: 0, benefit_gross: 0, discount_cents: 0, benefit_net: 0, minimum_topup: 0, billed: 0, extra: 0 },
     )
 
     return ok({ period: { from, to }, totals, invoices })

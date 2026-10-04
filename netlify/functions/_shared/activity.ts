@@ -11,6 +11,7 @@ export type ActivityKind =
   | 'employee.created' | 'employee.updated' | 'employee.deactivated' | 'employee.activated' | 'employee.bulk_imported'
   | 'group.created' | 'group.updated' | 'group.archived'
   | 'company.profile_updated'
+  | 'deal_rule.created' | 'deal_rule.changed' | 'deal_rule.ended' | 'deal_rule.corrected' | 'deal_rule.deleted'
 
 export async function logActivity(
   sb: SupabaseClient,

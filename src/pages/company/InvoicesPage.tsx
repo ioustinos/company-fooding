@@ -13,7 +13,9 @@ type Invoice = {
   discount_cents: number
   benefit_net: number
   discount_pct: number
-  discount_applies_to: string | null
+  discount_mixed?: boolean
+  minimum_topup?: number       // extra owed to reach the deal's minimum commitment
+  billed?: number              // what to invoice = net + minimum top-up
   extra: number; status: 'open' | 'current'
 }
 type Data = {
@@ -21,6 +23,7 @@ type Data = {
   totals: {
     orders: number; gross: number;
     benefit: number; benefit_gross: number; discount_cents: number; benefit_net: number;
+    minimum_topup?: number; billed?: number
     extra: number
   }
   invoices: Invoice[]
@@ -85,6 +88,8 @@ export default function InvoicesPage() {
         discount_cents: inv.discount_cents,
         benefit_net: inv.benefit_net,
         discount_pct: inv.discount_pct,
+        minimum_topup: inv.minimum_topup ?? 0,
+        billed: inv.billed ?? inv.benefit_net,
         extra: inv.extra,
       },
       lang,
@@ -92,17 +97,19 @@ export default function InvoicesPage() {
   }
 
   const grouped = useMemo(() => {
-    type Total = { gross: number; benefit_gross: number; discount_cents: number; benefit_net: number; extra: number; orders: number }
+    type Total = { gross: number; benefit_gross: number; discount_cents: number; benefit_net: number; minimum_topup: number; billed: number; extra: number; orders: number }
     if (!data) return [] as { month: string; rows: Invoice[]; total: Total }[]
     const map = new Map<string, { month: string; rows: Invoice[]; total: Total }>()
     for (const inv of data.invoices) {
       if (tab !== 'all' && inv.status !== tab) continue
-      const g = map.get(inv.month) ?? { month: inv.month, rows: [], total: { gross: 0, benefit_gross: 0, discount_cents: 0, benefit_net: 0, extra: 0, orders: 0 } }
+      const g = map.get(inv.month) ?? { month: inv.month, rows: [], total: { gross: 0, benefit_gross: 0, discount_cents: 0, benefit_net: 0, minimum_topup: 0, billed: 0, extra: 0, orders: 0 } }
       g.rows.push(inv)
       g.total.gross += inv.gross
       g.total.benefit_gross += inv.benefit_gross
       g.total.discount_cents += inv.discount_cents
       g.total.benefit_net += inv.benefit_net
+      g.total.minimum_topup += inv.minimum_topup ?? 0
+      g.total.billed += inv.billed ?? inv.benefit_net
       g.total.extra += inv.extra
       g.total.orders += inv.orders
       map.set(inv.month, g)
@@ -137,13 +144,18 @@ export default function InvoicesPage() {
             <KPI label={L('Σύνολο τιμολογίων', 'Invoices')} value={data.invoices.length} tone="brand" icon="file" />
             <KPI label={L('Δαπάνη', 'Spend')} value={moneyFull(data.totals.gross, lang)} tone="accent" icon="wallet" />
             <KPI
-              label={L('Καθαρό προς τιμολόγηση', 'Net to invoice')}
-              value={moneyFull(data.totals.benefit_net, lang)}
+              label={L('Προς τιμολόγηση', 'To invoice')}
+              value={moneyFull(data.totals.billed ?? data.totals.benefit_net, lang)}
               tone="success" icon="chart"
-              sub={data.totals.discount_cents > 0
-                ? L(`μικτό ${moneyFull(data.totals.benefit_gross, lang)} − έκπτωση ${moneyFull(data.totals.discount_cents, lang)}`,
-                     `gross ${moneyFull(data.totals.benefit_gross, lang)} − discount ${moneyFull(data.totals.discount_cents, lang)}`)
-                : L('αυτό χρεώνεται η εταιρεία', "this is what the company is billed")}
+              sub={[
+                data.totals.discount_cents > 0
+                  ? L(`μικτό ${moneyFull(data.totals.benefit_gross, lang)} − έκπτωση ${moneyFull(data.totals.discount_cents, lang)}`,
+                      `gross ${moneyFull(data.totals.benefit_gross, lang)} − discount ${moneyFull(data.totals.discount_cents, lang)}`)
+                  : null,
+                (data.totals.minimum_topup ?? 0) > 0
+                  ? L(`+ ${moneyFull(data.totals.minimum_topup ?? 0, lang)} ελάχιστη χρέωση`, `+ ${moneyFull(data.totals.minimum_topup ?? 0, lang)} minimum commitment`)
+                  : null,
+              ].filter(Boolean).join(' · ') || L('αυτό χρεώνεται η εταιρεία', 'this is what the company is billed')}
             />
             <KPI label={L('Από υπαλλήλους', 'Paid by employees')} value={moneyFull(data.totals.extra, lang)} tone="warn" icon="users" sub={L('εκτός παροχής', 'beyond the benefit')} />
           </div>
@@ -172,12 +184,17 @@ export default function InvoicesPage() {
                       {g.month === new Date().toISOString().slice(0, 7) && <Pill tone="accent">{L('τρέχων', 'current')}</Pill>}
                     </h2>
                     <div className="text-right text-[12.5px]">
-                      <div className="num text-[16px] font-semibold">{moneyFull(g.total.benefit_net, lang)}</div>
+                      <div className="num text-[16px] font-semibold">{moneyFull(g.total.billed, lang)}</div>
                       <div className="text-ink-faint">
-                        {g.total.discount_cents > 0
-                          ? L(`καθαρό προς τιμολόγηση · μικτό ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`,
-                               `net to invoice · gross ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`)
-                          : L('παροχή προς τιμολόγηση', 'billable benefit')}
+                        {[
+                          g.total.discount_cents > 0
+                            ? L(`μικτό ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`,
+                                `gross ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`)
+                            : null,
+                          g.total.minimum_topup > 0
+                            ? L(`+ ${moneyFull(g.total.minimum_topup, lang)} ελάχιστη χρέωση`, `+ ${moneyFull(g.total.minimum_topup, lang)} minimum`)
+                            : null,
+                        ].filter(Boolean).join(' · ') || L('παροχή προς τιμολόγηση', 'billable benefit')}
                       </div>
                     </div>
                   </div>
@@ -190,6 +207,8 @@ export default function InvoicesPage() {
                         <th className="px-5 py-2.5 text-right">{L('Παροχή μικτή', 'Benefit gross')}</th>
                         <th className="px-5 py-2.5 text-right">{L('Έκπτωση', 'Discount')}</th>
                         <th className="px-5 py-2.5 text-right">{L('Παροχή καθαρή', 'Benefit net')}</th>
+                        <th className="px-5 py-2.5 text-right">{L('Ελάχιστη χρέωση', 'Minimum top-up')}</th>
+                        <th className="px-5 py-2.5 text-right">{L('Προς τιμολόγηση', 'To invoice')}</th>
                         <th className="px-5 py-2.5 text-right">{L('Επιπλέον', 'Extra')}</th>
                         <th className="px-5 py-2.5">{L('Κατάσταση', 'Status')}</th>
                         <th className="px-5 py-2.5 text-right">{L('PDF', 'PDF')}</th>
@@ -204,10 +223,12 @@ export default function InvoicesPage() {
                           <td className="px-5 py-2.5 text-right num">{moneyFull(inv.benefit_gross, lang)}</td>
                           <td className="px-5 py-2.5 text-right num text-ink-soft">
                             {inv.discount_cents > 0
-                              ? <>−{moneyFull(inv.discount_cents, lang)} <span className="text-[10.5px] text-ink-faint">({inv.discount_pct}%)</span></>
+                              ? <>−{moneyFull(inv.discount_cents, lang)}{!inv.discount_mixed && inv.discount_pct > 0 && <span className="text-[10.5px] text-ink-faint"> ({inv.discount_pct}%)</span>}</>
                               : '—'}
                           </td>
-                          <td className="px-5 py-2.5 text-right num text-brand font-semibold">{moneyFull(inv.benefit_net, lang)}</td>
+                          <td className="px-5 py-2.5 text-right num">{moneyFull(inv.benefit_net, lang)}</td>
+                          <td className="px-5 py-2.5 text-right num text-ink-soft">{(inv.minimum_topup ?? 0) > 0 ? '+' + moneyFull(inv.minimum_topup ?? 0, lang) : '—'}</td>
+                          <td className="px-5 py-2.5 text-right num text-brand font-semibold">{moneyFull(inv.billed ?? inv.benefit_net, lang)}</td>
                           <td className="px-5 py-2.5 text-right num text-ink-soft">{moneyFull(inv.extra, lang)}</td>
                           <td className="px-5 py-2.5"><Pill tone={inv.status === 'current' ? 'accent' : 'warn'}>{inv.status === 'current' ? L('τρέχον', 'current') : L('εκκρεμές', 'open')}</Pill></td>
                           <td className="px-5 py-2.5 text-right">

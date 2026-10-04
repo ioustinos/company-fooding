@@ -35,6 +35,8 @@ import { ok, badRequest, forbidden, methodNotAllowed, errorResponse } from './_s
 import { getCaller } from './_shared/auth'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
 import { listOrders, type GoOrder } from './_shared/gonnaorder'
+import { computeInvoice } from './_shared/dealRulesCore'
+import { loadBenefitCaps, loadCalendar, loadRules } from './_shared/dealRules'
 
 type CfOrder = {
   external_order_id: string
@@ -111,24 +113,12 @@ export default async (req: Request, _ctx: Context) => {
       .filter((v, i, arr) => v && arr.indexOf(v) === i)
     if (storeIds.length === 0) return badRequest('no GO shops for this company')
 
-    // --- Vendor discount lookup (CF-97) ---
-    // Today the schema has one discount per VENDOR (not per agreement). For
-    // the headline "To bill" we apply the discount of the FIRST vendor in
-    // this company's active agreements. In practice every company uses the
-    // single Wecook vendor, so this is unambiguous; if a company is ever
-    // matched with multiple vendors at different discounts we'll need to
-    // bucket per-vendor here (filed for future).
-    const { data: vendorAgs } = await sb.from('matchmaking_agreements')
-      .select('vendor:vendors!inner(id, discount_percentage, discount_applies_to)')
-      .eq('company_id', companyId).eq('status', 'active').limit(1)
-    const vendorRow = ((vendorAgs ?? [])[0] as unknown as { vendor: { discount_percentage: number | string | null; discount_applies_to: string | null } | null } | undefined)?.vendor
-    // Per-agreement override (matchmaking_agreements.settings.billing.vendor_discount_applies).
-    const { data: agSettings } = await sb.from('matchmaking_agreements')
-      .select('settings').eq('company_id', companyId).eq('status', 'active')
-    const vendorDiscountOff = ((agSettings ?? []) as Array<{ settings: { billing?: { vendor_discount_applies?: boolean } } | null }>)
-      .some((a) => a.settings?.billing?.vendor_discount_applies === false)
-    const discountPct = !vendorDiscountOff && vendorRow && vendorRow.discount_percentage != null ? Number(vendorRow.discount_percentage) : 0
-    const discountAppliesTo = vendorRow?.discount_applies_to ?? null
+    // --- Deal rules (benefit-invoice discount, minimum commitment) ---
+    const agreementIds = ((ags ?? []) as Array<{ id: string }>).map((a) => a.id)
+    const [rulesByAgreement, caps] = await Promise.all([loadRules(sb, agreementIds), loadBenefitCaps(sb, [companyId])])
+    const dealRules = agreementIds.flatMap((id) => rulesByAgreement.get(id) ?? [])
+    const needsCalendar = dealRules.some((r) => r.kind === 'minimum_commitment' && r.counts_on !== 'days_with_orders')
+    const calendar = needsCalendar ? await loadCalendar(sb, companyId, from, to) : undefined
 
     // --- Voucher → owner map (every CF voucher code → company + employee) ---
     // Lowercased keys (GO matching is case-insensitive per memory).
@@ -240,6 +230,7 @@ export default async (req: Request, _ctx: Context) => {
 
     // Running totals (cents)
     let toBillSubtotal = 0, toBillBenefit = 0
+    const toBillOrders: { delivery_date: string; benefit_applied: number; employee_id: string | null }[] = []
     let noVoucherSubtotal = 0
     let orphanSubtotal = 0, orphanBenefit = 0
     let crossSubtotal = 0, crossBenefit = 0
@@ -342,6 +333,7 @@ export default async (req: Request, _ctx: Context) => {
       }
       toBillSubtotal += g.subtotal
       toBillBenefit += cf.benefit_applied
+      if (cf.delivery_date) toBillOrders.push({ delivery_date: cf.delivery_date, benefit_applied: cf.benefit_applied, employee_id: cf.employee_id })
     }
 
     // Bucket 7: in CF, not in GO (should be ~zero with the tightened query)
@@ -388,20 +380,20 @@ export default async (req: Request, _ctx: Context) => {
       counts.missingInGo++
     }
 
-    // Apply the company's vendor discount to the matched ("To bill") benefit
-    // so the headline shows the net invoiceable amount (CF-97).
-    const toBillDiscountCents = (discountPct > 0 && discountAppliesTo === 'benefit_price')
-      ? Math.round((toBillBenefit * discountPct) / 100)
-      : 0
-    const toBillBenefitNet = toBillBenefit - toBillDiscountCents
+    // What to bill for the matched orders, per the deal's dated rules:
+    // Σ per period max(minimum, benefit − benefit-invoice discount).
+    const inv = computeInvoice({ orders: toBillOrders, rules: dealRules, caps, companyId, from, to, calendar })
+    const toBillDiscountCents = inv.discount
+    const toBillBenefitNet = inv.net
 
     return ok({
       period: { from, to },
       storeIds,
       // Vendor discount context for the UI (so it can show "-10%" subline).
       discount: {
-        pct: discountPct,
-        applies_to: discountAppliesTo,
+        pct: inv.discount_pct ?? 0,        // null from core = several rules in range
+        mixed: inv.discount_pct === null,
+        applies_to: 'benefit_price',
       },
       // Headline numbers — what the 3 cards on the page show.
       headline: {
@@ -412,6 +404,8 @@ export default async (req: Request, _ctx: Context) => {
           benefit_gross_cents: toBillBenefit,
           discount_cents: toBillDiscountCents,
           benefit_net_cents: toBillBenefitNet,
+          minimum_topup_cents: inv.minimum_topup,
+          billed_cents: inv.billed,
         },
         needsAttention: {
           count: counts.missingKnownVoucher + counts.missingAmountMismatch + counts.missingInGo,

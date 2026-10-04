@@ -45,7 +45,7 @@ type OrphanCodeAgg = {
 type Data = {
   period: { from: string; to: string }
   storeIds: string[]
-  discount?: { pct: number; applies_to: string | null }
+  discount?: { pct: number; mixed?: boolean; applies_to: string | null }
   headline: {
     toBill: {
       count: number
@@ -54,6 +54,8 @@ type Data = {
       benefit_gross_cents: number
       discount_cents: number
       benefit_net_cents: number
+      minimum_topup_cents?: number   // top-up to the deal's minimum commitment
+      billed_cents?: number          // what to invoice = net + minimum top-up
     }
     needsAttention: {
       count: number
@@ -393,19 +395,20 @@ export default function ReconcilePage() {
             count={data.headline.toBill.count}
             valueNode={
               <span className="font-mono text-[28px] leading-none font-semibold text-success num">
-                {moneyFull(data.headline.toBill.benefit_gross_cents, lang)}
+                {moneyFull(data.headline.toBill.billed_cents ?? data.headline.toBill.benefit_net_cents, lang)}
               </span>
             }
-            subline={data.headline.toBill.discount_cents > 0
-              ? L(
-                  `${moneyFull(data.headline.toBill.benefit_net_cents, lang)} μετά την έκπτωση ${data.discount?.pct ?? 0}% · ${data.headline.toBill.count} παραγγελίες`,
-                  `${moneyFull(data.headline.toBill.benefit_net_cents, lang)} after ${data.discount?.pct ?? 0}% discount · ${data.headline.toBill.count} orders`
-                )
-              : L(
-                  `${data.headline.toBill.count} παραγγελίες · σύνολο ${moneyFull(data.headline.toBill.subtotal_cents, lang)}`,
-                  `${data.headline.toBill.count} orders · subtotal ${moneyFull(data.headline.toBill.subtotal_cents, lang)}`
-                )
-            }
+            subline={(() => {
+              const t = data.headline.toBill
+              const parts: string[] = []
+              if (t.discount_cents > 0 || (t.minimum_topup_cents ?? 0) > 0) parts.push(L(`παροχή ${moneyFull(t.benefit_gross_cents, lang)}`, `benefit ${moneyFull(t.benefit_gross_cents, lang)}`))
+              if (t.discount_cents > 0) parts.push(L(
+                `− έκπτωση ${moneyFull(t.discount_cents, lang)}${!data.discount?.mixed && data.discount?.pct ? ` (${data.discount.pct}%)` : ''}`,
+                `− discount ${moneyFull(t.discount_cents, lang)}${!data.discount?.mixed && data.discount?.pct ? ` (${data.discount.pct}%)` : ''}`))
+              if ((t.minimum_topup_cents ?? 0) > 0) parts.push(L(`+ ελάχιστη χρέωση ${moneyFull(t.minimum_topup_cents ?? 0, lang)}`, `+ minimum ${moneyFull(t.minimum_topup_cents ?? 0, lang)}`))
+              parts.push(L(`${t.count} παραγγελίες`, `${t.count} orders`))
+              return parts.join(' · ')
+            })()}
             expanded={expanded.bill}
             onToggle={() => toggle('bill')}
           >
@@ -555,15 +558,10 @@ export default function ReconcilePage() {
                 {L('Έτοιμο για τιμολόγηση.', 'Ready to invoice.')}
               </div>
               <p className="text-[12.5px] text-ink-soft mt-1">
-                {data.headline.toBill.discount_cents > 0
-                  ? L(
-                      `Καμία διαφορά. ${data.headline.toBill.count} παραγγελίες, καθαρό προς τιμολόγηση ${moneyFull(data.headline.toBill.benefit_net_cents, lang)} (μικτό ${moneyFull(data.headline.toBill.benefit_gross_cents, lang)}).`,
-                      `No discrepancies. ${data.headline.toBill.count} orders, net to invoice ${moneyFull(data.headline.toBill.benefit_net_cents, lang)} (gross ${moneyFull(data.headline.toBill.benefit_gross_cents, lang)}).`
-                    )
-                  : L(
-                      `Καμία διαφορά. ${data.headline.toBill.count} παραγγελίες, παροχή ${moneyFull(data.headline.toBill.benefit_cents, lang)} προς τιμολόγηση.`,
-                      `No discrepancies. ${data.headline.toBill.count} orders, ${moneyFull(data.headline.toBill.benefit_cents, lang)} benefit to bill.`
-                    )}
+                {L(
+                  `Καμία διαφορά. ${data.headline.toBill.count} παραγγελίες, προς τιμολόγηση ${moneyFull(data.headline.toBill.billed_cents ?? data.headline.toBill.benefit_net_cents, lang)}.`,
+                  `No discrepancies. ${data.headline.toBill.count} orders, ${moneyFull(data.headline.toBill.billed_cents ?? data.headline.toBill.benefit_net_cents, lang)} to invoice.`
+                )}
               </p>
             </div>
           )}

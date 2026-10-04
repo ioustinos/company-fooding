@@ -17,6 +17,9 @@ type InvoiceRow = {
   discount_cents?: number       // cents — vendor discount applied to benefit
   benefit_net?: number          // cents — net invoiceable (gross − discount)
   discount_pct?: number         // 0..100
+  discount_mixed?: boolean      // several discount rules in the month → no single %
+  minimum_topup?: number        // cents — top-up to the deal's minimum commitment
+  billed?: number               // cents — total to invoice (net + minimum top-up)
   extra: number                 // cents — paid by employees, not billed
 }
 type Company = { name: string; vat_number: string | null; billing_email: string | null }
@@ -95,9 +98,17 @@ export function downloadInvoicePdf(opts: {
   ]]
   if (discount > 0) {
     body.push([
-      L(`Έκπτωση συνεργάτη (${pct}%)`, `Vendor discount (${pct}%)`),
+      invoice.discount_mixed || !pct ? L('Έκπτωση συνεργάτη', 'Vendor discount') : L(`Έκπτωση συνεργάτη (${pct}%)`, `Vendor discount (${pct}%)`),
       '',
       '−' + moneyFull(discount, lang),
+    ])
+  }
+  const minimumTopup = invoice.minimum_topup ?? 0
+  if (minimumTopup > 0) {
+    body.push([
+      L('Συμπλήρωμα ελάχιστης χρέωσης', 'Minimum commitment top-up'),
+      '',
+      moneyFull(minimumTopup, lang),
     ])
   }
   autoTable(doc, {
@@ -107,7 +118,7 @@ export function downloadInvoicePdf(opts: {
     foot: [[
       L('Σύνολο προς πληρωμή', 'Total payable'),
       '',
-      moneyFull(benefitNet, lang),
+      moneyFull(invoice.billed ?? benefitNet, lang),
     ]],
     headStyles: { fillColor: [45, 79, 60], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [232, 237, 231], textColor: [26, 46, 36], fontStyle: 'bold' },

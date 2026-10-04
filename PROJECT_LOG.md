@@ -20,6 +20,44 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-10-05 — Deal terms: dated rules per deal drive all billing
+
+**Status:** Done (migration 22 applied 2026-10-02, pushed to main)
+
+**Why:** Billing rules lived in code / a free-form JSON setting and the 10%
+discount sat on the vendor, so every company got it. Ioustinos: deal terms must
+live in the database, per deal, editable in the admin — never in code.
+
+**What:**
+- **Migration 22:** `deal_rules` (typed, dated rows per agreement; kinds
+  catalogue_discount / order_discount / benefit_invoice_discount /
+  minimum_commitment / loyalty, with CHECK constraints per kind) and
+  `company_calendar` (workdays; import UI still to build). RLS on, service-role only.
+- **Seeded:** Queensway/Paricom/Vsltec benefit-invoice 10%, Pollfish 7%,
+  HarborLab catalogue 15% + loyalty €20→€1 + minimum €50/day on days with orders.
+- **`_shared/dealRulesCore.ts`** (pure math, 16 tests): per-order split (loyalty
+  rule → benefit capped, excess = vendor loyalty) and `computeInvoice`:
+  billed per period = max(minimum, benefit − invoice discount); minimum per
+  day/week/month, fixed € or N orders × daily benefit, counting days with orders /
+  calendar workdays / both. A week or month is charged its minimum once, in the
+  range containing its first day.
+- **`_shared/dealRules.ts`** loaders, **`_shared/dealRulesValidate.ts`** (validation +
+  overlap guard, 16 tests), **`cf-deal-rules`** API (GET for admins; writes super_admin
+  only: create / change-from-date / end / correct+delete only before start; activity log).
+- **Reports, Reconcile, Invoices, invoice PDF, sync, webhook** all use the module.
+  `vendors.discount_percentage` and `matchmaking_agreements.settings.billing` are no
+  longer read for money. Invoices/Reconcile show minimum top-up + "to invoice".
+- **Deal page:** new "Deal terms" section (plain-language sentences, history,
+  add / change from a date / end / edit-before-start, live preview).
+
+**Notes:**
+- Effect vs. before: Pollfish 10% → 7% (Sep +€44.56); HarborLab gets the €50 floor
+  (Sep €650, Oct 1–2 €100). Queensway/Paricom/Vsltec unchanged.
+- Company admins / vendors can only read terms. Proposing + accepting changes
+  between the two sides is the intended next step.
+- Employee vendor page still shows `vendors.discount_percentage` (no employee has a
+  login yet). `package-lock.json` is out of sync with package.json (npm ci fails).
+
 ## 2026-10-02 (round 2) — Store who funds each part of the discount (benefit / vendor loyalty / vendor discount)
 
 **Status:** Done (migration 21 applied, pushed to main)

@@ -6,7 +6,7 @@ import { fmtMoney } from '../../lib/helpers'
 type Totals = { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number; loyalty?: number; vendor_discount?: number; billed?: number; min_topup?: number }
 type CompanyRow = {
   company: string; orders: number; employees: number; gross: number; benefit: number; topup: number
-  net_benefit?: number; loyalty?: number; vendor_discount?: number; billed?: number; min_topup?: number; billed_days?: number; daily_minimum?: number | null
+  net_benefit?: number; loyalty?: number; vendor_discount?: number; billed?: number; min_topup?: number; billed_periods?: number; minimum?: string | null
 }
 type EmployeeRow = { company: string; name: string; voucher: string; orders: number; gross: number; benefit: number; topup: number }
 type DayRow = { date: string; orders: number; employees: number; gross: number; benefit: number; topup: number; billed?: number; min_topup?: number }
@@ -72,7 +72,8 @@ export default function ReportsPage() {
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [session?.access_token])
 
   const m = (c: number) => fmtMoney(c, lang)
-  const hasFloor = !!data && (data.totals.min_topup ?? 0) > 0
+  // Show billing columns whenever deal rules change what is billed (discount or minimum).
+  const hasFloor = !!data && (data.totals.billed ?? data.totals.benefit) !== data.totals.benefit
   const hasLoyalty = !!data && (data.totals.loyalty ?? 0) > 0
   const hasVendorDisc = !!data && (data.totals.vendor_discount ?? 0) > 0
 
@@ -107,7 +108,7 @@ export default function ReportsPage() {
               <div style={card}><div className="cf-muted" style={{ fontSize: 12 }}>Vendor loyalty (not billed)</div><div style={{ fontSize: 22, fontWeight: 700 }}>{m(data.totals.loyalty ?? 0)}</div></div>
             )}
             {hasFloor && (
-              <div style={card}><div className="cf-muted" style={{ fontSize: 12 }}>Billed (incl. daily minimum)</div><div style={{ fontSize: 22, fontWeight: 700 }}>{m(data.totals.billed ?? 0)}</div></div>
+              <div style={card}><div className="cf-muted" style={{ fontSize: 12 }}>Billed (incl. minimum)</div><div style={{ fontSize: 22, fontWeight: 700 }}>{m(data.totals.billed ?? 0)}</div></div>
             )}
           </div>
 
@@ -121,12 +122,12 @@ export default function ReportsPage() {
                   <th style={thR}>Gross</th><th style={thR}>Benefit</th><th style={thR}>Top-up</th>
                   {hasVendorDisc && <th style={thR}>Vendor discount</th>}
                   {hasLoyalty && <th style={thR}>Vendor loyalty</th>}
-                  {hasFloor && <><th style={thR}>Daily min. top-up</th><th style={thR}>Billed</th></>}
+                  {hasFloor && <><th style={thR}>Minimum top-up</th><th style={thR}>Billed</th></>}
                 </tr></thead>
                 <tbody>
                   {data.perCompany.map((c) => (
                     <tr key={c.company}>
-                      <td style={td}>{c.company}{c.daily_minimum ? <span className="cf-muted" style={{ fontSize: 11 }}> · min {m(c.daily_minimum)}/day</span> : null}</td>
+                      <td style={td}>{c.company}{c.minimum ? <span className="cf-muted" style={{ fontSize: 11 }}> · min {c.minimum}</span> : null}</td>
                       <td style={tdR}>{c.employees}</td>
                       <td style={tdR}>{c.orders}</td>
                       <td style={tdR}>{m(c.gross)}</td>
@@ -150,7 +151,7 @@ export default function ReportsPage() {
                 <thead><tr>
                   <th style={th}>Date</th><th style={thR}>Orders</th><th style={thR}>Employees</th>
                   <th style={thR}>Gross</th><th style={thR}>Benefit</th><th style={thR}>Top-up</th>
-                  {hasFloor && <><th style={thR}>Daily min. top-up</th><th style={thR}>Billed</th></>}
+                  {hasFloor && <><th style={thR}>Minimum top-up</th><th style={thR}>Billed</th></>}
                 </tr></thead>
                 <tbody>
                   {data.perDay.map((d) => (
