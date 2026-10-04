@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
 import { Icon, KPI } from '../../lib/specui'
+import { ruleShort, ruleSentence, type DealRuleView } from '../../lib/dealRuleText'
 
 type Vendor = {
   agreementId: string; status: string; stickerMode: string; reusableContainers: string
@@ -11,6 +12,7 @@ type Vendor = {
   vendor: { id: string; name: string; legalName: string | null; discountPercentage: number; discountAppliesTo: string; tags: string[] } | null
   deliveryWindows: { from: string; to: string }[]
   shopIds: string[]
+  terms?: DealRuleView[]   // deal terms in effect today
 }
 
 const tagTone: Record<string, string> = {
@@ -91,9 +93,6 @@ export default function VendorsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {filtered.map((v) => {
             const isConn = v.shopIds.length > 0
-            const discountApplies = v.vendor?.discountAppliesTo === 'benefit_price'
-              ? L('στην παροχή', 'on benefit')
-              : L('στο σύνολο', 'on total')
             const windows = v.deliveryWindows.map((w) => `${w.from.slice(0, 5)}–${w.to.slice(0, 5)}`).join(', ')
             return (
               <Link key={v.agreementId} to={`/company/vendors/${v.agreementId}`} className="group bg-surface border border-line rounded-md shadow-sm p-5 hover:border-ink-soft transition block">
@@ -121,19 +120,27 @@ export default function VendorsPage() {
                   </div>
                 )}
 
-                {/* Discount strip */}
-                <div className="mt-5 pt-4 border-t border-line flex items-center gap-6">
+                {/* Deal terms in effect today + delivery */}
+                <div className="mt-5 pt-4 border-t border-line flex items-start gap-6">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className={`num font-display text-[26px] font-semibold leading-none ${(v.vendor?.discountPercentage ?? 0) > 0 ? 'text-brand' : 'text-ink-faint'}`}>
-                        {(v.vendor?.discountPercentage ?? 0) > 0 ? `-${v.vendor!.discountPercentage}%` : '—'}
-                      </span>
-                    </div>
-                    {(v.vendor?.discountPercentage ?? 0) > 0 && (
-                      <div className="text-[10.5px] text-ink-faint mt-1">{discountApplies}</div>
+                    <div className="text-ink-faint uppercase tracking-[0.06em] text-[10.5px] font-semibold">{L('Όροι συμφωνίας', 'Deal terms')}</div>
+                    {(v.terms ?? []).length === 0 ? (
+                      <div className="text-[12.5px] text-ink-faint mt-1">{L('Χωρίς ειδικούς όρους', 'No special terms')}</div>
+                    ) : (
+                      <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-2">
+                        {(v.terms ?? []).map((t, i) => {
+                          const s = ruleShort(t, lang)
+                          return (
+                            <div key={t.id ?? i} title={ruleSentence(t, lang)}>
+                              <div className="num font-display text-[18px] font-semibold leading-none text-brand">{s.value}</div>
+                              <div className="text-[10.5px] text-ink-faint mt-1">{s.label}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
                     )}
                   </div>
-                  <div className="text-right text-[12px]">
+                  <div className="text-right text-[12px] shrink-0">
                     <div className="text-ink-faint uppercase tracking-[0.06em] text-[10.5px] font-semibold">{L('Παράδοση', 'Delivery')}</div>
                     <div className="num text-ink mt-0.5">{windows || '—'}</div>
                   </div>

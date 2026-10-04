@@ -96,3 +96,21 @@ export function ruleState(r: Pick<DealRuleView, 'valid_from' | 'valid_to'>, toda
   if (r.valid_from > today) return 'upcoming'
   return 'active'
 }
+
+/** Compact form for cards: a value ("15%", "€50/day") and a short label. */
+export function ruleShort(r: DealRuleView, lang: Lang): { value: string; label: string } {
+  const L = (el: string, en: string) => (lang === 'el' ? el : en)
+  const m = (c: number | null) => moneyFull(c ?? 0, lang)
+  const v = r.percent != null ? `${r.percent}%` : m(r.amount_cents)
+  switch (r.kind) {
+    case 'catalogue_discount': return { value: v, label: r.scope_tags.length ? L('έκπτωση σε επιλεγμένα', 'off selected items') : L('έκπτωση καταλόγου', 'off catalogue') }
+    case 'order_discount': return { value: v, label: L('έκπτωση παραγγελίας', 'off each order') }
+    case 'benefit_invoice_discount': return { value: v, label: L('έκπτωση τιμολογίου', 'off the invoice') }
+    case 'minimum_commitment': {
+      const per = r.period === 'week' ? L('/εβδ.', '/wk') : r.period === 'month' ? L('/μήνα', '/mo') : L('/ημέρα', '/day')
+      const amount = r.min_basis === 'orders_x_benefit' ? L(`${r.min_orders} παρ.`, `${r.min_orders} orders`) : m(r.amount_cents)
+      return { value: amount + per, label: L('ελάχιστη χρέωση', 'minimum') }
+    }
+    case 'loyalty': return { value: `${m(r.earn_cents)} / ${m(r.spend_cents)}`, label: L('επιβράβευση', 'loyalty') }
+  }
+}

@@ -10,6 +10,9 @@ import type { Context } from '@netlify/functions'
 import { ok, badRequest, forbidden, methodNotAllowed, errorResponse } from './_shared/errors'
 import { getCaller } from './_shared/auth'
 import { supabaseAdmin } from './_shared/supabaseAdmin'
+import { activeOn } from './_shared/dealRulesCore'
+import { loadRules } from './_shared/dealRules'
+import { athensToday } from './_shared/dealRulesValidate'
 
 type AgreementRow = {
   id: string
@@ -104,6 +107,9 @@ export default async (req: Request, _ctx: Context) => {
     if (error) throw new Error(error.message)
 
     const rows = (data ?? []) as unknown as AgreementRow[]
+    // The deal's terms in effect today (deal_rules) — what the card shows.
+    const today = athensToday()
+    const rulesByAgreement = await loadRules(sb, rows.map((a) => a.id))
     const vendors = rows.map((a) => ({
       agreementId: a.id,
       status: a.status,
@@ -123,6 +129,7 @@ export default async (req: Request, _ctx: Context) => {
         : null,
       deliveryWindows: (a.agreement_offices ?? []).map((o) => ({ from: o.delivery_time_from, to: o.delivery_time_to })),
       shopIds: (a.agreement_shops ?? []).map((s) => s.gonnaorder_shop_id),
+      terms: (rulesByAgreement.get(a.id) ?? []).filter((r) => activeOn(r, today)),
     }))
     return ok({ vendors })
   } catch (e) {
