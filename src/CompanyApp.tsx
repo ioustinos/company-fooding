@@ -102,8 +102,21 @@ function TopBar() {
 function SideNav() {
   const { lang } = useUIStore()
   const { companies, selectedId } = useCompanyStore()
+  const { user } = useAuthStore()
+  const isSuper = user?.role === 'super_admin'
   const L = (el: string, en: string) => (lang === 'el' ? el : en)
   const companyName = companies.find((c) => c.id === selectedId)?.name ?? companies[0]?.name ?? '—'
+
+  // CF-101: role-gate Διαγνωστικά. Company admins see only Αντιστοίχιση
+  // (business-relevant billing audit). The other three — voucher audit, topup
+  // log, GO event log — are sysadmin-only.
+  const allDiagItems = [
+    { to: '/company/reconcile', label: L('Αντιστοίχιση παραγγελιών', 'Order reconciliation'), icon: 'check' as IconName },
+    { to: '/company/vouchers',  label: L('Έλεγχος vouchers',       'Voucher audit'),       icon: 'wallet' as IconName },
+    { to: '/company/topups',    label: L('Αρχείο ανανεώσεων',      'Top-up log'),          icon: 'history' as IconName },
+    { to: '/company/webhooks',  label: L('Αρχείο γεγονότων GO',    'GO event log'),        icon: 'bell' as IconName },
+  ]
+  const diagItems = isSuper ? allDiagItems : allDiagItems.filter((i) => i.to === '/company/reconcile')
 
   const groups: { label: string; items: { to: string; label: string; icon: IconName; end?: boolean }[] }[] = [
     { label: L('Επισκόπηση', 'Overview'), items: [
@@ -121,14 +134,9 @@ function SideNav() {
       { to: '/company/invoices', label: L('Τιμολόγια', 'Invoices'), icon: 'file' },
     ] },
     // Σύστημα → Διαγνωστικά: audit / log pages the admin opens only when
-    // something looks off. Order = how often they're actually useful:
-    // Αντιστοίχιση (billing readiness) first, then voucher audit, then logs.
-    { label: L('Διαγνωστικά', 'Diagnostics'), items: [
-      { to: '/company/reconcile', label: L('Αντιστοίχιση παραγγελιών', 'Order reconciliation'), icon: 'check' },
-      { to: '/company/vouchers', label: L('Έλεγχος vouchers', 'Voucher audit'), icon: 'wallet' },
-      { to: '/company/topups', label: L('Αρχείο ανανεώσεων', 'Top-up log'), icon: 'history' },
-      { to: '/company/webhooks', label: L('Αρχείο γεγονότων GO', 'GO event log'), icon: 'bell' },
-    ] },
+    // something looks off. Items are role-gated above (super_admin sees all 4,
+    // company_admin sees only Αντιστοίχιση).
+    { label: L('Διαγνωστικά', 'Diagnostics'), items: diagItems },
     { label: L('Ρυθμίσεις', 'Settings'), items: [
       { to: '/company/settings', label: L('Προφίλ εταιρείας', 'Company profile'), icon: 'gear' },
     ] },
@@ -172,8 +180,14 @@ function SideNav() {
 }
 
 export default function CompanyApp() {
-  const { session } = useAuthStore()
+  const { session, user } = useAuthStore()
   const { setCompanies, loaded } = useCompanyStore()
+  const isSuper = user?.role === 'super_admin'
+  // CF-101: paired with the SideNav gate — a company_admin typing
+  // /company/vouchers / /company/topups / /company/webhooks directly in the URL
+  // gets redirected to the dashboard. Only /company/reconcile stays visible.
+  const SuperOnly = ({ children }: { children: React.ReactNode }) =>
+    isSuper ? <>{children}</> : <Navigate to="/company" replace />
 
   useEffect(() => {
     if (!session?.access_token || loaded) return
@@ -207,10 +221,10 @@ export default function CompanyApp() {
             <Route path="vendors/:id" element={<VendorDetailPage />} />
             <Route path="invoices" element={<InvoicesPage />} />
             <Route path="activity" element={<ActivityPage />} />
-            <Route path="topups" element={<TopupsPage />} />
-            <Route path="webhooks" element={<WebhookEventsPage />} />
+            <Route path="topups" element={<SuperOnly><TopupsPage /></SuperOnly>} />
+            <Route path="webhooks" element={<SuperOnly><WebhookEventsPage /></SuperOnly>} />
             <Route path="reconcile" element={<ReconcilePage />} />
-            <Route path="vouchers" element={<VouchersHealthPage />} />
+            <Route path="vouchers" element={<SuperOnly><VouchersHealthPage /></SuperOnly>} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/company" replace />} />
           </Routes>
