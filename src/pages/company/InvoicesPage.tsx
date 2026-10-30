@@ -149,8 +149,8 @@ export default function InvoicesPage() {
               tone="success" icon="chart"
               sub={[
                 data.totals.discount_cents > 0
-                  ? L(`μικτό ${moneyFull(data.totals.benefit_gross, lang)} − έκπτωση ${moneyFull(data.totals.discount_cents, lang)}`,
-                      `gross ${moneyFull(data.totals.benefit_gross, lang)} − discount ${moneyFull(data.totals.discount_cents, lang)}`)
+                  ? L(`συνολικό ${moneyFull(data.totals.benefit_gross, lang)} − έκπτωση ${moneyFull(data.totals.discount_cents, lang)}`,
+                      `total ${moneyFull(data.totals.benefit_gross, lang)} − discount ${moneyFull(data.totals.discount_cents, lang)}`)
                   : null,
                 (data.totals.minimum_topup ?? 0) > 0
                   ? L(`+ ${moneyFull(data.totals.minimum_topup ?? 0, lang)} ελάχιστη χρέωση`, `+ ${moneyFull(data.totals.minimum_topup ?? 0, lang)} minimum commitment`)
@@ -188,8 +188,8 @@ export default function InvoicesPage() {
                       <div className="text-ink-faint">
                         {[
                           g.total.discount_cents > 0
-                            ? L(`μικτό ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`,
-                                `gross ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`)
+                            ? L(`συνολικό ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`,
+                                `total ${moneyFull(g.total.benefit_gross, lang)} − ${moneyFull(g.total.discount_cents, lang)}`)
                             : null,
                           g.total.minimum_topup > 0
                             ? L(`+ ${moneyFull(g.total.minimum_topup, lang)} ελάχιστη χρέωση`, `+ ${moneyFull(g.total.minimum_topup, lang)} minimum`)
@@ -198,49 +198,70 @@ export default function InvoicesPage() {
                       </div>
                     </div>
                   </div>
-                  <table className="w-full text-[14px]">
+                  {/* 11-column table was too wide for the page container. Tidied to 8:
+                      - Collapsed Συνολική + Έκπτωση into a sub-line under Χρεώσιμη.
+                      - Collapsed Ελάχιστη χρέωση into a sub-line under Προς τιμολόγηση.
+                      - Tightened cell padding + text, headers allowed to wrap.
+                      - Container is overflow-x-auto as a safety net for narrow viewports. */}
+                  <div className="overflow-x-auto">
+                  <table className="w-full text-[13px]">
                     <thead className="bg-bg/40 border-b border-line">
-                      <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">
-                        <th className="px-5 py-2.5">{L('Συνεργάτης', 'Vendor')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('Παρ.', 'Ord.')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('Δαπάνη', 'Spend')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('Παροχή μικτή', 'Benefit gross')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('Έκπτωση', 'Discount')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('Παροχή καθαρή', 'Benefit net')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('Ελάχιστη χρέωση', 'Minimum top-up')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('Προς τιμολόγηση', 'To invoice')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('Επιπλέον', 'Extra')}</th>
-                        <th className="px-5 py-2.5">{L('Κατάσταση', 'Status')}</th>
-                        <th className="px-5 py-2.5 text-right">{L('PDF', 'PDF')}</th>
+                      <tr className="text-left text-[10.5px] uppercase tracking-[0.07em] text-ink-faint font-semibold align-bottom">
+                        <th className="px-3 py-2">{L('Συνεργάτης', 'Vendor')}</th>
+                        <th className="px-3 py-2 text-right">{L('Παρ.', 'Ord.')}</th>
+                        <th className="px-3 py-2 text-right">{L('Δαπάνη', 'Spend')}</th>
+                        <th className="px-3 py-2 text-right whitespace-normal leading-tight max-w-[110px]">{L('Παροχή χρεώσιμη', 'Benefit chargeable')}</th>
+                        <th className="px-3 py-2 text-right whitespace-normal leading-tight max-w-[110px]">{L('Προς τιμολόγηση', 'To invoice')}</th>
+                        <th className="px-3 py-2 text-right">{L('Επιπλέον', 'Extra')}</th>
+                        <th className="px-3 py-2">{L('Κατάσταση', 'Status')}</th>
+                        <th className="px-3 py-2 text-right">PDF</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
-                      {g.rows.map((inv) => (
-                        <tr key={`${inv.vendor_id}-${inv.month}`} className="hover:bg-brand-soft/20">
-                          <td className="px-5 py-2.5"><div className="flex items-center gap-2"><Icon name="shop" /><span className="font-medium">{inv.vendor_name}</span></div></td>
-                          <td className="px-5 py-2.5 text-right num">{inv.orders}</td>
-                          <td className="px-5 py-2.5 text-right num">{moneyFull(inv.gross, lang)}</td>
-                          <td className="px-5 py-2.5 text-right num">{moneyFull(inv.benefit_gross, lang)}</td>
-                          <td className="px-5 py-2.5 text-right num text-ink-soft">
-                            {inv.discount_cents > 0
-                              ? <>−{moneyFull(inv.discount_cents, lang)}{!inv.discount_mixed && inv.discount_pct > 0 && <span className="text-[10.5px] text-ink-faint"> ({inv.discount_pct}%)</span>}</>
-                              : '—'}
-                          </td>
-                          <td className="px-5 py-2.5 text-right num">{moneyFull(inv.benefit_net, lang)}</td>
-                          <td className="px-5 py-2.5 text-right num text-ink-soft">{(inv.minimum_topup ?? 0) > 0 ? '+' + moneyFull(inv.minimum_topup ?? 0, lang) : '—'}</td>
-                          <td className="px-5 py-2.5 text-right num text-brand font-semibold">{moneyFull(inv.billed ?? inv.benefit_net, lang)}</td>
-                          <td className="px-5 py-2.5 text-right num text-ink-soft">{moneyFull(inv.extra, lang)}</td>
-                          <td className="px-5 py-2.5"><Pill tone={inv.status === 'current' ? 'accent' : 'warn'}>{inv.status === 'current' ? L('τρέχον', 'current') : L('εκκρεμές', 'open')}</Pill></td>
-                          <td className="px-5 py-2.5 text-right">
-                            <button onClick={() => exportPdf(inv)} disabled={!company} title={L('Κατέβασμα PDF', 'Download PDF')}
-                              className="text-ink-faint hover:text-brand disabled:opacity-30 inline-flex items-center justify-center w-7 h-7 rounded hover:bg-brand-soft/40">
-                              <Icon name="file" size={14} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {g.rows.map((inv) => {
+                        const hasDiscount = inv.discount_cents > 0
+                        const hasMin = (inv.minimum_topup ?? 0) > 0
+                        const billed = inv.billed ?? inv.benefit_net
+                        return (
+                          <tr key={`${inv.vendor_id}-${inv.month}`} className="hover:bg-brand-soft/20">
+                            <td className="px-3 py-2"><div className="flex items-center gap-2"><Icon name="shop" /><span className="font-medium">{inv.vendor_name}</span></div></td>
+                            <td className="px-3 py-2 text-right num">{inv.orders}</td>
+                            <td className="px-3 py-2 text-right num">{moneyFull(inv.gross, lang)}</td>
+                            {/* Chargeable benefit = net benefit after vendor discount.
+                                Sub-line shows the breakdown "συνολικό − έκπτωση" when a discount applies. */}
+                            <td className="px-3 py-2 text-right">
+                              <div className="num font-medium">{moneyFull(inv.benefit_net, lang)}</div>
+                              {hasDiscount && (
+                                <div className="text-[10.5px] text-ink-faint num leading-tight whitespace-nowrap">
+                                  {L('από', 'from')} {moneyFull(inv.benefit_gross, lang)}
+                                  {' − '}{moneyFull(inv.discount_cents, lang)}
+                                  {!inv.discount_mixed && inv.discount_pct > 0 && <> ({inv.discount_pct}%)</>}
+                                </div>
+                              )}
+                            </td>
+                            {/* To invoice = billed amount. Sub-line surfaces the minimum top-up when it kicked in. */}
+                            <td className="px-3 py-2 text-right">
+                              <div className="num text-brand font-semibold">{moneyFull(billed, lang)}</div>
+                              {hasMin && (
+                                <div className="text-[10.5px] text-ink-faint num leading-tight whitespace-nowrap">
+                                  {L('περιλ.', 'incl.')} +{moneyFull(inv.minimum_topup ?? 0, lang)} {L('ελάχιστη', 'minimum')}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right num text-ink-soft">{moneyFull(inv.extra, lang)}</td>
+                            <td className="px-3 py-2"><Pill tone={inv.status === 'current' ? 'accent' : 'warn'}>{inv.status === 'current' ? L('τρέχον', 'current') : L('εκκρεμές', 'open')}</Pill></td>
+                            <td className="px-3 py-2 text-right">
+                              <button onClick={() => exportPdf(inv)} disabled={!company} title={L('Κατέβασμα PDF', 'Download PDF')}
+                                className="text-ink-faint hover:text-brand disabled:opacity-30 inline-flex items-center justify-center w-7 h-7 rounded hover:bg-brand-soft/40">
+                                <Icon name="file" size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               ))}
             </div>
