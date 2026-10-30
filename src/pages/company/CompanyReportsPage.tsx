@@ -181,15 +181,24 @@ export default function CompanyReportsPage() {
           {tab === 'overview' && (
             <>
               <div className="bg-surface border border-line rounded-md shadow-sm p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <h2 className="font-display text-[18px] font-semibold">{L('Δαπάνες στην περίοδο', 'Spend over period')}</h2>
+                <div className="flex items-start justify-between mb-3 flex-wrap gap-3">
+                  <div>
+                    <h2 className="font-display text-[18px] font-semibold">{L('Δαπάνες στην περίοδο', 'Spend over period')}</h2>
+                    <p className="text-[11.5px] text-ink-faint font-mono mt-0.5">{from} → {to}</p>
+                  </div>
                   <div className="flex items-center gap-4 text-[11.5px] text-ink-soft">
                     <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-brand"></span>{L('Παροχή', 'Benefit')}</span>
                     <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-xs bg-accent"></span>{L('Επιπλέον', 'Extra')}</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="w-3 h-[1.5px] bg-ink-soft"></span>{L('Παραγγελίες', 'Orders')}</span>
                   </div>
                 </div>
                 <SpendChart
-                  data={data.perDay.map((d) => ({ date: d.date, benefit: d.benefit, extra: Math.max(0, d.gross - d.benefit - vendorPart(d)) }))}
+                  data={data.perDay.map((d) => ({
+                    date: d.date,
+                    benefit: d.benefit,
+                    extra: Math.max(0, d.gross - d.benefit - vendorPart(d)),
+                    orders: d.orders,
+                  }))}
                   lang={lang} height={220} />
               </div>
             <div className="bg-surface border border-line rounded-md shadow-sm">
