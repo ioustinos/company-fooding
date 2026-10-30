@@ -37,6 +37,12 @@ export default function EmployeeEditPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(isEdit)
   const [unassigning, setUnassigning] = useState<string | null>(null)
+  // Available-benefits picker (inline on this page — assign without round-trip to Benefits list).
+  type BenefitLite = { id: string; name_el: string; name_en: string; credit_amount: number; status: string; benefit_rules?: { topup_cadence: string }[] | { topup_cadence: string } | null }
+  const [availableBenefits, setAvailableBenefits] = useState<BenefitLite[]>([])
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerChoice, setPickerChoice] = useState<string>('')
+  const [assigningBenefit, setAssigningBenefit] = useState(false)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -67,6 +73,42 @@ export default function EmployeeEditPage() {
     finally { setLoading(false) }
   }
   useEffect(() => { void loadDetail() /* eslint-disable-next-line */ }, [token, isEdit, id, lang])
+
+  // Load active benefits for this company so the picker can offer them.
+  useEffect(() => {
+    if (!token || !selectedId || !isEdit) return
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/cf-benefits?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
+        if (!r.ok) return
+        const d = await r.json()
+        const list = (d.benefits ?? d ?? []) as BenefitLite[]
+        setAvailableBenefits(list.filter((b) => b.status === 'active'))
+      } catch { /* non-fatal; picker simply shows empty */ }
+    })()
+  }, [token, selectedId, isEdit])
+
+  // Benefits available to assign = active for this company, minus ones already active on this employee.
+  const assignedBenefitIds = new Set(assignments.map((a) => a.benefit_id))
+  const assignableBenefits = availableBenefits.filter((b) => !assignedBenefitIds.has(b.id))
+
+  async function assignBenefit() {
+    if (!token || !id || !pickerChoice) return
+    setAssigningBenefit(true); setErr(null)
+    try {
+      const r = await fetch('/api/cf-benefit-assign', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ benefitId: pickerChoice, target: 'employee', employeeId: id }),
+      })
+      if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
+      // refresh assignments
+      await loadDetail()
+      setPickerOpen(false)
+      setPickerChoice('')
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to assign') }
+    finally { setAssigningBenefit(false) }
+  }
 
   async function unassign(assignmentId: string) {
     if (!token) return
@@ -254,6 +296,54 @@ export default function EmployeeEditPage() {
                       })}
                     </div>
                   )}
+
+                  {/* Inline picker — assign a new benefit without leaving this page */}
+                  <div className="mt-3">
+                    {!pickerOpen ? (
+                      <Btn variant="secondary" size="md" onClick={() => setPickerOpen(true)}
+                        disabled={assignableBenefits.length === 0}
+                        title={assignableBenefits.length === 0
+                          ? (availableBenefits.length === 0
+                              ? L('Δεν υπάρχουν ενεργές παροχές — φτιάξτε μία από «Παροχές»', 'No active benefits — create one from "Benefits"')
+                              : L('Όλες οι ενεργές παροχές έχουν ήδη ανατεθεί', 'All active benefits are already assigned'))
+                          : undefined}>
+                        <Icon name="plus" /><span>{L('Προσθήκη παροχής', 'Add benefit')}</span>
+                      </Btn>
+                    ) : (
+                      <div className="flex items-center gap-2 p-3 border border-line rounded bg-bg/40">
+                        <select
+                          className={txtInputCls + ' flex-1'}
+                          value={pickerChoice}
+                          onChange={(e) => setPickerChoice(e.target.value)}
+                          disabled={assigningBenefit}>
+                          <option value="">{L('— Επιλέξτε παροχή —', '— Select a benefit —')}</option>
+                          {assignableBenefits.map((b) => {
+                            const rule = Array.isArray(b.benefit_rules) ? b.benefit_rules[0] : b.benefit_rules
+                            const cad = rule?.topup_cadence === 'monthly' ? L('κάθε μήνα', 'every month')
+                              : rule?.topup_cadence === 'weekly' ? L('κάθε εβδομάδα', 'every week')
+                              : rule?.topup_cadence === 'daily' ? L('καθημερινά', 'every day')
+                              : rule?.topup_cadence === 'one_time' ? L('μία φορά', 'one-off') : ''
+                            const name = lang === 'el' ? b.name_el : b.name_en
+                            return (
+                              <option key={b.id} value={b.id}>
+                                {name} · {moneyFull(b.credit_amount, lang)}{cad ? ` · ${cad}` : ''}
+                              </option>
+                            )
+                          })}
+                        </select>
+                        <Btn variant="primary" size="md"
+                          disabled={!pickerChoice || assigningBenefit}
+                          onClick={() => void assignBenefit()}>
+                          {assigningBenefit ? L('Ανάθεση…', 'Assigning…') : L('Ανάθεση', 'Assign')}
+                        </Btn>
+                        <Btn variant="secondary" size="md"
+                          disabled={assigningBenefit}
+                          onClick={() => { setPickerOpen(false); setPickerChoice('') }}>
+                          {L('Άκυρο', 'Cancel')}
+                        </Btn>
+                      </div>
+                    )}
+                  </div>
                 </FormSection>
 
                 <FormSection title={L('Πρόσφατες παραγγελίες', 'Recent orders')} sub={L('Οι τελευταίες 30 παραγγελίες του υπαλλήλου.', 'The employee’s last 30 orders.')}>
