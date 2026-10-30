@@ -113,10 +113,10 @@ export async function runSync(args: {
   // route via voucher_code → employee) are still attributed to that one
   // company. Multi-tenant stores (e.g. 5677 = Queensway+Vsltec+Paricom) stay
   // orphan since there's no safe way to disambiguate.
-  const { data: shopAgs, error: shopErr } = await sb
+  const { data: shopAgs, error: shopAgErr } = await sb
     .from('agreement_shops')
     .select('gonnaorder_shop_id, matchmaking_agreements!inner(id, company_id, vendor_id, status)')
-  if (shopErr) throw new Error(`Failed to load agreement_shops: ${shopErr.message}`)
+  if (shopAgErr) throw new Error(`Failed to load agreement_shops: ${shopAgErr.message}`)
   type ShopAgRow = { gonnaorder_shop_id: string; matchmaking_agreements: { id: string; company_id: string; vendor_id: string; status: string } }
   const companiesPerShop = new Map<string, Set<string>>()
   const anyAgForShop = new Map<string, AgRow>()
