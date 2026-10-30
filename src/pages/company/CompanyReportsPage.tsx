@@ -10,7 +10,10 @@ import { downloadCsv } from '../../lib/csv'
 // Αξία − Έκπτωση προμηθευτή − Παροχή = Πληρωμή υπαλλήλου.
 type VendorPart = { vendor_discount?: number; loyalty?: number }
 type Report = {
-  totals: { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number } & VendorPart
+  // billed / min_topup come from dealRulesCore: billed = max(minimum, net) per period.
+  // perCompany[i].minimum is a human label like '€50/ημέρα' when the company's deal has a minimum.
+  totals: { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number; billed?: number; min_topup?: number } & VendorPart
+  perCompany?: Array<{ company?: string; minimum?: string | null; billed?: number; min_topup?: number }>
   perEmployee: ({ name: string; voucher: string; orders: number; gross: number; benefit: number; net_benefit?: number; topup: number } & VendorPart)[]
   perDay: ({ date: string; orders: number; employees: number; gross: number; benefit: number; net_benefit?: number; topup: number } & VendorPart)[]
   orders: ({ date: string | null; token: string | null; voucher: string | null; employee: string | null; gross: number; benefit: number; net_benefit?: number; topup: number; status?: string } & VendorPart)[]
@@ -166,6 +169,40 @@ export default function CompanyReportsPage() {
             <KPI label={L('Πληρωμή υπαλλήλων', 'Employees paid')} value={moneyFull(data.totals.topup, lang)}
               tone="brand" icon="users" sub={L('επιπλέον της παροχής', 'extra beyond benefit')} />
           </div>
+
+          {/* Minimum-charge line — only renders when the company's deal has a
+              minimum commitment rule. Shows the rule in plain text, plus
+              (when triggered) the top-up amount for the current period. */}
+          {(() => {
+            const co = (data.perCompany ?? [])[0]
+            const minLabel = co?.minimum
+            if (!minLabel) return null
+            const triggered = (data.totals.min_topup ?? 0) > 0
+            return (
+              <div className={`rounded-md border px-4 py-3 text-[13px] flex items-center justify-between gap-4 flex-wrap ${
+                triggered ? 'border-warn/40 bg-warn/5' : 'border-line bg-surface'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-soft text-brand"><Icon name="shop" /></span>
+                  <div>
+                    <div className="font-semibold">{L('Ελάχιστη χρέωση', 'Minimum charge')} <span className="num">{minLabel}</span></div>
+                    <div className="text-[12px] text-ink-soft">
+                      {triggered
+                        ? L(`Ενεργοποιήθηκε για αυτή την περίοδο — πρόσθετη χρέωση +${moneyFull(data.totals.min_topup ?? 0, lang)}.`,
+                            `Triggered for this period — extra charge +${moneyFull(data.totals.min_topup ?? 0, lang)}.`)
+                        : L('Δεν ενεργοποιήθηκε (η παροχή κάλυψε το ελάχιστο).', 'Not triggered (benefit covered the minimum).')}
+                    </div>
+                  </div>
+                </div>
+                {typeof data.totals.billed === 'number' && (
+                  <div className="text-right">
+                    <div className="text-[11px] uppercase tracking-[0.08em] text-ink-faint font-semibold">{L('Προς τιμολόγηση', 'To invoice')}</div>
+                    <div className="num text-[16px] font-semibold text-brand">{moneyFull(data.totals.billed, lang)}</div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* tabs */}
           <div className="flex items-center gap-0.5 bg-bg border border-line rounded p-0.5 w-fit">
