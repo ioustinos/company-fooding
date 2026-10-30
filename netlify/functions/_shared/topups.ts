@@ -138,6 +138,22 @@ export async function runTopups(opts: RunTopupsOpts): Promise<TopupResult> {
           gonnaorder_voucher_code: code,
           applied_at: new Date().toISOString(),
         }, { onConflict: 'assignment_id,scheduled_for' })
+      } else {
+        // Dry-run: still write a row so the Topups page shows what WOULD happen.
+        // The topup_status enum has no 'dry_run' value, so we use 'skipped' +
+        // tag the error_detail with 'DRY_RUN:...' and the UI picks it up as a
+        // distinct kind.
+        await sb.from('benefit_topups').upsert({
+          assignment_id: a.id,
+          benefit_id: a.benefit_id,
+          employee_id: a.employee_id,
+          scheduled_for: today,
+          status: 'skipped',
+          amount: 0,
+          gonnaorder_voucher_code: code,
+          applied_at: new Date().toISOString(),
+          error_detail: `DRY_RUN:${result.action}`,
+        }, { onConflict: 'assignment_id,scheduled_for' })
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)

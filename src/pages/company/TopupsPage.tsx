@@ -59,8 +59,11 @@ export default function TopupsPage() {
   return (
     <section className="p-8 space-y-6 max-w-[1100px]">
       <div>
-        <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Ιστορικό ανανεώσεων', 'Top-up history')}</h1>
-        <p className="text-ink-soft mt-2 text-[15px]">{L('Πότε κάθε voucher ανανεώθηκε, με τι αποτέλεσμα. Πηγή: benefit_topups.', 'When each voucher was refreshed and the outcome. Source: benefit_topups.')}</p>
+        <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Αρχείο ανανεώσεων', 'Top-up log')}</h1>
+        <p className="text-ink-soft mt-2 text-[15px]">{L(
+          'Πότε το CF ανανέωσε το υπόλοιπο κάθε voucher, και πού απέτυχε κάτι. Οι εγγραφές «DRY_RUN» δείχνουν τι θα γινόταν αν ο cron δεν ήταν σε δοκιμαστική λειτουργία.',
+          'When CF refreshed each voucher balance, and where anything failed. "DRY_RUN" rows show what the cron would have done if it weren\'t in dry-run mode.'
+        )}</p>
       </div>
 
       {alert && (
@@ -116,7 +119,22 @@ export default function TopupsPage() {
             </thead>
             <tbody className="divide-y divide-line">
               {shown.map((r) => {
-                const tone = r.status === 'applied' ? 'success' : r.status === 'failed' ? 'danger' : r.status === 'skipped' ? 'neutral' : 'accent'
+                // Dry-run rows are stored with status='skipped' + error_detail starting with 'DRY_RUN:'.
+                // Promote them to a distinct label so they're not confused with real skips.
+                const isDryRun = r.status === 'skipped' && (r.error_detail ?? '').startsWith('DRY_RUN:')
+                const label = isDryRun
+                  ? L('δοκιμαστικό', 'dry-run')
+                  : r.status
+                const tone = isDryRun
+                  ? 'accent'
+                  : r.status === 'applied' ? 'success'
+                  : r.status === 'failed'  ? 'danger'
+                  : r.status === 'skipped' ? 'neutral' : 'accent'
+                // In dry-run rows the error_detail is "DRY_RUN:WOULD CREATE" or ":WOULD UPDATE" —
+                // show the "what would happen" bit without the DRY_RUN: prefix.
+                const detailText = isDryRun
+                  ? (r.error_detail ?? '').slice('DRY_RUN:'.length)
+                  : (r.error_detail ?? '')
                 return (
                   <tr key={r.id} className="hover:bg-brand-soft/20">
                     <td className="px-5 py-3 font-mono text-[12px]">{r.applied_at ? new Date(r.applied_at).toLocaleString(lang === 'el' ? 'el-GR' : 'en-GB') : r.scheduled_for}</td>
@@ -124,8 +142,8 @@ export default function TopupsPage() {
                     <td className="px-5 py-3 truncate">{r.employees?.display_name ?? '—'}</td>
                     <td className="px-5 py-3 font-mono text-[12px] text-ink-soft">{r.gonnaorder_voucher_code ?? '—'}</td>
                     <td className="px-5 py-3 text-right num">{r.amount > 0 ? moneyFull(r.amount, lang) : '—'}</td>
-                    <td className="px-5 py-3"><Pill tone={tone}>{r.status}</Pill></td>
-                    <td className="px-5 py-3 text-[11.5px] text-danger font-mono max-w-[280px] truncate" title={r.error_detail ?? ''}>{r.error_detail ?? ''}</td>
+                    <td className="px-5 py-3"><Pill tone={tone}>{label}</Pill></td>
+                    <td className={`px-5 py-3 text-[11.5px] font-mono max-w-[280px] truncate ${isDryRun ? 'text-ink-soft' : 'text-danger'}`} title={detailText}>{detailText}</td>
                   </tr>
                 )
               })}

@@ -120,11 +120,14 @@ function SideNav() {
       { to: '/company/reports', label: L('Αναφορές', 'Reports'), icon: 'chart' },
       { to: '/company/invoices', label: L('Τιμολόγια', 'Invoices'), icon: 'file' },
     ] },
-    { label: L('Σύστημα', 'System'), items: [
-      { to: '/company/topups', label: L('Ανανεώσεις voucher', 'Top-ups'), icon: 'history' },
-      { to: '/company/vouchers', label: L('Υγεία voucher', 'Voucher health'), icon: 'wallet' },
-      { to: '/company/webhooks', label: L('Webhooks', 'Webhooks'), icon: 'bell' },
-      { to: '/company/reconcile', label: L('Αντιστοίχιση GO', 'Reconcile GO'), icon: 'check' },
+    // Σύστημα → Διαγνωστικά: audit / log pages the admin opens only when
+    // something looks off. Order = how often they're actually useful:
+    // Αντιστοίχιση (billing readiness) first, then voucher audit, then logs.
+    { label: L('Διαγνωστικά', 'Diagnostics'), items: [
+      { to: '/company/reconcile', label: L('Αντιστοίχιση παραγγελιών', 'Order reconciliation'), icon: 'check' },
+      { to: '/company/vouchers', label: L('Έλεγχος vouchers', 'Voucher audit'), icon: 'wallet' },
+      { to: '/company/topups', label: L('Αρχείο ανανεώσεων', 'Top-up log'), icon: 'history' },
+      { to: '/company/webhooks', label: L('Αρχείο γεγονότων GO', 'GO event log'), icon: 'bell' },
     ] },
     { label: L('Ρυθμίσεις', 'Settings'), items: [
       { to: '/company/settings', label: L('Προφίλ εταιρείας', 'Company profile'), icon: 'gear' },

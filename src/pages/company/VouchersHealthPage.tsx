@@ -39,8 +39,11 @@ export default function VouchersHealthPage() {
     <section className="p-8 space-y-6 max-w-[1100px]">
       <div className="flex items-start justify-between gap-6 flex-wrap">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Υγεία voucher (GO)', 'Voucher health (GO)')}</h1>
-          <p className="text-ink-soft mt-2 text-[15px]">{L('Ζωντανή σύγκριση των vouchers στο GonnaOrder με τις αναθέσεις στο CF.', 'Live diff of GonnaOrder vouchers against CF assignments.')}</p>
+          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Έλεγχος vouchers', 'Voucher audit')}</h1>
+          <p className="text-ink-soft mt-2 text-[15px]">{L(
+            'Για κάθε υπάλληλο με ανατεθειμένη παροχή: υπάρχει πραγματικά το voucher του στο GonnaOrder, είναι ενεργό και δεν έχει λήξει;',
+            'For each employee with an assigned benefit: does their GonnaOrder voucher actually exist, is it active, and has it not expired?'
+          )}</p>
         </div>
         <Btn variant="primary" size="md" disabled={loading} onClick={() => void load()}><Icon name="history" /><span>{loading ? L('Φόρτωση…', 'Loading…') : L('Ανανέωση', 'Refresh')}</span></Btn>
       </div>

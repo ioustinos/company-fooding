@@ -37,8 +37,11 @@ export default function WebhookEventsPage() {
     <section className="p-8 space-y-6 max-w-[1100px]">
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Webhook events', 'Webhook events')}</h1>
-          <p className="text-ink-soft mt-2 text-[15px]">{L('Όλα τα εισερχόμενα events από το GonnaOrder. Source of truth: webhook_events.', 'Every inbound event from GonnaOrder. Source of truth: webhook_events.')}</p>
+          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Αρχείο γεγονότων GO', 'GO event log')}</h1>
+          <p className="text-ink-soft mt-2 text-[15px]">{L(
+            'Μας ειδοποίησε το GonnaOrder για κάθε παραγγελία; Ποια γεγονότα απέτυχαν στην επεξεργασία; Είναι αρχείο για debugging — όχι πηγή για τιμολόγηση.',
+            'Did GonnaOrder notify us about every order? Which events failed to process? This is a debug log — not a billing source.'
+          )}</p>
         </div>
         <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 h-10 px-4 bg-surface text-ink border border-line hover:border-ink-soft rounded text-[14px] font-medium">
           <Icon name="history" /><span>{L('Ανανέωση', 'Refresh')}</span>
