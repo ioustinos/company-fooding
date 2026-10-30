@@ -108,6 +108,34 @@ export async function runSync(args: {
     agByCompanyVendor.set(`${a.company_id}::${a.vendor_id}`, a)
   }
 
+  // Single-tenant store → company fallback. For stores served by exactly ONE
+  // active (vendor × company) agreement, no-voucher orders (where we can't
+  // route via voucher_code → employee) are still attributed to that one
+  // company. Multi-tenant stores (e.g. 5677 = Queensway+Vsltec+Paricom) stay
+  // orphan since there's no safe way to disambiguate.
+  const { data: shopAgs, error: shopErr } = await sb
+    .from('agreement_shops')
+    .select('gonnaorder_shop_id, matchmaking_agreements!inner(id, company_id, vendor_id, status)')
+  if (shopErr) throw new Error(`Failed to load agreement_shops: ${shopErr.message}`)
+  type ShopAgRow = { gonnaorder_shop_id: string; matchmaking_agreements: { id: string; company_id: string; vendor_id: string; status: string } }
+  const companiesPerShop = new Map<string, Set<string>>()
+  const anyAgForShop = new Map<string, AgRow>()
+  for (const row of (shopAgs ?? []) as unknown as ShopAgRow[]) {
+    if (row.matchmaking_agreements?.status !== 'active') continue
+    const sid = row.gonnaorder_shop_id
+    const ag = row.matchmaking_agreements
+    if (!companiesPerShop.has(sid)) companiesPerShop.set(sid, new Set())
+    companiesPerShop.get(sid)!.add(ag.company_id)
+    anyAgForShop.set(sid, { id: ag.id, company_id: ag.company_id, vendor_id: ag.vendor_id })
+  }
+  const singleTenantAgByShop = new Map<string, AgRow>()
+  for (const [sid, companies] of companiesPerShop) {
+    if (companies.size === 1) {
+      const ag = anyAgForShop.get(sid)
+      if (ag) singleTenantAgByShop.set(sid, ag)
+    }
+  }
+
   // Single active vendor for now (Wecook). Future: shop→vendor map.
   type VendorRow = { id: string }
   const { data: vendors, error: venErr } = await sb
@@ -148,7 +176,9 @@ export async function runSync(args: {
       const deduped = dedupGoOrders(raw)
       shopOut.fetched = deduped.length
       const r = await applyShopOrders({
-        sb, orders: deduped, shopId, vendorId, empLookup, agByCompanyVendor, splitter, dryRun: args.dryRun,
+        sb, orders: deduped, shopId, vendorId, empLookup, agByCompanyVendor, splitter,
+        singleTenantAg: singleTenantAgByShop.get(shopId) ?? null,
+        dryRun: args.dryRun,
       })
       shopOut.matched = r.matched
       shopOut.unmatched = r.unmatched
@@ -181,9 +211,12 @@ async function applyShopOrders(args: {
   empLookup: EmployeeLookup
   agByCompanyVendor: Map<string, { id: string; company_id: string; vendor_id: string }>
   splitter: BillingSplitter
+  // Fallback agreement for no-voucher orders when the shop is single-tenant.
+  // null for multi-tenant shops — those stay orphan since we can't disambiguate.
+  singleTenantAg: { id: string; company_id: string; vendor_id: string } | null
   dryRun: boolean
 }): Promise<{ matched: number; unmatched: number; written: number }> {
-  const { sb, orders, shopId, vendorId, empLookup, agByCompanyVendor, splitter, dryRun } = args
+  const { sb, orders, shopId, vendorId, empLookup, agByCompanyVendor, splitter, singleTenantAg, dryRun } = args
 
   const rows: Array<Record<string, unknown>> = []
   const itemsByExtId = new Map<string, ReturnType<typeof parseOrder>['items']>()
@@ -204,9 +237,20 @@ async function applyShopOrders(args: {
       })
     }
     const agreement = employee ? agByCompanyVendor.get(`${employee.company_id}::${vendorId}`) ?? null : null
+
+    // No-voucher fallback: if we couldn't route via voucher/employee AND the
+    // shop is single-tenant, attribute to that one company so it shows in
+    // their reports (not billable — benefit_applied stays 0). Multi-tenant
+    // shops stay orphan on purpose (ambiguous).
+    const needsFallback = !employee && (order.voucher_code === null || order.voucher_code === '')
+    const fallbackAg = needsFallback ? singleTenantAg : null
+
+    const effectiveCompanyId = employee?.company_id ?? fallbackAg?.company_id ?? null
+    const effectiveAgreement = agreement ?? fallbackAg
+
     const money = splitter.split({
-      agreement_id: agreement?.id ?? null,
-      company_id: employee?.company_id ?? null,
+      agreement_id: effectiveAgreement?.id ?? null,
+      company_id: effectiveCompanyId,
       delivery_date: order.delivery_date,
       subtotal: order.subtotal,
       voucher_discount: order.benefit_applied,
@@ -220,9 +264,9 @@ async function applyShopOrders(args: {
       order_token: order.order_token,
       voucher_code: order.voucher_code,
       employee_id:  employee?.id ?? null,
-      company_id:   employee?.company_id ?? null,
+      company_id:   effectiveCompanyId,
       vendor_id:    vendorId,
-      agreement_id: agreement?.id ?? null,
+      agreement_id: effectiveAgreement?.id ?? null,
       office_id:    employee?.default_office_id ?? null,
       subtotal:        order.subtotal,
       benefit_applied: money.benefit_applied,

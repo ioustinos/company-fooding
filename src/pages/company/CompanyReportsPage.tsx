@@ -306,17 +306,30 @@ export default function CompanyReportsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {filteredOrders.map((o, i) => (
-                    <tr key={i} className="hover:bg-brand-soft/20">
-                      <td className="px-4 py-2 font-mono text-[12px]">{o.date ?? '—'}</td>
-                      <td className="px-4 py-2 font-mono text-[12px] text-ink-soft truncate">{o.token ?? '—'}</td>
-                      <td className="px-4 py-2 truncate">{o.employee ?? (o.voucher ?? '—')}</td>
-                      <td className="px-4 py-2 text-right num">{moneyFull(o.gross, lang)}</td>
-                      {hasVendor && <td className="px-4 py-2 text-right num text-ink-soft">{vendorPart(o) > 0 ? moneyFull(vendorPart(o), lang) : '—'}</td>}
-                      <td className="px-4 py-2 text-right num text-brand">{moneyFull(o.benefit, lang)}</td>
-                      <td className="px-4 py-2 text-right num text-ink-soft">{o.topup > 0 ? moneyFull(o.topup, lang) : '—'}</td>
-                    </tr>
-                  ))}
+                  {filteredOrders.map((o, i) => {
+                    // No-voucher order: employee ate without using their voucher.
+                    // Shown for visibility but not billable (benefit stays 0).
+                    const noVoucher = !o.voucher || o.voucher.trim() === ''
+                    return (
+                      <tr key={i} className="hover:bg-brand-soft/20">
+                        <td className="px-4 py-2 font-mono text-[12px]">{o.date ?? '—'}</td>
+                        <td className="px-4 py-2 font-mono text-[12px] text-ink-soft truncate">{o.token ?? '—'}</td>
+                        <td className="px-4 py-2 truncate">
+                          <span>{o.employee ?? (o.voucher ?? '—')}</span>
+                          {noVoucher && (
+                            <span className="ml-2 inline-block px-1.5 py-0.5 rounded-xs text-[10px] font-semibold uppercase tracking-[0.05em] bg-ink-faint/10 text-ink-soft align-middle"
+                              title={L('Παραγγελία χωρίς voucher — εμφάνιση για ορατότητα, δεν τιμολογείται', 'No-voucher order — shown for visibility, not billable')}>
+                              {L('χωρίς voucher', 'no voucher')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right num">{moneyFull(o.gross, lang)}</td>
+                        {hasVendor && <td className="px-4 py-2 text-right num text-ink-soft">{vendorPart(o) > 0 ? moneyFull(vendorPart(o), lang) : '—'}</td>}
+                        <td className="px-4 py-2 text-right num text-brand">{noVoucher ? '—' : moneyFull(o.benefit, lang)}</td>
+                        <td className="px-4 py-2 text-right num text-ink-soft">{o.topup > 0 ? moneyFull(o.topup, lang) : '—'}</td>
+                      </tr>
+                    )
+                  })}
                   {filteredOrders.length === 0 && (
                     <tr><td colSpan={hasVendor ? 7 : 6} className="px-4 py-6 text-center text-ink-faint">{L('Καμία παραγγελία', 'No orders')}</td></tr>
                   )}
