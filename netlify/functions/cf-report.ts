@@ -157,12 +157,16 @@ export default async (req: Request, _ctx: Context) => {
       const needsCalendar = rules.some((x) => x.kind === 'minimum_commitment' && x.counts_on !== 'days_with_orders')
       const calendar = needsCalendar ? await loadCalendar(sb, deal.companyId, from, to) : undefined
       const inv = computeInvoice({ orders: deal.orders, rules, caps, companyId: deal.companyId, from, to, calendar })
-      const bc = billedByCompany.get(deal.companyId) ?? { net: 0, billed: 0, min_topup: 0, periods: 0, minimum_label: null }
+      const bc = billedByCompany.get(deal.companyId) ?? { net: 0, billed: 0, min_topup: 0, periods: 0, minimum_label: null as string | null, minimum_amount_cents: null as number | null, minimum_period: null as string | null }
       bc.net += inv.net; bc.billed += inv.billed; bc.min_topup += inv.minimum_topup; bc.periods += inv.periods.length
       const minRule = rules.find((x) => x.kind === 'minimum_commitment' && x.valid_from <= to && (!x.valid_to || x.valid_to >= from))
-      if (minRule) bc.minimum_label = minRule.min_basis === 'fixed_amount'
-        ? `${((minRule.amount_cents ?? 0) / 100).toFixed(2)}/${minRule.period}`
-        : `${minRule.min_orders}×benefit/${minRule.period}`
+      if (minRule) {
+        bc.minimum_label = minRule.min_basis === 'fixed_amount'
+          ? `${((minRule.amount_cents ?? 0) / 100).toFixed(2)}/${minRule.period}`
+          : `${minRule.min_orders}×benefit/${minRule.period}`
+        bc.minimum_amount_cents = minRule.min_basis === 'fixed_amount' ? (minRule.amount_cents ?? null) : null
+        bc.minimum_period = minRule.period ?? null
+      }
       billedByCompany.set(deal.companyId, bc)
       for (const p of inv.periods) {
         // day-level view: put each period's billing on its last day
@@ -175,7 +179,7 @@ export default async (req: Request, _ctx: Context) => {
     for (const r of rows) {
       if (r.agreement_id || r.status === 'cancelled') continue
       const cKey = r.company_id ?? 'none'
-      const bc = billedByCompany.get(cKey) ?? { net: 0, billed: 0, min_topup: 0, periods: 0, minimum_label: null }
+      const bc = billedByCompany.get(cKey) ?? { net: 0, billed: 0, min_topup: 0, periods: 0, minimum_label: null as string | null, minimum_amount_cents: null as number | null, minimum_period: null as string | null }
       bc.net += r.benefit_applied; bc.billed += r.benefit_applied
       billedByCompany.set(cKey, bc)
       if (r.delivery_date) {
@@ -188,12 +192,13 @@ export default async (req: Request, _ctx: Context) => {
 
     const perCompany = [...byCompany.entries()]
       .map(([key, c]) => {
-        const b = billedByCompany.get(key) ?? { net: 0, billed: 0, min_topup: 0, periods: 0, minimum_label: null }
+        const b = billedByCompany.get(key) ?? { net: 0, billed: 0, min_topup: 0, periods: 0, minimum_label: null as string | null, minimum_amount_cents: null as number | null, minimum_period: null as string | null }
         return {
           company: c.company, orders: c.orders, employees: c.employees.size, gross: c.gross,
           benefit: c.benefit, net_benefit: b.net, topup: c.topup,
           loyalty: c.loyalty, vendor_discount: c.vendor_discount, billed: b.billed, min_topup: b.min_topup,
           billed_periods: b.periods, minimum: b.minimum_label,
+          minimum_amount_cents: b.minimum_amount_cents, minimum_period: b.minimum_period,
         }
       })
       .sort((a, b) => b.gross - a.gross)

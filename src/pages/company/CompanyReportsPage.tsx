@@ -13,7 +13,7 @@ type Report = {
   // billed / min_topup come from dealRulesCore: billed = max(minimum, net) per period.
   // perCompany[i].minimum is a human label like '€50/ημέρα' when the company's deal has a minimum.
   totals: { orders: number; gross: number; benefit: number; net_benefit?: number; topup: number; billed?: number; min_topup?: number } & VendorPart
-  perCompany?: Array<{ company?: string; minimum?: string | null; billed?: number; min_topup?: number }>
+  perCompany?: Array<{ company?: string; minimum?: string | null; minimum_amount_cents?: number | null; minimum_period?: string | null; billed?: number; min_topup?: number }>
   perEmployee: ({ name: string; voucher: string; orders: number; gross: number; benefit: number; net_benefit?: number; topup: number } & VendorPart)[]
   perDay: ({ date: string; orders: number; employees: number; gross: number; benefit: number; net_benefit?: number; topup: number } & VendorPart)[]
   orders: ({ date: string | null; token: string | null; voucher: string | null; employee: string | null; gross: number; benefit: number; net_benefit?: number; topup: number; status?: string } & VendorPart)[]
@@ -168,10 +168,14 @@ export default function CompanyReportsPage() {
                 ))
               }
               if (hasMinTopup) {
-                parts.push(L(
+                // Append the deal's own minimum label (e.g. '€50/ημέρα') so the
+                // user sees WHY the top-up applied, not just how much.
+                const dealMin = (data.perCompany ?? [])[0]?.minimum
+                const minPiece = L(
                   `+${moneyFull(minTopup, lang)} ελάχιστη χρέωση`,
                   `+${moneyFull(minTopup, lang)} minimum charge`
-                ))
+                )
+                parts.push(dealMin ? `${minPiece} (${dealMin})` : minPiece)
               }
               return (
                 <KPI label={L('Καλύφθηκε από παροχή', 'Covered by benefit')} value={moneyFull(gross, lang)}
@@ -241,14 +245,25 @@ export default function CompanyReportsPage() {
                     <span className="inline-flex items-center gap-1.5"><span className="w-3 h-[1.5px] bg-ink-soft"></span>{L('Παραγγελίες', 'Orders')}</span>
                   </div>
                 </div>
-                <SpendChart
-                  data={data.perDay.map((d) => ({
-                    date: d.date,
-                    benefit: d.benefit,
-                    extra: Math.max(0, d.gross - d.benefit - vendorPart(d)),
-                    orders: d.orders,
-                  }))}
-                  lang={lang} height={220} />
+                {(() => {
+                  // Pass the per-day minimum threshold so the chart can draw
+                  // a reference line. Only when the deal uses a fixed-amount
+                  // minimum with period='day' — weekly/monthly minimums don't
+                  // map cleanly to a daily bar height.
+                  const co = (data.perCompany ?? [])[0]
+                  const minPerDay = (co?.minimum_period === 'day' && typeof co?.minimum_amount_cents === 'number')
+                    ? co.minimum_amount_cents : null
+                  return (
+                    <SpendChart
+                      data={data.perDay.map((d) => ({
+                        date: d.date,
+                        benefit: d.benefit,
+                        extra: Math.max(0, d.gross - d.benefit - vendorPart(d)),
+                        orders: d.orders,
+                      }))}
+                      lang={lang} height={240} minPerDayCents={minPerDay} />
+                  )
+                })()}
               </div>
             <div className="bg-surface border border-line rounded-md shadow-sm">
               <div className="p-4 border-b border-line">
