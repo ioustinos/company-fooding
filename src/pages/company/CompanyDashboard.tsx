@@ -15,21 +15,19 @@ type Dash = {
 }
 type ActivityEvent = { id: string; kind: string; actor_email: string | null; summary_el: string | null; summary_en: string | null; created_at: string }
 
-// Build a continuous daily series from the earliest order day (or `fromIso`
-// if the trend is empty) through today, zero-filling gaps so the chart reads
-// as a real timeline rather than just the last N days.
-function buildSeries(trend: Dash['trend'], fromIso: string) {
+// Build a continuous daily series from `fromIso` through `toIso`, zero-filling
+// gaps so the chart reads as a real timeline rather than skipping empty days.
+function buildSeries(trend: Dash['trend'], fromIso: string, toIso: string) {
   const byDate = new Map(trend.map((t) => [t.date, t]))
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const startIso = trend.length > 0 ? trend[0].date : fromIso
-  const start = new Date(startIso + 'T00:00:00')
-  const out: { date: string; benefit: number; extra: number }[] = []
-  for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+  const start = new Date(fromIso + 'T00:00:00')
+  const end   = new Date(toIso + 'T00:00:00')
+  const out: { date: string; benefit: number; extra: number; orders: number }[] = []
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const iso = d.toISOString().slice(0, 10)
     const row = byDate.get(iso)
     const benefit = row?.benefit ?? 0
     const gross = row?.gross ?? 0
-    out.push({ date: iso, benefit, extra: Math.max(0, gross - benefit) })
+    out.push({ date: iso, benefit, extra: Math.max(0, gross - benefit), orders: row?.orders ?? 0 })
   }
   return out
 }
@@ -48,8 +46,19 @@ export default function CompanyDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const from = '2026-03-01'
-  const to = new Date().toISOString().slice(0, 10)
+  // Dashboard chart range. Default = current month (resets 1st of month).
+  // Switch to 'week' for a rolling 7-day read.
+  const [range, setRange] = useState<'week' | 'month'>('month')
+  const fmtDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const to = fmtDate(new Date())
+  const from = (() => {
+    const now = new Date()
+    if (range === 'week') {
+      const w = new Date(now); w.setDate(now.getDate() - 6)
+      return fmtDate(w)
+    }
+    return fmtDate(new Date(now.getFullYear(), now.getMonth(), 1))
+  })()
 
   useEffect(() => {
     if (!session?.access_token || !selectedId) return
@@ -66,7 +75,7 @@ export default function CompanyDashboard() {
       } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
       finally { setLoading(false) }
     })()
-  }, [session?.access_token, selectedId])
+  }, [session?.access_token, selectedId, from, to])
 
   function actKind(kind: string): 'order' | 'signup' | 'invoice' | 'benefit_start' | 'topup_failed' {
     if (kind.startsWith('employee.')) return 'signup'
@@ -92,7 +101,7 @@ export default function CompanyDashboard() {
     return L('Καλό βράδυ', 'Good evening')
   })()
 
-  const series = data ? buildSeries(data.trend, from) : []
+  const series = data ? buildSeries(data.trend, from, to) : []
   const windowTotal = series.reduce((a, d) => a + d.benefit + d.extra, 0)
   const seriesStart = series[0]?.date
   const seriesEnd = series[series.length - 1]?.date
@@ -137,10 +146,10 @@ export default function CompanyDashboard() {
           <div className="grid lg:grid-cols-[3fr_2fr] gap-6">
             {/* chart */}
             <div className="bg-surface border border-line rounded-md shadow-sm p-6">
-              <div className="flex items-start justify-between mb-5">
+              <div className="flex items-start justify-between mb-3 gap-4 flex-wrap">
                 <div>
                   <h2 className="font-display text-[20px] font-semibold">{L('Δαπάνες ανά ημέρα', 'Spend per day')}</h2>
-                  <div className="flex items-center gap-4 mt-2">
+                  <div className="flex items-center gap-4 mt-2 flex-wrap">
                     <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-soft"><span className="w-2.5 h-2.5 rounded-xs bg-brand"></span>{L('Καλύπτεται από παροχή', 'Covered by benefit')}</span>
                     <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-soft"><span className="w-2.5 h-2.5 rounded-xs bg-accent"></span>{L('Επιπλέον από υπαλλήλους', 'Extra paid by employees')}</span>
                   </div>
@@ -149,6 +158,16 @@ export default function CompanyDashboard() {
                   <div className="num text-[22px] font-semibold">{moneyFull(windowTotal, lang)}</div>
                   <div className="text-[11px] text-ink-faint">{L(`σύνολο ${series.length} ημερών`, `${series.length}-day total`)}</div>
                 </div>
+              </div>
+              {/* Range toggle. Default = this month (changes on 1st);
+                  Week = rolling last 7 days. Fetching re-runs via from/to deps. */}
+              <div className="flex items-center gap-0.5 bg-bg border border-line rounded p-0.5 w-fit mb-4">
+                {(['week', 'month'] as const).map((r) => (
+                  <button key={r} onClick={() => setRange(r)}
+                    className={`px-3 py-1 rounded-xs text-[12px] font-medium transition ${range === r ? 'bg-surface shadow-sm text-ink' : 'text-ink-soft hover:text-ink'}`}>
+                    {r === 'week' ? L('Τελευταίες 7 ημέρες', 'Last 7 days') : L('Τρέχων μήνας', 'This month')}
+                  </button>
+                ))}
               </div>
               <SpendChart data={series} lang={lang} height={180} />
               <div className="flex justify-between mt-1 num text-[10px] text-ink-faint">
