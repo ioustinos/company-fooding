@@ -146,24 +146,36 @@ export default function CompanyReportsPage() {
             <KPI label={L('Συνολική δαπάνη', 'Total spend')} value={moneyFull(data.totals.gross, lang)}
               tone="accent" icon="wallet" sub={`${from} → ${to}`} />
             {(() => {
-              // Big number = gross benefit covered. Subline = % covered, plus
-              // the post-discount amount when a vendor discount applies.
-              // Discount % is derived from gross vs net so we don't have to
-              // round-trip another field; if mixed vendors, this is a blended
-              // average (informational).
+              // Big number = gross benefit covered. Subline composes 3 pieces:
+              //   1. '%' of total spend the benefit covered (always)
+              //   2. post-discount net benefit (when a vendor discount applies)
+              //   3. '+€X ελάχιστη χρέωση' when the deal's minimum-commitment
+              //      rule kicked in for this period (so admins can see where
+              //      the invoice total came from without hunting around).
+              // Pieces 2 and 3 are composed via a filter so a company with
+              // only a discount OR only a minimum OR both reads naturally.
               const gross = data.totals.benefit
               const net = data.totals.net_benefit ?? gross
               const hasDiscount = gross > 0 && net < gross
               const discountPct = hasDiscount ? Math.round(((gross - net) / gross) * 100) : 0
-              const sub = hasDiscount
-                ? L(
-                    `${benefitShare}% · ${moneyFull(net, lang)} μετά την έκπτωση ${discountPct}%`,
-                    `${benefitShare}% · ${moneyFull(net, lang)} after ${discountPct}% discount`
-                  )
-                : `${benefitShare}%`
+              const minTopup = data.totals.min_topup ?? 0
+              const hasMinTopup = minTopup > 0
+              const parts: string[] = [`${benefitShare}%`]
+              if (hasDiscount) {
+                parts.push(L(
+                  `${moneyFull(net, lang)} μετά την έκπτωση ${discountPct}%`,
+                  `${moneyFull(net, lang)} after ${discountPct}% discount`
+                ))
+              }
+              if (hasMinTopup) {
+                parts.push(L(
+                  `+${moneyFull(minTopup, lang)} ελάχιστη χρέωση`,
+                  `+${moneyFull(minTopup, lang)} minimum charge`
+                ))
+              }
               return (
                 <KPI label={L('Καλύφθηκε από παροχή', 'Covered by benefit')} value={moneyFull(gross, lang)}
-                  tone="success" icon="chart" sub={sub} />
+                  tone="success" icon="chart" sub={parts.join(' · ')} />
               )
             })()}
             <KPI label={L('Πληρωμή υπαλλήλων', 'Employees paid')} value={moneyFull(data.totals.topup, lang)}
