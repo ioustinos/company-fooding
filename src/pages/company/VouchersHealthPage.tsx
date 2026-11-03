@@ -36,10 +36,10 @@ export default function VouchersHealthPage() {
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, selectedId])
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div className="flex items-start justify-between gap-6 flex-wrap">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Έλεγχος vouchers', 'Voucher audit')}</h1>
+          <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Έλεγχος vouchers', 'Voucher audit')}</h1>
           <p className="text-ink-soft mt-2 text-[15px]">{L(
             'Για κάθε υπάλληλο με ανατεθειμένη παροχή: υπάρχει πραγματικά το voucher του στο GonnaOrder, είναι ενεργό και δεν έχει λήξει;',
             'For each employee with an assigned benefit: does their GonnaOrder voucher actually exist, is it active, and has it not expired?'

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, Btn, KPI, Pill, moneyFull } from '../../lib/specui'
+import { Icon, Btn, KPI, Pill, InfoTip, moneyFull, ErrorBanner, friendlyError } from '../../lib/specui'
 import { downloadInvoicePdf } from '../../lib/invoicePdf'
 
 type Invoice = {
@@ -57,7 +57,7 @@ export default function InvoicesPage() {
       const r = await fetch(`/api/cf-invoices?companyId=${selectedId}&from=${from}&to=${to}`, { headers: { authorization: `Bearer ${token}` } })
       if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
       setData(await r.json())
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+    } catch (e) { setError(friendlyError(e, lang)) }
     finally { setLoading(false) }
   }
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, selectedId])
@@ -118,10 +118,10 @@ export default function InvoicesPage() {
   }, [data, tab])
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div className="flex items-start justify-between gap-6 flex-wrap">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Τιμολόγια', 'Invoices')}</h1>
+          <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Τιμολόγια', 'Invoices')}</h1>
           <p className="text-ink-soft mt-2 text-[15px]">{L('Αυτόματα παραγόμενα από τη χρήση παροχής ανά μήνα και συνεργάτη.', 'Auto-derived from benefit usage per month per vendor.')}</p>
         </div>
         <div className="flex items-end gap-2">
@@ -137,14 +137,22 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {error && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={() => void load()} lang={lang} />}
       {data && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <KPI label={L('Σύνολο τιμολογίων', 'Invoices')} value={data.invoices.length} tone="brand" icon="file" />
             <KPI label={L('Δαπάνη', 'Spend')} value={moneyFull(data.totals.gross, lang)} tone="accent" icon="wallet" />
             <KPI
-              label={L('Προς τιμολόγηση', 'To invoice')}
+              label={
+                <>
+                  {L('Προς τιμολόγηση', 'To invoice')}{' '}
+                  <InfoTip>{L(
+                    'Το ποσό που αναμένεται να χρεώσει ο συνεργάτης. Ένδειξη μόνο — το επίσημο τιμολόγιο εκδίδεται από τον ίδιο μέσω του φορολογικού του συστήματος.',
+                    'What the vendor is expected to invoice. For reference only — the actual invoice is issued by the vendor via their tax-authority system.',
+                  )}</InfoTip>
+                </>
+              }
               value={moneyFull(data.totals.billed ?? data.totals.benefit_net, lang)}
               tone="success" icon="chart"
               sub={[
@@ -210,8 +218,20 @@ export default function InvoicesPage() {
                         <th className="px-3 py-2">{L('Συνεργάτης', 'Vendor')}</th>
                         <th className="px-3 py-2 text-right">{L('Παρ.', 'Ord.')}</th>
                         <th className="px-3 py-2 text-right">{L('Δαπάνη', 'Spend')}</th>
-                        <th className="px-3 py-2 text-right whitespace-normal leading-tight max-w-[110px]">{L('Παροχή χρεώσιμη', 'Benefit chargeable')}</th>
-                        <th className="px-3 py-2 text-right whitespace-normal leading-tight max-w-[110px]">{L('Προς τιμολόγηση', 'To invoice')}</th>
+                        <th className="px-3 py-2 text-right whitespace-normal leading-tight max-w-[110px]">
+                          {L('Παροχή χρεώσιμη', 'Benefit chargeable')}{' '}
+                          <InfoTip align="end">{L(
+                            'Παροχή που αντλήθηκε, μείον τυχόν συμφωνημένη έκπτωση συνεργάτη. Αυτό είναι το ποσό που αντιστοιχεί στη χρήση — χωρίς τον ΦΠΑ και χωρίς την ελάχιστη χρέωση.',
+                            'Benefit consumed, minus any agreed vendor discount. The amount tied to actual usage — before VAT and before any minimum top-up.',
+                          )}</InfoTip>
+                        </th>
+                        <th className="px-3 py-2 text-right whitespace-normal leading-tight max-w-[110px]">
+                          {L('Προς τιμολόγηση', 'To invoice')}{' '}
+                          <InfoTip align="end">{L(
+                            'Παροχή χρεώσιμη + τυχόν ελάχιστη χρέωση αν η παροχή δεν την κάλυψε. Ένδειξη — επίσημο τιμολόγιο εκδίδει ο συνεργάτης.',
+                            'Chargeable benefit + any minimum top-up when benefit didn\'t meet it. Indicative — the official invoice comes from the vendor.',
+                          )}</InfoTip>
+                        </th>
                         <th className="px-3 py-2 text-right">{L('Επιπλέον', 'Extra')}</th>
                         <th className="px-3 py-2">{L('Κατάσταση', 'Status')}</th>
                         <th className="px-3 py-2 text-right">PDF</th>

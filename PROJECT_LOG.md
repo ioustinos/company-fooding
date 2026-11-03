@@ -20,6 +20,83 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-10-30 — Runbook: rotating webhook & admin keys
+
+**Status:** Doc only
+**Linked tickets:** CF-105
+**Why:** Two shared secrets gate inbound traffic and administrative sync
+triggers: `CF_WEBHOOK_KEY` (GonnaOrder → CF webhook) and `CF_ADMIN_TOKEN`
+(manual + cron sync of GO orders). If either leaks or an operator with
+access leaves, we need a safe swap that doesn't drop events.
+
+### `CF_WEBHOOK_KEY` — GonnaOrder → CF live-order webhook
+
+Receiver: `netlify/functions/cf-gonnaorder-webhook.ts`. Secret is passed as
+`?key=…` query param; mismatched key returns 401 (no body). GonnaOrder has
+one webhook URL per store with this key baked in.
+
+Rotation (zero-downtime):
+
+1. Generate a new secret: `openssl rand -hex 32`.
+2. In Netlify → company-fooding → Site settings → Environment variables,
+   add `CF_WEBHOOK_KEY_NEXT` with the new value. **Keep `CF_WEBHOOK_KEY`
+   on the old value** until GO is updated. Deploy — the function now
+   accepts either key (see note below).
+3. For every live store (currently 5677 Queensway, 5909 Pollfish, 7085
+   HarborLab, +Paricom/Vsltec stores): log into GonnaOrder admin as
+   `GONNAORDER_USERNAME`, open the store's **Integrations → Webhooks**,
+   edit the saved URL to replace `?key=<old>` with `?key=<new>`, save.
+4. Watch `webhook_events` in Supabase for 15 min — all new rows should
+   be `source='gonnaorder'` with `processed=true`. If anything 401s,
+   you missed a store.
+5. Swap `CF_WEBHOOK_KEY` to the new value and remove
+   `CF_WEBHOOK_KEY_NEXT`. Redeploy.
+
+Note: the receiver today only honours `CF_WEBHOOK_KEY`. For a true dual-key
+window during rotation, patch it to accept either `CF_WEBHOOK_KEY` **or**
+`CF_WEBHOOK_KEY_NEXT`, deploy, do the GO cutover, then collapse. If you
+can tolerate ≤2 min of dropped webhooks (events are also captured by
+the hourly reconcile sync, so no permanent data loss), you can skip
+the dual-key step and swap in-place: update GO stores first, then the
+Netlify env var, redeploy immediately. GO retries 3× over ~10 min.
+
+### `CF_ADMIN_TOKEN` — manual + cron sync + sensitive admin ops
+
+Used by `cf-sync-gonnaorder`, `cf-sync-trigger`, `cf-topups-cron`,
+`cf-scheduled-sync`. Sent as `authorization: Bearer <token>` header for
+manual triggers; the Netlify scheduled functions read it from env.
+
+Rotation:
+
+1. Generate a new secret: `openssl rand -hex 32`.
+2. In Netlify env, replace `CF_ADMIN_TOKEN`. Redeploy.
+3. If anyone (ops, cron tools outside Netlify, your own CLI scripts) has
+   the old token cached, update it there. There's no dual-key window —
+   the handful of callers are in-house.
+4. Trigger `/api/cf-sync-gonnaorder` manually with the new token to
+   verify.
+
+### Keys that live elsewhere (do NOT rotate here)
+
+- `SUPABASE_SERVICE_ROLE_KEY` → Supabase dashboard. See the Supabase
+  project settings → Project API Keys to regenerate. Netlify env must
+  be updated the same minute, since this key is only ever on the
+  server side.
+- `VITE_SUPABASE_ANON_KEY` → safe to leak (RLS enforces). Rotate only
+  if Supabase forces it.
+- `GONNAORDER_USERNAME` / `GONNAORDER_PASSWORD` → the GO admin login
+  used by `_shared/gonnaorder.ts` to mint a JWT. Change in GonnaOrder's
+  admin UI, then Netlify env.
+- `RESEND_FROM_ADDRESS` → not a secret.
+
+### Audit trail
+
+Each rotation: add a one-line entry to this log under today's date with
+`**Rotated:** <key name>` and the operator initials. No PII — never
+record the old or new value.
+
+---
+
 ## 2026-10-05 — Deal terms: dated rules per deal drive all billing
 
 **Status:** Done (migration 22 applied 2026-10-02, pushed to main)

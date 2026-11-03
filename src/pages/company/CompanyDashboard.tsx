@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, KPI, ActIcon, moneyFull } from '../../lib/specui'
+import { Icon, KPI, ActIcon, moneyFull, ErrorBanner, friendlyError } from '../../lib/specui'
 import type { IconName } from '../../lib/specui'
 import { SpendChart } from '../../lib/specCharts'
 
@@ -72,7 +72,7 @@ export default function CompanyDashboard() {
         if (!dashRes.ok) { const b = await dashRes.json().catch(() => ({})); throw new Error(b.error || `HTTP ${dashRes.status}`) }
         setData(await dashRes.json())
         if (actRes.ok) { const d = await actRes.json(); setActivity(d.events ?? []) }
-      } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+      } catch (e) { setError(friendlyError(e, lang)) }
       finally { setLoading(false) }
     })()
   }, [session?.access_token, selectedId, from, to])
@@ -117,9 +117,9 @@ export default function CompanyDashboard() {
   ]
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div>
-        <h1 className="font-display text-[36px] leading-[44px] font-semibold">
+        <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">
           {greeting}, <span className="italic text-ink-soft">{firstName}</span>
         </h1>
         <p className="text-ink-soft mt-2 text-[15px]">
@@ -127,7 +127,7 @@ export default function CompanyDashboard() {
         </p>
       </div>
 
-      {error && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={() => void load()} lang={lang} />}
       {loading && !data && <div className="text-ink-soft">{L('Φόρτωση…', 'Loading…')}</div>}
 
       {data && (

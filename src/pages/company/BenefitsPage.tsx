@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, Btn, moneyFull } from '../../lib/specui'
+import { Icon, Btn, moneyFull, ErrorBanner, friendlyError } from '../../lib/specui'
 
 type Cadence = 'daily' | 'weekly' | 'monthly' | 'one_time'
 type Rule = { topup_cadence: Cadence; carryover: string }
@@ -45,7 +45,7 @@ export default function BenefitsPage() {
       const r = await fetch(`/api/cf-benefits?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
       if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
       const d = await r.json(); setRows(d.benefits ?? [])
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+    } catch (e) { setError(friendlyError(e, lang)) }
     finally { setLoading(false) }
   }
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, selectedId])
@@ -76,10 +76,10 @@ export default function BenefitsPage() {
   const shown = tab === 'active' ? active : archived
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Παροχές', 'Benefits')}</h1>
+          <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Παροχές', 'Benefits')}</h1>
           <p className="text-ink-soft mt-2 text-[15px] max-w-xl">{L('Ρυθμίστε τι λαμβάνουν οι εργαζόμενοι και πού.', 'Configure what your employees get and where.')}</p>
         </div>
         <Link to="/company/benefits/new">
@@ -98,7 +98,7 @@ export default function BenefitsPage() {
         </div>
       </div>
 
-      {error && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={() => void load()} lang={lang} />}
       {loading ? (
         <div className="text-ink-soft">{L('Φόρτωση…', 'Loading…')}</div>
       ) : shown.length === 0 ? (

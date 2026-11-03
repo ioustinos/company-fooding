@@ -57,9 +57,9 @@ export default function TopupsPage() {
   const lastApplied = rows.find((r) => r.applied_at)?.applied_at ?? null
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div>
-        <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Αρχείο ανανεώσεων', 'Top-up log')}</h1>
+        <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Αρχείο ανανεώσεων', 'Top-up log')}</h1>
         <p className="text-ink-soft mt-2 text-[15px]">{L(
           'Πότε το CF ανανέωσε το υπόλοιπο κάθε voucher, και πού απέτυχε κάτι. Οι εγγραφές «DRY_RUN» δείχνουν τι θα γινόταν αν ο cron δεν ήταν σε δοκιμαστική λειτουργία.',
           'When CF refreshed each voucher balance, and where anything failed. "DRY_RUN" rows show what the cron would have done if it weren\'t in dry-run mode.'

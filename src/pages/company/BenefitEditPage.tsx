@@ -126,7 +126,7 @@ export default function BenefitEditPage() {
         setValidFrom(b.valid_from); setValidTo(b.valid_to || '')
         const assigned: string[] = d.assignedEmployeeIds ?? []
         if (assigned.length > 0) { setAssignMode('pick'); setPicked(new Set(assigned)) }
-      } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to load') }
+      } catch (e) { setErr(friendlyError(e, lang)) }
       finally { setLoading(false) }
     })()
   }, [token, id, isEdit])
@@ -219,7 +219,7 @@ export default function BenefitEditPage() {
         }
       }
       navigate('/company/benefits')
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to save') }
+    } catch (e) { setErr(friendlyError(e, lang)) }
     finally { setSaving(false) }
   }
 
@@ -233,7 +233,7 @@ export default function BenefitEditPage() {
         </button>
         <div className="flex items-start justify-between gap-6 mb-6">
           <div>
-            <h1 className="font-display text-[36px] leading-[44px] font-semibold">
+            <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">
               {isEdit ? L('Επεξεργασία παροχής', 'Edit benefit') : L('Νέα παροχή', 'New benefit')}
             </h1>
             <p className="text-ink-soft mt-2 text-[15px]">
@@ -550,7 +550,7 @@ export default function BenefitEditPage() {
             </div>
           </FormSection>
 
-          {err && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{err}</div>}
+          {err && <ErrorBanner message={err} lang={lang} />}
         </section>
       )}
 

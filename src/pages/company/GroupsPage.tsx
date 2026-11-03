@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, Btn, Pill, FormSection, Field, txtInputCls } from '../../lib/specui'
+import { Icon, Btn, Pill, FormSection, Field, txtInputCls, ErrorBanner, friendlyError } from '../../lib/specui'
 
 type Group = { id: string; code: string; name_el: string; name_en: string; status: 'active' | 'archived'; is_system: boolean; people?: number }
 
@@ -33,7 +33,7 @@ export default function GroupsPage() {
       const r = await fetch(`/api/cf-groups?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
       if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
       const d = await r.json(); setRows(d.groups ?? [])
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+    } catch (e) { setError(friendlyError(e, lang)) }
     finally { setLoading(false) }
   }
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, selectedId])
@@ -73,10 +73,10 @@ export default function GroupsPage() {
   })
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Ομάδες', 'Groups')}</h1>
+          <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Ομάδες', 'Groups')}</h1>
           <p className="text-ink-soft mt-2 text-[15px] max-w-xl">{L('Οργανώστε υπαλλήλους σε ομάδες (Engineering, Sales, …) για να αναθέτετε παροχές μαζικά.', 'Organize employees into groups (Engineering, Sales, …) to assign benefits in bulk.')}</p>
         </div>
         <Btn variant="primary" size="md" onClick={() => setShowForm((s) => !s)}>
@@ -106,7 +106,7 @@ export default function GroupsPage() {
         </FormSection>
       )}
 
-      {error && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={() => void load()} lang={lang} />}
 
       <div className="bg-surface border border-line rounded-md shadow-sm">
         <div className="flex items-center justify-between gap-3 p-4 border-b border-line">

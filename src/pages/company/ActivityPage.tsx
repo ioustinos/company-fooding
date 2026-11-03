@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { ActIcon } from '../../lib/specui'
+import { ActIcon, ErrorBanner, friendlyError } from '../../lib/specui'
 
 type Event = { id: string; kind: string; actor_email: string | null; summary_el: string | null; summary_en: string | null; created_at: string; target_type: string | null; target_id: string | null }
 
@@ -40,19 +40,19 @@ export default function ActivityPage() {
         const r = await fetch(`/api/cf-activity?companyId=${selectedId}&limit=200`, { headers: { authorization: `Bearer ${token}` } })
         if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
         const d = await r.json(); setEvents(d.events ?? [])
-      } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+      } catch (e) { setError(friendlyError(e, lang)) }
       finally { setLoading(false) }
     })()
   }, [token, selectedId])
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div>
-        <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Δραστηριότητα', 'Activity')}</h1>
+        <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Δραστηριότητα', 'Activity')}</h1>
         <p className="text-ink-soft mt-2 text-[15px]">{L('Καταγραφή ενεργειών στην εταιρεία σας — ποιος έκανε τι, πότε.', 'Audit log of company actions — who did what, when.')}</p>
       </div>
 
-      {error && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={() => void load()} lang={lang} />}
       {loading && events.length === 0 && <div className="text-ink-soft">{L('Φόρτωση…', 'Loading…')}</div>}
 
       {events.length === 0 && !loading ? (

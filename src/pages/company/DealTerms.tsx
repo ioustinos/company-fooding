@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Btn, Field, Icon, Pill, selectCls, txtInputCls } from '../../lib/specui'
+import { Btn, Field, Icon, Pill, selectCls, txtInputCls, ErrorBanner, friendlyError } from '../../lib/specui'
 import { KIND_LABEL, ruleDates, ruleSentence, ruleState, type DealRuleView, type RuleKind } from '../../lib/dealRuleText'
 
 type Mode = { type: 'create' } | { type: 'change'; rule: DealRuleView } | { type: 'correct'; rule: DealRuleView } | { type: 'end'; rule: DealRuleView }
@@ -87,7 +87,7 @@ export default function DealTerms({ agreementId }: { agreementId: string }) {
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`)
       setRules(d.rules ?? []); setToday(d.today); setCanEdit(!!d.canEdit)
-    } catch (e) { setLoadError(e instanceof Error ? e.message : 'Failed to load') }
+    } catch (e) { setLoadError(friendlyError(e, lang)) }
     finally { setLoading(false) }
   }
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, agreementId])
@@ -115,7 +115,7 @@ export default function DealTerms({ agreementId }: { agreementId: string }) {
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { setFieldErrors(d.validationErrors ?? {}); throw new Error(d.error || `HTTP ${r.status}`) }
       setMode(null); setConfirmDelete(null); await load()
-    } catch (e) { setSaveError(e instanceof Error ? e.message : 'Failed to save') }
+    } catch (e) { setSaveError(friendlyError(e, lang)) }
     finally { setSaving(false) }
   }
 
@@ -304,7 +304,7 @@ export default function DealTerms({ agreementId }: { agreementId: string }) {
             </>
           )}
 
-          {saveError && <div className="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-[13px] text-danger">{saveError}</div>}
+          {saveError && <ErrorBanner message={saveError} compact lang={lang} />}
           <div className="flex items-center gap-2">
             <Btn size="sm" disabled={saving} onClick={() => void submit()}>{saving ? L('Αποθήκευση…', 'Saving…') : L('Αποθήκευση', 'Save')}</Btn>
             <Btn size="sm" variant="ghost" disabled={saving} onClick={() => setMode(null)}>{L('Ακύρωση', 'Cancel')}</Btn>

@@ -34,10 +34,10 @@ export default function WebhookEventsPage() {
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token])
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Αρχείο γεγονότων GO', 'GO event log')}</h1>
+          <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Αρχείο γεγονότων GO', 'GO event log')}</h1>
           <p className="text-ink-soft mt-2 text-[15px]">{L(
             'Μας ειδοποίησε το GonnaOrder για κάθε παραγγελία; Ποια γεγονότα απέτυχαν στην επεξεργασία; Είναι αρχείο για debugging — όχι πηγή για τιμολόγηση.',
             'Did GonnaOrder notify us about every order? Which events failed to process? This is a debug log — not a billing source.'

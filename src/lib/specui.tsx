@@ -55,6 +55,9 @@ const ICON_PATHS: Record<string, string> = {
   bell: '<path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 004 0"/>',
   menu: '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
   logout: '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  edit: '<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4z"/>',
+  trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 012-2h2a2 2 0 012 2v2"/>',
+  info: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="8"/><line x1="12" y1="12" x2="12" y2="16"/>',
 }
 
 export type IconName = keyof typeof ICON_PATHS
@@ -69,6 +72,94 @@ export function Icon({ name, size, className }: { name: IconName; size?: number;
       className={className}
       dangerouslySetInnerHTML={{ __html: ICON_PATHS[name] }}
     />
+  )
+}
+
+// friendlyError — translate raw fetch errors into a short bilingual message
+// an operator can act on. Pass the thrown Error (or a string). Backend-emitted
+// `error:` messages come through unchanged; HTTP-status fallbacks and network
+// failures become plain-language text.
+export function friendlyError(e: unknown, lang: 'el' | 'en' = 'el'): string {
+  const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : ''
+  const L = (el: string, en: string) => (lang === 'el' ? el : en)
+  // Network / offline — fetch throws TypeError with "Failed to fetch" in Chrome,
+  // "Load failed" in Safari, "NetworkError" in Firefox.
+  if (/failed to fetch|load failed|networkerror|network request/i.test(raw)) {
+    return L(
+      'Προβλήμα σύνδεσης. Ελέγξτε το δίκτυο και δοκιμάστε ξανά.',
+      'Connection problem. Check your network and retry.',
+    )
+  }
+  // HTTP status codes from the "HTTP 4xx/5xx" fallback.
+  const m = raw.match(/HTTP\s+(\d{3})/i)
+  if (m) {
+    const code = Number(m[1])
+    if (code === 401) return L('Η συνεδρία έληξε. Συνδεθείτε ξανά.', 'Your session expired. Please sign in again.')
+    if (code === 403) return L('Δεν έχετε πρόσβαση σε αυτό το περιεχόμενο.', 'You don\'t have access to this content.')
+    if (code === 404) return L('Δεν βρέθηκε.', 'Not found.')
+    if (code === 409) return L('Σύγκρουση με υπάρχοντα δεδομένα. Ανανεώστε και δοκιμάστε ξανά.', 'Conflict with existing data. Refresh and try again.')
+    if (code === 429) return L('Πολλά αιτήματα — δοκιμάστε σε λίγο.', 'Too many requests — try again shortly.')
+    if (code >= 500) return L('Προσωρινό σφάλμα στον διακομιστή. Δοκιμάστε ξανά σε λίγο.', 'Temporary server error. Please retry shortly.')
+    return L('Σφάλμα αιτήματος. Δοκιμάστε ξανά.', 'Request error. Please retry.')
+  }
+  // Backend-emitted message: show if it's reasonably short + human-looking.
+  if (raw && raw.length <= 160 && !/undefined|\[object |^Error:?$/i.test(raw)) return raw
+  return L('Κάτι πήγε στραβά. Δοκιμάστε ξανά.', 'Something went wrong. Please retry.')
+}
+
+// ErrorBanner — standard red-tinted error block with an optional retry button.
+// Use for load failures that can be retried in-place. For validation errors on
+// a specific input, prefer <Field hint> or an inline red paragraph beneath the
+// field — not this.
+export function ErrorBanner({
+  message, onRetry, lang = 'el', compact,
+}: { message: string; onRetry?: () => void; lang?: 'el' | 'en'; compact?: boolean }) {
+  const L = (el: string, en: string) => (lang === 'el' ? el : en)
+  return (
+    <div className={`rounded-md border border-danger/40 bg-danger/5 ${compact ? 'px-3 py-2 text-[13px]' : 'px-4 py-3 text-sm'} text-danger flex items-start justify-between gap-3`}>
+      <div className="min-w-0">{message}</div>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="shrink-0 inline-flex items-center gap-1 text-[12px] font-semibold px-2 py-1 rounded border border-danger/40 bg-surface text-danger hover:bg-danger hover:text-white transition"
+        >
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 109-9" /><path d="M3 4v5h5" />
+          </svg>
+          <span>{L('Ξανά', 'Retry')}</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+// InfoTip — small (ⓘ) icon that reveals a short bilingual explainer on hover
+// or tap. CSS-only, no portals; absolute-positioned bubble inside a relative
+// anchor. Designed to sit inline next to jargon labels in table headers,
+// KPIs, and section titles. Keep bodies short (≤ 2 lines, no formatting).
+export function InfoTip({ children, align = 'start' }: { children: ReactNode; align?: 'start' | 'end' | 'center' }) {
+  const alignCls = align === 'end' ? 'right-0' : align === 'center' ? 'left-1/2 -translate-x-1/2' : 'left-0'
+  return (
+    <span className="relative inline-flex items-center group align-middle">
+      <button
+        type="button"
+        tabIndex={0}
+        aria-label="More info"
+        className="w-[14px] h-[14px] inline-flex items-center justify-center text-ink-faint hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 rounded-full"
+      >
+        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <line x1="12" y1="16" x2="12" y2="11" />
+          <circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+      <span
+        role="tooltip"
+        className={`pointer-events-none absolute top-full mt-1 ${alignCls} w-[260px] bg-ink text-surface text-[11.5px] leading-snug font-medium rounded-sm px-2.5 py-2 shadow-lg opacity-0 translate-y-0.5 transition-all duration-100 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 z-30 normal-case tracking-normal`}
+      >
+        {children}
+      </span>
+    </span>
   )
 }
 

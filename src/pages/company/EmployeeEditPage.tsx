@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, Btn, FormSection, Field, Pill, txtInputCls, moneyFull } from '../../lib/specui'
+import { Icon, Btn, FormSection, Field, Pill, txtInputCls, moneyFull, ErrorBanner, friendlyError } from '../../lib/specui'
 
 type Mode = 'one' | 'csv'
 type Employee = { id: string; display_name: string; email: string | null; external_ref: string | null; status: string; office?: { label_el: string | null; label_en: string | null } | null }
@@ -106,7 +106,7 @@ export default function EmployeeEditPage() {
       await loadDetail()
       setPickerOpen(false)
       setPickerChoice('')
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to assign') }
+    } catch (e) { setErr(friendlyError(e, lang)) }
     finally { setAssigningBenefit(false) }
   }
 
@@ -121,7 +121,7 @@ export default function EmployeeEditPage() {
       })
       if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
       setAssignments((arr) => arr.filter((a) => a.id !== assignmentId))
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to unassign') }
+    } catch (e) { setErr(friendlyError(e, lang)) }
     finally { setUnassigning(null) }
   }
 
@@ -148,7 +148,7 @@ export default function EmployeeEditPage() {
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`)
       navigate('/company/employees')
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to save') }
+    } catch (e) { setErr(friendlyError(e, lang)) }
     finally { setSaving(false) }
   }
 
@@ -189,7 +189,7 @@ export default function EmployeeEditPage() {
       const b = d.bulk
       setBulkMsg(L(`Προστέθηκαν ${b.inserted}, παραλείφθηκαν ${b.skipped}`, `Added ${b.inserted}, skipped ${b.skipped}`))
       if (b.inserted > 0) setTimeout(() => navigate('/company/employees'), 800)
-    } catch (e) { setBulkMsg(e instanceof Error ? e.message : 'Failed') }
+    } catch (e) { setBulkMsg(friendlyError(e, lang)) }
     finally { setBulkBusy(false) }
   }
 
@@ -201,7 +201,7 @@ export default function EmployeeEditPage() {
         </Link>
         <div className="mb-6 flex items-start justify-between gap-6">
           <div>
-            <h1 className="font-display text-[36px] leading-[44px] font-semibold">
+            <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">
               {isEdit ? `${firstName} ${lastName}`.trim() || L('Επεξεργασία υπαλλήλου', 'Edit employee') : L('Νέος υπάλληλος', 'New employee')}
             </h1>
             <p className="text-ink-soft mt-2 text-[15px]">
@@ -379,7 +379,7 @@ export default function EmployeeEditPage() {
               </>
             )}
 
-            {err && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{err}</div>}
+            {err && <ErrorBanner message={err} lang={lang} />}
           </>
         ) : (
           <>

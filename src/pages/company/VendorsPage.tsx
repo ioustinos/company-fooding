@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, KPI } from '../../lib/specui'
+import { Icon, KPI, ErrorBanner, friendlyError } from '../../lib/specui'
 import { ruleShort, ruleSentence, type DealRuleView } from '../../lib/dealRuleText'
 
 type Vendor = {
@@ -42,7 +42,7 @@ export default function VendorsPage() {
         const r = await fetch(`/api/cf-vendors?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
         if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
         const d = await r.json(); setRows(d.vendors ?? [])
-      } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+      } catch (e) { setError(friendlyError(e, lang)) }
       finally { setLoading(false) }
     })()
   }, [token, selectedId])
@@ -57,10 +57,10 @@ export default function VendorsPage() {
   }, [rows, search])
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Συνεργάτες', 'Vendors')}</h1>
+          <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Συνεργάτες', 'Vendors')}</h1>
           <p className="text-ink-soft mt-2 text-[15px] max-w-xl">{L('Τα καταστήματα φαγητού με τα οποία συνεργάζεται η εταιρεία σας.', "The food vendors your company partners with.")}</p>
         </div>
       </div>
@@ -81,7 +81,7 @@ export default function VendorsPage() {
         </div>
       </div>
 
-      {error && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={() => void load()} lang={lang} />}
       {loading ? (
         <div className="text-ink-soft">{L('Φόρτωση…', 'Loading…')}</div>
       ) : filtered.length === 0 ? (

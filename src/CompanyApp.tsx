@@ -22,7 +22,7 @@ import ReconcilePage from './pages/company/ReconcilePage'
 import VouchersHealthPage from './pages/company/VouchersHealthPage'
 import SettingsPage from './pages/company/SettingsPage'
 
-function TopBar() {
+function TopBar({ onToggleNav }: { onToggleNav: () => void }) {
   const { user, signOut } = useAuthStore()
   const { lang, setLang } = useUIStore()
   const { companies, selectedId, setSelected } = useCompanyStore()
@@ -32,16 +32,21 @@ function TopBar() {
 
   return (
     <header className="border-b border-line bg-surface/95 backdrop-blur sticky top-0 z-20">
-      <div className="max-w-[1400px] mx-auto px-6 h-[60px] flex items-center justify-between gap-6">
-        <Link to="/company" className="flex items-center gap-2.5 shrink-0">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 h-[60px] flex items-center justify-between gap-3 sm:gap-6">
+        {/* Hamburger — mobile only. Opens SideNav as a drawer. */}
+        <button onClick={onToggleNav} aria-label="Menu"
+          className="md:hidden -ml-1 w-9 h-9 inline-flex items-center justify-center rounded hover:bg-brand-soft/50 text-ink">
+          <Icon name="menu" />
+        </button>
+        <Link to="/company" className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           <PlateMark />
-          <span className="font-display text-[22px] font-semibold tracking-tight">orexi</span>
+          <span className="font-display text-[20px] sm:text-[22px] font-semibold tracking-tight">orexi</span>
           <span className="hidden lg:inline-block ml-2 px-2 py-0.5 rounded-xs bg-accent-soft text-accent text-[10px] font-semibold uppercase tracking-[0.1em]">Beta</span>
         </Link>
 
-        {/* company switcher */}
+        {/* company switcher — hidden on <sm to free the top bar */}
         {companies.length > 0 && (
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="hidden sm:flex items-center gap-2 min-w-0">
             {isSuper && companies.length > 1 ? (
               <select
                 value={selectedId ?? ''}
@@ -58,7 +63,7 @@ function TopBar() {
           </div>
         )}
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {isSuper && (
             <NavLink to="/admin" className="text-[12.5px] font-medium text-ink-soft hover:text-ink">Admin</NavLink>
           )}
@@ -99,7 +104,7 @@ function TopBar() {
   )
 }
 
-function SideNav() {
+function SideNav({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { lang } = useUIStore()
   const { companies, selectedId } = useCompanyStore()
   const { user } = useAuthStore()
@@ -146,7 +151,16 @@ function SideNav() {
     `flex items-center gap-2.5 px-2.5 py-1.5 rounded text-[13.5px] transition ${isActive ? 'bg-brand-soft text-brand font-semibold' : 'text-ink-soft hover:text-ink hover:bg-brand-soft/40'}`
 
   return (
-    <aside className="w-[232px] shrink-0 border-r border-line bg-surface/60 sticky top-[60px] h-[calc(100vh-60px)] overflow-y-auto">
+    <>
+      {/* Mobile drawer backdrop */}
+      {open && <div className="md:hidden fixed inset-0 top-[60px] bg-ink/40 z-20" onClick={onClose} />}
+      <aside className={`
+        ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+        fixed md:sticky top-[60px] left-0 z-30
+        w-[232px] shrink-0 border-r border-line bg-surface
+        h-[calc(100vh-60px)] overflow-y-auto
+        transition-transform duration-200 ease-out
+      `} onClick={() => onClose()}>
       <div className="px-4 py-5 border-b border-line">
         <div className="text-[11px] text-ink-faint uppercase tracking-[0.08em] font-semibold mb-1.5">{L('Εταιρεία', 'Company')}</div>
         <div className="flex items-center gap-2.5">
@@ -175,7 +189,8 @@ function SideNav() {
           </div>
         ))}
       </nav>
-    </aside>
+      </aside>
+    </>
   )
 }
 
@@ -188,6 +203,9 @@ export default function CompanyApp() {
   // gets redirected to the dashboard. Only /company/reconcile stays visible.
   const SuperOnly = ({ children }: { children: React.ReactNode }) =>
     isSuper ? <>{children}</> : <Navigate to="/company" replace />
+  // Mobile drawer open state. On >= md the SideNav is always visible, so this
+  // only matters below the breakpoint.
+  const [navOpen, setNavOpen] = useState(false)
 
   useEffect(() => {
     if (!session?.access_token || loaded) return
@@ -203,9 +221,9 @@ export default function CompanyApp() {
 
   return (
     <div className="flex min-h-screen flex-col bg-bg">
-      <TopBar />
+      <TopBar onToggleNav={() => setNavOpen((o) => !o)} />
       <div className="flex flex-1">
-        <SideNav />
+        <SideNav open={navOpen} onClose={() => setNavOpen(false)} />
         <main className="flex-1 min-w-0">
           <Routes>
             <Route index element={<CompanyDashboard />} />

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, KPI, Btn, moneyFull } from '../../lib/specui'
+import { Icon, KPI, Btn, InfoTip, moneyFull, ErrorBanner, friendlyError } from '../../lib/specui'
 import { SpendChart } from '../../lib/specCharts'
 import { downloadCsv } from '../../lib/csv'
 
@@ -46,7 +46,7 @@ export default function CompanyReportsPage() {
       const r = await fetch(`/api/cf-report?companyId=${selectedId}&from=${from}&to=${to}`, { headers: { authorization: `Bearer ${token}` } })
       if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
       setData(await r.json())
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+    } catch (e) { setError(friendlyError(e, lang)) }
     finally { setLoading(false) }
   }
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, selectedId])
@@ -88,11 +88,11 @@ export default function CompanyReportsPage() {
   }) ?? []
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       {/* header */}
       <div className="flex items-start justify-between gap-6 flex-wrap">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Αναφορές', 'Reports')}</h1>
+          <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Αναφορές', 'Reports')}</h1>
           <p className="text-ink-soft mt-2 text-[15px]">{L('Ζωντανά δεδομένα — συγχρονισμός κάθε 30′ από GonnaOrder.', 'Live data — synced from GonnaOrder every 30 min.')}</p>
         </div>
         <div className="flex items-end gap-2">
@@ -134,7 +134,7 @@ export default function CompanyReportsPage() {
         ))}
       </div>
 
-      {error && <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={() => void load()} lang={lang} />}
       {loading && !data && <div className="text-ink-soft">{L('Φόρτωση…', 'Loading…')}</div>}
 
       {data && (
@@ -178,7 +178,10 @@ export default function CompanyReportsPage() {
                 parts.push(dealMin ? `${minPiece} (${dealMin})` : minPiece)
               }
               return (
-                <KPI label={L('Καλύφθηκε από παροχή', 'Covered by benefit')} value={moneyFull(gross, lang)}
+                <KPI label={<>{L('Καλύφθηκε από παροχή', 'Covered by benefit')} <InfoTip>{L(
+                    'Το μέρος της δαπάνης που κάλυψε η παροχή της εταιρείας. Αν ο συνεργάτης έχει έκπτωση ή ελάχιστη χρέωση, εμφανίζονται στην υποσημείωση.',
+                    'The portion of spend covered by the company benefit. Vendor discounts and minimum charges show in the sub-line.',
+                  )}</InfoTip></>} value={moneyFull(gross, lang)}
                   tone="success" icon="chart" sub={parts.join(' · ')} />
               )
             })()}
@@ -201,7 +204,13 @@ export default function CompanyReportsPage() {
                 <div className="flex items-center gap-2.5">
                   <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-soft text-brand"><Icon name="shop" /></span>
                   <div>
-                    <div className="font-semibold">{L('Ελάχιστη χρέωση', 'Minimum charge')} <span className="num">{minLabel}</span></div>
+                    <div className="font-semibold inline-flex items-center gap-1.5">
+                      {L('Ελάχιστη χρέωση', 'Minimum charge')} <span className="num">{minLabel}</span>
+                      <InfoTip>{L(
+                        'Συμφωνημένο ελάχιστο ποσό που χρεώνεται η εταιρεία για την περίοδο. Αν η παροχή πέσει κάτω από αυτό, η διαφορά προστίθεται στο τιμολόγιο.',
+                        'Agreed minimum the company is charged per period. If benefit falls below it, the shortfall is added to the invoice.',
+                      )}</InfoTip>
+                    </div>
                     <div className="text-[12px] text-ink-soft">
                       {triggered
                         ? L(`Ενεργοποιήθηκε για αυτή την περίοδο — πρόσθετη χρέωση +${moneyFull(data.totals.min_topup ?? 0, lang)}.`,

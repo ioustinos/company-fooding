@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, KPI, Pill, moneyFull } from '../../lib/specui'
+import { Icon, KPI, Pill, moneyFull, ErrorBanner, friendlyError } from '../../lib/specui'
 import DealTerms from './DealTerms'
 
 type Vendor = { id: string; name: string; legal_name: string | null; tags: string[] | null }
@@ -41,13 +41,13 @@ export default function VendorDetailPage() {
         if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
         const d = await r.json()
         setAgreement(d.agreement); setTotals(d.totals); setTopEmployees(d.topEmployees ?? []); setOrders(d.orders ?? [])
-      } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+      } catch (e) { setError(friendlyError(e, lang)) }
       finally { setLoading(false) }
     })()
   }, [token, id])
 
   if (loading) return <section className="p-8 text-ink-soft">{L('Φόρτωση…', 'Loading…')}</section>
-  if (error) return <section className="p-8"><div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div></section>
+  if (error) return <section className="p-4 md:p-8"><div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div></section>
   if (!agreement) return <section className="p-8 text-ink-faint">{L('Δεν βρέθηκε', 'Not found')}</section>
 
   const v = agreement.vendors
@@ -55,7 +55,7 @@ export default function VendorDetailPage() {
   const shops = (agreement.agreement_shops ?? []).map((s) => s.gonnaorder_shop_id).join(', ')
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <Link to="/company/vendors" className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink">
         <span className="rotate-180"><Icon name="chevron_r" /></span>{L('Συνεργάτες', 'Vendors')}
       </Link>

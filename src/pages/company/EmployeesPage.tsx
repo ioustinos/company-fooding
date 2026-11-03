@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, Btn, Pill, moneyFull } from '../../lib/specui'
+import { Icon, Btn, Pill, moneyFull, ErrorBanner, friendlyError } from '../../lib/specui'
 import { downloadCsv } from '../../lib/csv'
 
 type Employee = {
@@ -47,7 +47,7 @@ export default function EmployeesPage() {
       const r = await fetch(`/api/cf-employees?companyId=${selectedId}`, { headers: { authorization: `Bearer ${token}` } })
       if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`) }
       const d = await r.json(); setRows(d.employees ?? [])
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load') }
+    } catch (e) { setError(friendlyError(e, lang)) }
     finally { setLoading(false) }
   }
   useEffect(() => { void load() /* eslint-disable-next-line */ }, [token, selectedId])
@@ -143,10 +143,10 @@ export default function EmployeesPage() {
   }, [rows, tab, search, sortBy])
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Υπάλληλοι', 'Employees')}</h1>
+          <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold">{L('Υπάλληλοι', 'Employees')}</h1>
           <p className="text-ink-soft mt-2 text-[15px] max-w-xl">{L('Όσοι λαμβάνουν παροχές από την εταιρεία σας.', 'Everyone receiving a benefit from your company.')}</p>
         </div>
         <div className="flex items-center gap-2">

@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCompanyStore } from '../../store/useCompanyStore'
 import { useUIStore } from '../../store/useUIStore'
-import { Icon, Btn, moneyFull } from '../../lib/specui'
+import { Icon, Btn, InfoTip, moneyFull } from '../../lib/specui'
 
 type RowOut = {
   id: string
@@ -340,11 +340,17 @@ export default function ReconcilePage() {
   }, [data, lang])
 
   return (
-    <section className="p-8 space-y-6 max-w-[1100px]">
+    <section className="p-4 md:p-8 space-y-6 max-w-[1100px]">
       {/* Header */}
       <div className="flex items-start justify-between gap-6 flex-wrap">
         <div className="max-w-2xl">
-          <h1 className="font-display text-[36px] leading-[44px] font-semibold">{L('Αντιστοίχιση', 'Reconciliation')}</h1>
+          <h1 className="font-display text-[26px] leading-[32px] sm:text-[36px] sm:leading-[44px] font-semibold inline-flex items-center gap-2">
+            {L('Αντιστοίχιση', 'Reconciliation')}
+            <span className="text-[18px]"><InfoTip>{L(
+              'Παραβολή παραγγελιών CF με τις παραγγελίες GonnaOrder για την ίδια περίοδο. Εντοπίζει τι λείπει, τι δεν ταιριάζει και τι να διορθώσετε πριν την τιμολόγηση.',
+              'Side-by-side check between CF orders and GonnaOrder for the same window. Flags what\'s missing, what doesn\'t match, and what to fix before billing.',
+            )}</InfoTip></span>
+          </h1>
           <p className="text-ink-soft mt-2 text-[15px]">
             {L(
               'Για αυτή την εταιρεία και αυτή την περίοδο: τι να τιμολογήσετε, και υπάρχει κάτι που λείπει ή φαίνεται περίεργο πριν στείλετε το τιμολόγιο;',
