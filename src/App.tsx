@@ -28,6 +28,24 @@ function BootSplash() {
   )
 }
 
+// Landing-route dispatcher — sends each role to its own shell on "/".
+// Without this, a company_admin with no employee record lands on the empty
+// EmployeePortal and sees "No employee record linked to this account", which
+// is both confusing and misleading. Company admins go straight to /company;
+// super admins to /admin; everyone else (plain employees) stays on the
+// employee portal.
+function RoleLanding() {
+  const user = useAuthStore((s) => s.user)
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role === 'super_admin') return <Navigate to="/admin" replace />
+  if (user.role === 'company_admin' || user.role === 'company_owner') return <Navigate to="/company" replace />
+  return (
+    <Suspense fallback={<Loading />}>
+      <EmployeeApp />
+    </Suspense>
+  )
+}
+
 export default function App() {
   const hydrated = useAuthStore((s) => s.hydrated)
   // Don't render routes until the initial auth check is done — otherwise a
@@ -67,9 +85,7 @@ export default function App() {
         path="/*"
         element={
           <RoleGuard allow={['employee', 'company_owner', 'company_admin', 'super_admin']}>
-            <Suspense fallback={<Loading />}>
-              <EmployeeApp />
-            </Suspense>
+            <RoleLanding />
           </RoleGuard>
         }
       />
