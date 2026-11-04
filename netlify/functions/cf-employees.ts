@@ -171,11 +171,15 @@ export default async (req: Request, _ctx: Context) => {
         { id?: string; display_name?: string; email?: string; external_ref?: string; status?: string }
       if (!b.id) return badRequest('id required')
 
-      // company_admin may only edit employees in their own company
-      if (caller.role === 'company_admin') {
-        const { data: emp } = await sb.from('employees').select('company_id').eq('id', b.id).maybeSingle()
-        if (!emp || emp.company_id !== caller.companyId) return forbidden('Not your employee')
-      }
+      // Read current state up-front so we can both auth-check the company
+      // and compare before/after fields (the frontend always re-sends every
+      // field on save, so we can't trust the body alone — we'd fire
+      // 'employee.activated' on every tweak).
+      const { data: before } = await sb.from('employees')
+        .select('company_id, status, display_name, email, external_ref')
+        .eq('id', b.id).maybeSingle()
+      if (!before) return badRequest('employee not found')
+      if (caller.role === 'company_admin' && before.company_id !== caller.companyId) return forbidden('Not your employee')
 
       const patch: Record<string, string | null> = {}
       if (b.display_name !== undefined) { if (!b.display_name.trim()) return badRequest('display_name cannot be empty'); patch.display_name = b.display_name.trim() }
@@ -190,12 +194,43 @@ export default async (req: Request, _ctx: Context) => {
         if (error.code === '23505') return badRequest('Voucher code already used by another employee')
         throw new Error(error.message)
       }
-      const kind = b.status === 'active' ? 'employee.activated' : b.status === 'inactive' ? 'employee.deactivated' : 'employee.updated'
-      void logActivity(sb, caller, data.company_id, kind, {
-        target_type: 'employee', target_id: data.id,
-        summary_el: kind === 'employee.deactivated' ? `Απενεργοποιήθηκε υπάλληλος ${data.display_name}` : kind === 'employee.activated' ? `Ενεργοποιήθηκε υπάλληλος ${data.display_name}` : `Ενημερώθηκε υπάλληλος ${data.display_name}`,
-        summary_en: kind === 'employee.deactivated' ? `Deactivated employee ${data.display_name}` : kind === 'employee.activated' ? `Activated employee ${data.display_name}` : `Updated employee ${data.display_name}`,
-      })
+
+      // Pick the right activity kind by what ACTUALLY changed, not by what
+      // the body sent. Status transitions win over plain-field edits so the
+      // feed clearly shows activate / deactivate events; otherwise, record
+      // 'employee.updated' with a short "what changed" summary. If literally
+      // nothing changed (same submit, no field delta), skip the activity
+      // altogether — we don't log no-ops.
+      const changed: string[] = []
+      if (patch.display_name !== undefined && patch.display_name !== before.display_name) changed.push('name')
+      if (patch.email !== undefined && patch.email !== before.email) changed.push('email')
+      if (patch.external_ref !== undefined && patch.external_ref !== before.external_ref) changed.push('voucher')
+      const statusChanged = patch.status !== undefined && patch.status !== before.status
+
+      let kind: 'employee.activated' | 'employee.deactivated' | 'employee.updated' | null = null
+      let summary_el = '', summary_en = ''
+      if (statusChanged && patch.status === 'active') {
+        kind = 'employee.activated'
+        summary_el = `Ενεργοποιήθηκε υπάλληλος ${data.display_name}`
+        summary_en = `Activated employee ${data.display_name}`
+      } else if (statusChanged && patch.status === 'inactive') {
+        kind = 'employee.deactivated'
+        summary_el = `Απενεργοποιήθηκε υπάλληλος ${data.display_name}`
+        summary_en = `Deactivated employee ${data.display_name}`
+      } else if (changed.length > 0) {
+        kind = 'employee.updated'
+        const fields_el = changed.map((c) => c === 'name' ? 'όνομα' : c === 'email' ? 'email' : 'κωδικό voucher').join(', ')
+        const fields_en = changed.map((c) => c === 'name' ? 'name' : c === 'email' ? 'email' : 'voucher code').join(', ')
+        summary_el = `Ενημερώθηκε ${data.display_name} (${fields_el})`
+        summary_en = `Updated ${data.display_name} (${fields_en})`
+      }
+
+      if (kind) {
+        void logActivity(sb, caller, data.company_id, kind, {
+          target_type: 'employee', target_id: data.id,
+          summary_el, summary_en,
+        })
+      }
       return ok({ employee: data })
     }
 
