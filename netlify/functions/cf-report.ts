@@ -131,7 +131,13 @@ export default async (req: Request, _ctx: Context) => {
       add(c, r, net); if (r.employee_id) c.employees.add(r.employee_id)
       byCompany.set(cKey, c)
 
-      const eKey = `${cKey}::${voucher.toLowerCase()}`
+      // Prefer employee_id as the per-employee bucket key; without it we were
+      // collapsing every HarborLab loyalty order (voucher_code=null → '—')
+      // into a single row. Only fall back to voucher / '— unmatched —' when
+      // the order wasn't linked to a CF employee at all.
+      const eKey = r.employee_id
+        ? `${cKey}::emp::${r.employee_id}`
+        : `${cKey}::v::${voucher.toLowerCase()}`
       const e = byEmployee.get(eKey) ?? { ...zero(), company: companyName, name: r.employees?.display_name ?? (r.voucher_code ?? '— unmatched —'), voucher }
       add(e, r, net)
       byEmployee.set(eKey, e)

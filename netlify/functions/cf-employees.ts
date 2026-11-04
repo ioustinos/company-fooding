@@ -201,11 +201,21 @@ export default async (req: Request, _ctx: Context) => {
       // 'employee.updated' with a short "what changed" summary. If literally
       // nothing changed (same submit, no field delta), skip the activity
       // altogether — we don't log no-ops.
-      const changed: string[] = []
-      if (patch.display_name !== undefined && patch.display_name !== before.display_name) changed.push('name')
-      if (patch.email !== undefined && patch.email !== before.email) changed.push('email')
-      if (patch.external_ref !== undefined && patch.external_ref !== before.external_ref) changed.push('voucher')
+      // Diffs with explicit before→after per field, so the activity feed
+      // can show "email 'x@y' → 'x2@y'" instead of a vague "updated".
+      type Diff = { field: string; before: string; after: string }
+      const diffs: Diff[] = []
+      const q = (s: string | null | undefined) => s && s.length ? `«${s}»` : '—'
+      if (patch.display_name !== undefined && patch.display_name !== before.display_name)
+        diffs.push({ field: 'name', before: before.display_name ?? '', after: (patch.display_name as string) ?? '' })
+      if (patch.email !== undefined && patch.email !== before.email)
+        diffs.push({ field: 'email', before: before.email ?? '', after: (patch.email as string) ?? '' })
+      if (patch.external_ref !== undefined && patch.external_ref !== before.external_ref)
+        diffs.push({ field: 'voucher', before: before.external_ref ?? '', after: (patch.external_ref as string) ?? '' })
       const statusChanged = patch.status !== undefined && patch.status !== before.status
+
+      const labelEl = (f: string) => f === 'name' ? 'όνομα' : f === 'email' ? 'email' : 'κωδικός voucher'
+      const labelEn = (f: string) => f === 'name' ? 'name' : f === 'email' ? 'email' : 'voucher code'
 
       let kind: 'employee.activated' | 'employee.deactivated' | 'employee.updated' | null = null
       let summary_el = '', summary_en = ''
@@ -217,18 +227,21 @@ export default async (req: Request, _ctx: Context) => {
         kind = 'employee.deactivated'
         summary_el = `Απενεργοποιήθηκε υπάλληλος ${data.display_name}`
         summary_en = `Deactivated employee ${data.display_name}`
-      } else if (changed.length > 0) {
+      } else if (diffs.length > 0) {
         kind = 'employee.updated'
-        const fields_el = changed.map((c) => c === 'name' ? 'όνομα' : c === 'email' ? 'email' : 'κωδικό voucher').join(', ')
-        const fields_en = changed.map((c) => c === 'name' ? 'name' : c === 'email' ? 'email' : 'voucher code').join(', ')
-        summary_el = `Ενημερώθηκε ${data.display_name} (${fields_el})`
-        summary_en = `Updated ${data.display_name} (${fields_en})`
+        const pieces_el = diffs.map((d) => `${labelEl(d.field)} ${q(d.before)} → ${q(d.after)}`)
+        const pieces_en = diffs.map((d) => `${labelEn(d.field)} ${q(d.before)} → ${q(d.after)}`)
+        summary_el = `Ενημερώθηκε ${data.display_name}: ${pieces_el.join(', ')}`
+        summary_en = `Updated ${data.display_name}: ${pieces_en.join(', ')}`
       }
 
       if (kind) {
         void logActivity(sb, caller, data.company_id, kind, {
           target_type: 'employee', target_id: data.id,
           summary_el, summary_en,
+          // Keep the raw diffs on the row too — lets us render a richer
+          // per-event drawer later without re-querying.
+          payload: diffs.length > 0 ? { diffs } : undefined,
         })
       }
       return ok({ employee: data })
