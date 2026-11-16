@@ -25,6 +25,8 @@ the memory: this file = rules + infra + decisions, `PROJECT_LOG.md` = history.
 7. Every schema change is a migration file in `supabase/migrations/` (see Migrations).
 8. Append to `PROJECT_LOG.md` after every major task.
 9. Don't claim something is fixed without a live check (cached bundles have fooled us).
+10. **Collect his to-dos.** Anything only he can do or decide goes into
+    `docs/handoffs/THINGS-FOR-YOU.md` (gitignored), dated; tick off when he says done.
 
 `.claude/settings.json` enforces part of this: denies push to `main`, force-push,
 `git add -A`/`.`, `netlify deploy --prod`; asks before `supabase db push`.
