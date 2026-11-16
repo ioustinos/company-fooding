@@ -20,6 +20,89 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-11-16 — Moved from Cowork to Claude Code; handoffs folded in
+
+**Status:** Done (docs + local setup only; no system changed)
+**Linked tickets:** CF-77, CF-78, CF-101
+**Why:** Development moves from Cowork / claude.ai chats to Claude Code on the Mac.
+Six Cowork chats wrote handoffs; their facts and decisions now live in `CLAUDE.md`
+and here. Raw handoffs: `docs/handoffs/` (see `docs/CLAUDE-CODE-SETUP.md`).
+**What:**
+- Fresh `gh repo clone` on `dev`. Code is byte-identical to the old Cowork folder
+  (`…/Projects/Wecook Enterprise Platform`, never a git repo); that folder is left as is.
+- Verified: Netlify ↔ GitHub **is linked** (production = `main`; `dev` has no branch
+  deploy) — closes the CF-77 question. Supabase migrations: 23 remote vs 22 files,
+  naming drift (see CLAUDE.md → Migrations). Repo is **public**.
+- `CLAUDE.md` rewritten: sandbox-only rules removed (FUSE, `/tmp` push clones,
+  `GIT_DIR`/`GIT_WORK_TREE`, PAT file, "no outbound HTTP"); standing rules kept.
+- Added `.claude/settings.json` (deny push to main / force-push / `git add -A` /
+  `netlify deploy --prod`; ask before `supabase db push`).
+
+### History recovered from the handoffs (2026-10-01 → 2026-11-04)
+
+**2026-10-01 → 10-02 — GO order reconciliation (Sep 2026).** A Queensway employee
+added to CF after their September orders had synced had those orders unlinked
+(`employee_id/company_id = NULL`) and missing from reports. Cause: orders are matched
+only during a sync. Fix was Reconcile + a backfill. Comparing Ioustinos's sheet exports
+against `orders` also found 4 missing Pollfish employees and two orders (7B-B2, 7P-6Z)
+he asked to have in CF; all of these exist now (2026-11-16), added outside that chat.
+Learned: scheduled sync reached only ~20 of its 30 lookback days (likely the function
+timeout); only CLOSED orders sync; `order_token` isn't unique (match by GO uuid). Wrong
+claims made in that chat were corrected (a "Resync vs Reconcile" assumption; two rows
+"missing" because the parser skipped blank-UUID rows).
+
+**2026-10-01 — Second owner login.** Created a second cf_owner admin login (company_admin
+on Queensway Navigation, Paricom, Vsltec) by raw SQL, so someone could "play". It has
+signed in (2026-10-06). The password was shared in chat — rotation unconfirmed.
+
+**2026-10-01 → 10-05 — HarborLab onboarding + deal rules.** HarborLab = GO store 7085,
+83 employees imported (85 now), benefits daily Mon–Fri reset (€2 from 14 Sep to 30 Sep,
+€3 from 1 Oct), Wecook loyalty from 14 Sep, €50/day minimum on weekdays with orders.
+Built `deal_rules` (migration 22) and the stored order split (migration 21) — see the
+2026-10-05 and 2026-10-02 entries below. Fixed the sync: CF *did* have access to 7085;
+store 5677 timed out first, so stores now run in parallel with chunked upserts.
+Regenerated `package-lock.json` (`npm ci` was failing). Company admin login for
+HarborLab created and used.
+
+**2026-10-30 → 11-04 — Handoff polish → prod.** Shipped CF-100, CF-102, CF-103, CF-105,
+CF-108 and CF-101 (role-gated Διαγνωστικά); fixed routing (`RoleLanding`), activity log
+(`employee.activated` logged only on real transitions, before→after diffs), and
+per-employee report grouping (key by `employee_id`, voucher only as fallback).
+`dev` had diverged from `main` back to the scaffold; workspace drift was squashed onto
+`main` and `dev` force-pushed to mirror it (2026-11-04, "promote to main"). CF-110
+cancelled: CF invoices are indications only. Created an HarborLab-only preview admin
+account by raw SQL (not in a migration). Decided the ~€1.72/order HarborLab catalogue
+gap is the vendor's menu discount and stays out of CF columns.
+
+**Caterplan (dates not in its handoff; live deploy of `aa9b11c` dated 2026-08-04) —
+branch `caterplan`, site caterplan.netlify.app.** Public,
+auth-free catering event-brief builder: AI interview → vendor-neutral RFP PDF, with an
+owner-controlled lead-gen gate (`VITE_CATERPLAN_LOCK`, off). Same repo, own Netlify site.
+Decided "Orexis" names the whole project; sub-features get their own names.
+
+**Pricing Orexxis (cap-table tool).** A private claude.ai artifact, not in this repo;
+its handoff is kept outside git (business-confidential).
+
+### Open items carried over
+- Remove obsolete `settings.billing` from the HarborLab agreement (`6f60405b…`) —
+  approved 2026-10-05 to run after the deploy; no code reads it. Not yet run.
+- Delete 4 duplicate `employee.activated` rows (2026-11-02) after counting them.
+- Clean up or codify the HarborLab preview account; rotate the second admin's password;
+  decide whether it stays cf_owner on production.
+- CF-112 GO customer + voucher provisioning on employee create (Urgent, blocked on
+  reverse-engineering GO endpoints). CF-104 n8n → CF refills (needs a
+  `redemption_type` column, unfiled). CF-80 dry-run flip. CF-107 Sentry (needs DSN).
+- Relink an employee's past orders on create; make the scheduled sync cover its window;
+  decide on non-CLOSED orders. Company calendar import; rule propose/accept flow;
+  employee portal badge still reads `vendors.discount_percentage`; `getCaller` with
+  several `company_users` rows (`.maybeSingle()`, unverified).
+- Close CF-78 and CF-101 in Linear. HarborLab office address still TBD on prod.
+- Caterplan: real survey questions; wire lead destination (Klaviyo); branch strategy;
+  commit or save `caterplan-skill/SKILL.md` (only in the old Cowork folder).
+- Pricing tool: real "Cash investment" figure; test the investor export.
+
+---
+
 ## 2026-10-30 — Runbook: rotating webhook & admin keys
 
 **Status:** Doc only

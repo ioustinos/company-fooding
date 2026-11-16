@@ -22,3 +22,11 @@ reports/
 
 # Netlify deploy artifacts (stray zips in repo root)
 deploy-*.zip
+
+# Supabase CLI link state
+supabase/.temp
+supabase/.branches
+
+# Raw Cowork handoffs — contain customer PII / business-confidential notes.
+# Kept out of git while the repo is public (see docs/CLAUDE-CODE-SETUP.md).
+docs/handoffs/

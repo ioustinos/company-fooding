@@ -1,224 +1,239 @@
-# Company Fooding (CF) — Claude Context
+# Company Fooding (CF) / Orexis — Claude Context
 
-Working name for WeCook's B2B enterprise food-benefit platform. The CF name is used
-everywhere (repo, Linear team, Supabase project, Netlify site) until rebrand.
+WeCook's B2B enterprise food-benefit platform. **Orexis** is the new name for the whole
+project (decision in the Caterplan handoff, 2026-11). The UI already says "orexi"; the
+CF name stays on infra (repo, Linear team, Supabase project, Netlify site) until the
+rebrand is done. Sub-products get their own names (e.g. **Caterplan**), never "Orexis".
+
+Development runs in **Claude Code on Ioustinos's Mac** since 2026-11-16 (see
+`docs/CLAUDE-CODE-SETUP.md`). Real git, `gh`, `supabase` and `netlify` CLIs. The repo is
+the memory: this file = rules + infra + decisions, `PROJECT_LOG.md` = history.
+
+## Operating rules (Ioustinos's own — not sandbox workarounds)
+1. **Show before execute.** Before ANY write to Linear, Supabase, GitHub, Netlify,
+   GonnaOrder, Slack or any other external system, write out exactly what you will do
+   and wait for his explicit yes. Approval is per action.
+2. **Never push to `main` unless he says so.** Never push anything without being
+   asked. Ask separately before merging to `main`. `main` is production.
+3. **Stage specific files only** — never `git add -A` / `git add .`. Other Claude
+   sessions may share the folder; never stage files you didn't change.
+4. **He doesn't do git work** — Claude commits and (when told) pushes. Don't hand him
+   commands to run.
+5. Deal / billing rules live in the **database per deal** (`deal_rules`), editable in
+   the admin — **never in code**.
+6. Linear ticket id (`CF-N`) in commit messages when a ticket exists.
+7. Every schema change is a migration file in `supabase/migrations/` (see Migrations).
+8. Append to `PROJECT_LOG.md` after every major task.
+9. Don't claim something is fixed without a live check (cached bundles have fooled us).
+
+`.claude/settings.json` enforces part of this: denies push to `main`, force-push,
+`git add -A`/`.`, `netlify deploy --prod`; asks before `supabase db push`.
 
 ## Stack
-- React 19.2 + TypeScript 6 + Vite 8
-- React Router 7, Zustand 5
-- Netlify (hosting + serverless functions in `netlify/functions/`)
-- Supabase (Postgres + Auth + Storage) — EU Central
-- GonnaOrder (third-party voucher + ordering) — NOT merchant-of-record; vendors
-  invoice companies directly
-- Linear (team `CF`, project "Company Fooding — MVP v1")
+- React 19.2 + **TypeScript ~6.0** + Vite 8, React Router 7 (`BrowserRouter`), Zustand 5
+- Netlify (hosting + functions in `netlify/functions/`)
+- Supabase (Postgres + Auth + Storage), eu-central-1
+- GonnaOrder (GO) — third-party ordering + vouchers, NOT merchant-of-record
+- Linear (team `CF`)
+- Do not move to TypeScript 7 (breaks Netlify's function bundler).
 
-## Local Dev
+## Local dev
 ```bash
-npm run dev:netlify   # → http://localhost:8888
+npm run dev:netlify   # netlify dev → http://localhost:8888, Vite on 5173
 ```
-- Vite hot-reloads on every file save — no deploy needed during iteration
-- `CHOKIDAR_USEPOLLING=1` is built into the script (required for FUSE mounts)
-- **Build = `vite build`** (not `tsc -b && vite build`). Typecheck is a separate
-  non-gating `npm run typecheck`.
-- **Redirect priority:** Netlify evaluates `_redirects` BEFORE `netlify.toml`. So
-  `/api/*` → functions AND `/*` SPA fallback both live in `public/_redirects`
-  in that order. `netlify.toml` has zero redirect rules — stripped to avoid
-  the ordering footgun.
+- `CHOKIDAR_USEPOLLING=1` stays in the script (watcher reliability; it was originally
+  added for the Cowork FUSE mount, that reason is gone).
+- **Known broken on a fresh clone (2026-11-16):** `[dev] publish = "dist"` in
+  `netlify.toml` makes `netlify dev` read `dist/_redirects`. No `dist/` → `/api/*` is
+  not rewritten (returns the SPA). With `dist/` → the `/*` catch-all swallows Vite's
+  module requests → blank page. Proposed fix (not yet done): drop `publish` from
+  `[dev]` and add a Vite `server.proxy` for `/api` → `/.netlify/functions`. Keep `/*`
+  in `_redirects` for production (BrowserRouter + emailed deep links need it).
+- Ports 8888/5173 are often held by the Wecook-site dev server on this Mac; use
+  `npx netlify dev --port 8891 --target-port 5291 --command "npx vite --port 5291 --strictPort"`.
+- Direct function URL always works locally: `/.netlify/functions/<name>`.
+- **Build = `vite build`** (no `tsc` in build — deliberate). `npm run typecheck` is
+  separate and non-gating. Before pushing function changes, run `npm run build` /
+  `netlify build` — Netlify's esbuild catches errors `tsc` misses (duplicate consts).
+- **Redirect priority:** Netlify evaluates `_redirects` BEFORE `netlify.toml`, so
+  `/api/*` → functions and the `/*` SPA fallback both live in `public/_redirects`, in
+  that order. `netlify.toml` has no redirects.
+- `.env.local` holds only `VITE_*` vars; `netlify dev` injects server secrets from the
+  linked site. Gitignored.
 
-## Service-role pattern (from day one — different from Fitpal)
-Unlike Fitpal (which uses direct-client + admin RLS and has WEC-121 to migrate),
-CF uses **service-role via Netlify Functions from day one**.
+## Service-role pattern (deliberate, differs from Fitpal)
+- Browser holds the anon key only (`VITE_SUPABASE_ANON_KEY`).
+- RLS = tenant-scoped READs only (employee own data, company admin own company,
+  super admin all). Helper fns: `is_cf_admin()`, `current_company_id()`,
+  `current_employee_id()`.
+- All **writes** go through Netlify Functions with the service-role key, authorised by
+  `getCaller()` + `requireRole()` (`netlify/functions/_shared/auth.ts`).
+- Service-role key only imported from `netlify/functions/_shared/supabaseAdmin.ts`.
 
-- Browser holds the **anon key only** (`VITE_SUPABASE_ANON_KEY`)
-- RLS is **narrowed to tenant-scoped READs** (employee reads their own data,
-  company admin reads their company's data, super admin reads all)
-- All **writes** go through Netlify Functions that use the **service-role key**
-  and enforce authorization explicitly via `getCaller()` + `requireRole()`
-- Service-role key is **never** exposed to the bundle — imported only from
-  `netlify/functions/_shared/supabaseAdmin.ts`
+## Git & deploy
+- Default working branch: `dev`. `main` = production.
+- Netlify builds **`main` only** (`allowed_branches: ["main"]`, verified 2026-11-16).
+  `dev` has **no branch deploy**; `dev--company-fooding.netlify.app` does not exist.
+  Open decision: enable `dev` branch deploys or retire `dev`.
+- `caterplan` branch = Caterplan, deployed by its own Netlify site (below). Long-lived
+  branch vs merge: open decision.
+- Git auth = `gh` (keychain). No PAT files.
 
-## Git Push Rules — CRITICAL
-- **NEVER run git from the workspace folder** — the FUSE mount blocks `unlink`,
-  permanently breaking git lock files
-- **NEVER push to GitHub unless Ioustinos explicitly says so.** The iteration
-  loop is: edit workspace → Vite hot-reload → batch fixes → commit + push only
-  on explicit command. Treat `main` as production — multiple confirmations.
-- Credentials live in `<workspace>/.auto-memory/github_credentials.sh`
-  (gitignored). The var is `$GITHUB_TOKEN`. Source it at the start of every
-  bash call since env doesn't persist across calls.
-- Use a fresh `/tmp/company-fooding-pushN` path per session — old paths from
-  prior sessions have stale ownership and can't be deleted.
-- When a push IS requested, use this pattern:
-
-```bash
-source <workspace>/.auto-memory/github_credentials.sh
-git config --global --add safe.directory "<workspace>"
-
-PUSH_DIR=/tmp/company-fooding-pushN   # increment N each session
-rm -rf "$PUSH_DIR"
-git clone --depth 50 -b dev \
-  "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/${GITHUB_USER}/${PROJECT_REPO}.git" "$PUSH_DIR"
-cd "$PUSH_DIR"
-git config user.email "ioustinos@wecook.gr"
-git config user.name "Ioustinos Sarris"
-git config --global --add safe.directory "$PUSH_DIR"
-
-export GIT_DIR="$PUSH_DIR/.git"
-export GIT_WORK_TREE="<workspace>"
-
-git add src/specific/file.tsx   # specific files only — NEVER git add -A
-git commit -m "description"
-git push origin dev             # or main for production
-```
-
-Branches:
-- `dev` → https://dev--company-fooding.netlify.app (once Netlify ↔ repo linked)
-- `main` → https://company-fooding.netlify.app (production)
-
-## Infrastructure
+## Infrastructure (verified 2026-11-16)
 
 ### GitHub
-- Repo: `ioustinos/company-fooding`
-- URL: https://github.com/ioustinos/company-fooding
-- Visibility: Private
-- Auth: fine-grained PAT in `<workspace>/.auto-memory/github_credentials.sh` (var `$GITHUB_TOKEN`)
+- Repo `ioustinos/company-fooding` — **visibility PUBLIC** (older docs said private).
+  Treat everything committed as public: no customer PII, no secrets, no deal figures
+  beyond what is already here.
+- Branches: `main`, `dev` (both `2cc9884` on 2026-11-16), `caterplan` (`aa9b11c`).
 
-### Supabase (`company-fooding`)
-- Project ID: `jipkzmtkmpwsuuihghol`
-- Region: `eu-central-1`
-- DB host: `db.jipkzmtkmpwsuuihghol.supabase.co`
-- Dashboard: https://supabase.com/dashboard/project/jipkzmtkmpwsuuihghol
-- Supabase URL: `https://jipkzmtkmpwsuuihghol.supabase.co`
-- Anon key: in Netlify env (`VITE_SUPABASE_ANON_KEY`) and `.env.local`
-- Service role key: in Netlify env only (`SUPABASE_SERVICE_ROLE_KEY`, Functions scope)
-- Migrations applied: 01–15 (latest 13/14/15 from 2026-05-15 — see PROJECT_LOG.md)
+### Supabase — `company-fooding`
+- Ref `jipkzmtkmpwsuuihghol`, eu-central-1, org `peewverazoehzmjcynfh`.
+  ⚠ The same CLI account sees two other projects named `matchio`; always pass
+  `--project-ref jipkzmtkmpwsuuihghol`. The `supabase-matchio` MCP is unrelated.
+- URL `https://jipkzmtkmpwsuuihghol.supabase.co`;
+  dashboard https://supabase.com/dashboard/project/jipkzmtkmpwsuuihghol
+- Linked locally (`supabase link`), state in `supabase/.temp/` (gitignored).
+- Auth email: Brevo SMTP since 2026-10-04.
+- Create auth users with the **Auth Admin API** / `supabase` CLI, not raw SQL into
+  `auth.users` (raw SQL needs all 8 token columns = `''` + an `auth.identities` row).
+  New `auth.users` rows link to pending `company_users`/`employees` by email via the
+  `handle_new_user` trigger.
 
-### Netlify (`company-fooding`)
-- Site ID: `74d83bc6-70f3-466f-8caf-4b65756cb36b`
-- URL: https://company-fooding.netlify.app
-- Dashboard: https://app.netlify.com/projects/company-fooding
-- Linked GitHub repo: **NOT YET LINKED** (CF-77 — manual deploys only until linked)
-- Build command: `npm run build`
-- Publish directory: `dist`
-- Functions directory: `netlify/functions`
-- Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`,
-  `SUPABASE_SERVICE_ROLE_KEY`, `GONNAORDER_API_BASE` (=https://admin.gonnaorder.com/api/v1),
-  `GONNAORDER_USERNAME`, `GONNAORDER_PASSWORD`, `CF_ADMIN_TOKEN`,
-  `RESEND_FROM_ADDRESS`, `CF_TOPUPS_DRY_RUN`
+### Migrations
+- 23 applied remotely (latest `20261002100155_22_deal_rules`); 22 files locally
+  (`01_…` → `22_…`).
+- ⚠ **Naming drift:** remote versions are timestamps, local files are `NN_` — the CLI
+  matches none of them. Remote also has `20b_revoke_from_public` (content appears
+  folded into local `20_…`); remote 13–15 are named differently.
+  **Do not run `supabase db push`** until local files are renamed to the remote
+  versions (open item).
+- New migrations: `supabase/migrations/<YYYYMMDDHHMMSS>_<name>.sql`.
+
+### Netlify — `company-fooding` (team Wecook, `69bc8b86302c4bf6e17e80ec`)
+- Site id `74d83bc6-70f3-466f-8caf-4b65756cb36b`, https://company-fooding.netlify.app
+- Linked to GitHub (Netlify GitHub App), production branch `main`, autodeploy on push.
+- Build `npm run build`, publish `dist`, functions `netlify/functions`.
+- Functions region: **us-east-2** (default) while the DB is in eu-central-1 — slow
+  round trips; open item to move to eu-central-1.
+- Scheduled: `cf-scheduled-sync` every 30 min, `cf-topups-cron` 04:00.
+- Env var names: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `GONNAORDER_API_BASE`, `GONNAORDER_USERNAME`,
+  `GONNAORDER_PASSWORD`, `CF_ADMIN_TOKEN`, `CF_WEBHOOK_KEY`, `RESEND_FROM_ADDRESS`,
+  `CF_TOPUPS_DRY_RUN`, `ANTHROPIC_API_KEY`. ⚠ The service-role key, GO password and
+  admin token are not flagged `is_secret` (open item).
+- Local link: `.netlify/state.json` in this folder. **Never run a site-scoped
+  `netlify` command from a folder without its own link** — the CLI walks up to
+  `~/.netlify/state.json` (it happened 2026-11-16; fixed).
+
+### Netlify — `caterplan`
+- Site id `474d9e43-6bbe-4614-b892-c3372a965305`, https://caterplan.netlify.app
+- Same repo, branch `caterplan`, base dir `caterplan/`, autodeploy on.
+- Env: `ANTHROPIC_API_KEY`, `VITE_CATERPLAN_LOCK` (build-time; `off` now).
 
 ### Linear
-- Workspace: `wecook` (URL: linear.app/wecook)
-- Team key: `CF` (team id `2bed62a5-8cfe-4b9c-a97d-d31388a0f988`)
-- Project: `Company Fooding — MVP v1` (status `In Progress`)
-- Project URL: https://linear.app/wecook/project/company-fooding-mvp-v1-0917b77bd397
+- Workspace `wecook`, team `CF` (id `2bed62a5-8cfe-4b9c-a97d-d31388a0f988`)
+- Project "Company Fooding — MVP v1" (id `dbaf4703-32d4-44d8-8698-8750148f5c02`),
+  https://linear.app/wecook/project/company-fooding-mvp-v1-0917b77bd397
 
 ### GonnaOrder
-- API base: `https://admin.gonnaorder.com/api/v1`
-- Auth: login-then-JWT (no static API key). `username` + `password` env vars.
-- First customer's store: `5677` (Wecook → Queensway Group canteen)
+- API base `https://admin.gonnaorder.com/api/v1` (not api.gonnaorder.com).
+- Auth: login → JWT (`GONNAORDER_USERNAME`/`PASSWORD`). No static key.
+- Stores: 5677 (Queensway Group canteen — Queensway Navigation, Paricom, Vsltec),
+  5909 (Pollfish), 7085 (HarborLab).
 
-## Project Structure
+### Not used
+Airtable (none). n8n is external (his), still runs voucher refills + HarborLab loyalty
+until the CF-104 cutover.
+
+## Domain rules & decisions
+- **Money in cents** (int); `fmtMoney(cents, lang)`. Bilingual `_el`/`_en` columns,
+  `makeTr(lang)`. Business dates = Europe/Athens calendar dates (`isoDate()`). All
+  tables have `created_at`/`updated_at` (trigger `tg_set_updated_at`).
+- **Invoices in CF are an indication of what to charge**, not real invoices; real
+  invoicing happens in tax-authority-approved systems (CF-110 cancelled, 2026-10-30).
+- **Deal rules** (`deal_rules`, migration 22): typed, dated rows per agreement; several
+  kinds can coexist. Minimum (daily/weekly/monthly, € or N orders × benefit), loyalty
+  ("spend X → Y"), order discount (% or €), catalogue discount (separate kind).
+  Invoice = max(minimum, benefit − discount). Minimum counts days with ≥1 order, or an
+  imported calendar (optional "order day overrides calendar"). Rules don't drive the
+  ordering site — he keeps GO in sync by hand. Only super admins edit rules for now;
+  later propose/accept between company and vendor.
+- **Order split stored at write time:** `orders.vendor_discount`, `orders.vendor_loyalty`.
+  Invariant: subtotal = vendor_discount + benefit + loyalty + topup. Benefit is used
+  first; loyalty only covers what's above it.
+- Current discounts: Queensway, Paricom, Vsltec 10%; Pollfish 7%; HarborLab 0% (its 15%
+  catalogue discount goes to employees; the ~€1.72/order menu-level gap is intentional
+  and not shown as a CF column).
+- HarborLab: benefits daily Mon–Fri, reset (no carryover); loyalty is Wecook's
+  ("every €20 → €1"), from 14 Sep; €50/day minimum on weekdays with orders.
+- Auth UX: magic-link invite + in-account password reset for company admins; OTP login
+  is his long-term preference (not built).
+- Login routing: `RoleLanding` sends super_admin → `/admin`, company_owner/admin →
+  `/company`, employee → EmployeeApp.
+
+## GonnaOrder integration — facts & traps
+- Vouchers are balance-only. CF's plan: mint once per assignment, top up on schedule
+  (`benefits.topup_cadence`, `carryover`), record each attempt in `benefit_topups`
+  (unique `(assignment_id, scheduled_for)`), reconcile daily. Retries 05:00/08:00/12:00.
+- A GO **store** = one (vendor × company) relationship; id on
+  `agreement_shops.gonnaorder_shop_id`. One store can serve several legal entities.
+- **Orders are matched to employees only while a sync runs.** Match order: voucher code
+  vs `employees.external_ref` (case-insensitive) → assignment voucher codes → customer
+  email; ambiguous = no match. An employee added after their orders synced leaves those
+  orders with `employee_id/company_id = NULL` (excluded from reports) until a backfill.
+- Only **CLOSED** GO orders are synced (`listOrders` default).
+- `order_token` is **not unique** — match by GO uuid.
+- Scheduled sync: LOOKBACK_DAYS 30, but it has stopped short (~20 days) — likely the
+  function timeout. The background backfill (`cf-sync-trigger-background`,
+  super_admin, 15 min) is the reliable way to go further back. Stores are processed in
+  parallel, upserts in chunks of 200.
+- Store 7085 search results carry no `voucherCode`; member-code orders have only
+  `customerEmail`; loyalty orders have `voucherCode=null` but `voucherDiscount` set.
+  `totalNonDiscountedPrice` ≈ list price.
+- Sheet CSV exports: Excel mangles tokens like `7E-65`; some rows have a blank UUID.
+
+## SQL gotchas
+- Table is `matchmaking_agreements` (not `agreements`); `benefits` has no `name`.
+- Ambiguous `status`/`created_at` in joins; `month` is reserved.
+
+## Project structure (2026-11-16)
 ```
 src/
-  components/
-    guards/RoleGuard.tsx      route gate by app role
-    layout/Header.tsx         top bar + lang + logout
-  lib/
-    supabase.ts               browser anon client
-    helpers.ts                fmtMoney, isoDate, addDays, clamp
-    translations.ts           makeTr() — bilingual el/en string maps
-  pages/
-    LoginPage.tsx             email + password sign-in
-    EmployeeHome.tsx          employee landing (balance + redirect)
-    NotFound.tsx
-  store/
-    useAuthStore.ts           Zustand — session, user, role, companyId
-    useUIStore.ts             Zustand — lang, sidebar
-  AdminApp.tsx                super-admin shell (lazy-loaded)
-  CompanyApp.tsx              company-admin shell (lazy-loaded)
-  App.tsx                     top-level router with role guards
-  main.tsx
-  index.css
-
-netlify/
-  functions/
-    _shared/
-      supabaseAdmin.ts        service-role client factory
-      auth.ts                 getCaller(), requireRole()
-      errors.ts               jsonResponse, ok, badRequest, unauthorized, …
-      gonnaorder.ts           REAL client — login+JWT, listOrders paginated
-      parseGonnaOrder.ts      GO → CF row mapping (cents, status enum, Athens TZ)
-    cf-ping.ts                sanity-check endpoint
-    cf-sync-gonnaorder.ts     pull GO orders into CF mirror (admin-token-gated)
-
-scripts/
-  fetch-go-orders.py          one-off GO order fetch → JSON (for backfill)
-  sql/upsert-go-orders.sql    bulk upsert generated from a JSON dump
-  skill-patches/              patches to apply to setup-tech-stack skill source
-
-supabase/migrations/
-  01–15                       applied — see PROJECT_LOG.md for what each does
+  App.tsx, AdminApp.tsx, CompanyApp.tsx, EmployeeApp.tsx, main.tsx
+  components/guards/RoleGuard.tsx, components/layout/Header.tsx
+  lib/        supabase, helpers, translations, csv, invoicePdf, dealRuleText, spec*
+  pages/      Login, ForgotPassword, ResetPassword, NotFound, auth/
+    admin/    Reports, CompaniesReport
+    company/  Dashboard, Employees(+Edit), Benefits(+Edit), Groups, Vendors(+Detail),
+              DealTerms, Reports, Invoices, Topups, Reconcile, VouchersHealth,
+              WebhookEvents, Activity, Settings
+    employee/ Home, Orders, Profile, Vendors
+  store/      useAuthStore, useCompanyStore, useUIStore
+netlify/functions/
+  _shared/    supabaseAdmin, auth, errors, activity, gonnaorder, parseGonnaOrder,
+              syncGonnaOrder, billingSplit, dealRules(+Core, +Validate), topups
+  cf-*.ts     26 functions (sync, scheduled-sync, sync-trigger-background, reconcile,
+              topups(+cron), deal-rules, vendors, report(s), invoices, webhook, …)
+caterplan/    only on branch `caterplan`
+supabase/migrations/  01–22 (see Migrations)
+scripts/      fetch-go-orders.py, sql/, skill-patches/
+docs/         SPEC.md, LINEAR_PLAN.md, CLAUDE-CODE-SETUP.md
 ```
 
-## Route Topology
-- `/login` — public
-- `/` — employee home (any authenticated role)
-- `/company/*` — company_owner, company_admin
-- `/admin/*` — super_admin
-- `RoleGuard` redirects non-matching roles to `/` and unauthenticated callers
-  to `/login`
-
-## Key Conventions (mirrored from Fitpal)
-- **Money in cents** (int). Render with `fmtMoney(cents, lang)`.
-- **Bilingual** `_el` / `_en` suffix on user-facing columns; `makeTr(lang)` in UI.
-- **Dates** are calendar dates (Europe/Athens) for business logic; use `isoDate()`
-  for YYYY-MM-DD.
-- **All tables** have `created_at` / `updated_at` (timestamptz) triggers.
-- **Enums** declared up-front in the first migration.
-
-## GonnaOrder Integration (summary)
-GonnaOrder vouchers are **balance-only** (no period / cadence logic).
-
-CF's job:
-1. **Mint once** per (employee, benefit assignment) when a benefit starts.
-2. **Top up on a schedule** (CF-owned scheduler — NOT n8n) based on
-   `benefits.topup_cadence` (daily / weekly / monthly) and
-   `benefits.carryover` (reset / accumulate).
-3. **Record every attempt** in `benefit_topups` with a unique constraint on
-   `(assignment_id, scheduled_for)` for idempotency.
-4. **Reconcile daily** — fetch voucher balances from GonnaOrder and flag drift.
-
-Three-pass retry for failed top-ups: 05:00, 08:00, 12:00 local time.
-
-A working n8n script exists today at Ioustinos's side. We're **not** going to
-depend on it — CF's scheduler is built in `netlify/functions/` and runs on
-Netlify's scheduled-functions feature. n8n stays as a dry-run parity check for
-7 days before per-company cutover.
-
-**Architectural note (2026-05-15):** A GonnaOrder "store" represents a single
-(vendor × company) relationship. Store id lives on `agreement_shops.gonnaorder_shop_id`
-(NOT on `vendors`). One store can serve multiple legal entities (e.g.
-Queensway Group: 3 sister companies share canteen, all reference store 5677
-via separate matchmaking_agreements). Migration 13 dropped the dead
-`vendors.gonnaorder_merchant_id` column. Parent-store concept deferred until
-needed.
-
-## Show Before Execute
-Before ANY action in Linear, Supabase, GitHub, Netlify, or any other external
-system — write out exactly what you plan to do and wait for **explicit
-approval from Ioustinos**.
+## Routes
+`/login`, `/forgot-password`, `/reset-password` public · `/` employee (RoleLanding
+dispatches by role) · `/company/*` company_owner/admin · `/admin/*` super_admin.
 
 ## Knowledge layers
-1. **Project instructions** (Cowork project brief) — high-level, rarely changes
-2. **CLAUDE.md** (this file) — conventions and infrastructure, source of truth
-3. **PROJECT_LOG.md** (this repo) — living CTO journal, updated after every major task
-4. **Linear** (workspace wecook, team `CF`, project "Company Fooding — MVP v1")
-5. **Memory files** in `<workspace>/.auto-memory/` — context, infra, workflow
+1. `CLAUDE.md` (this file) — rules, infra, decisions
+2. `PROJECT_LOG.md` — history, newest first
+3. Linear team `CF`
+4. Claude Code auto-memory for this folder — preferences only, no infra duplicates
 
-When starting a new session: read CLAUDE.md and PROJECT_LOG.md, check open Linear
-CF-* issues, before asking "what's next".
+Start of a session: read this file and the top of `PROJECT_LOG.md`, check open CF-*
+issues, then ask what's next.
 
-## Docs in this repo
-- `docs/SPEC.md` — 13-section technical spec (overview → glossary)
-- `docs/LINEAR_PLAN.md` — 8 epics, 49 sub-issues (mostly tracked as CF-* in Linear now)
-- `PROJECT_LOG.md` — CTO journal (append after major tasks)
+## Docs
+- `docs/SPEC.md` — technical spec · `docs/LINEAR_PLAN.md` — original epic plan
+- `docs/CLAUDE-CODE-SETUP.md` — the 2026-11-16 move from Cowork to Claude Code
