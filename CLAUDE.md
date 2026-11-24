@@ -9,12 +9,29 @@ Development runs in **Claude Code on Ioustinos's Mac** since 2026-11-16 (see
 `docs/CLAUDE-CODE-SETUP.md`). Real git, `gh`, `supabase` and `netlify` CLIs. The repo is
 the memory: this file = rules + infra + decisions, `PROJECT_LOG.md` = history.
 
+## Team process
+Read `docs/TEAM-PROCESS.md` and `docs/REUSE-MAP.md` before any work. Your lane is in
+your session title. Ioustinos talks only to the Task Manager; decisions for him live on
+`../FOR-IOUSTINOS.md`.
+
+| Session | Owns |
+|---|---|
+| Orexxis · Task Manager | tickets, routing, HANDOFF / PROJECT_LOG, release approval file — no code |
+| Orexxis · Dev App | screens (`src/pages`, shells, store, components) + admin CRUD functions |
+| Orexxis · Dev Engine | GonnaOrder sync/webhook, top-ups, deal rules, billing, reports |
+| Orexxis · Dev Caterplan | `caterplan/` in worktree `../company-fooding-caterplan`, branch `caterplan` |
+| Orexxis · Data | SQL, data repair, imports, backfills, reports — no app code |
+| Orexxis · QA | verdicts, reuse map — no code, data or statuses |
+
 ## Operating rules (Ioustinos's own — not sandbox workarounds)
 1. **Show before execute.** Before ANY write to Linear, Supabase, GitHub, Netlify,
    GonnaOrder, Slack or any other external system, write out exactly what you will do
-   and wait for his explicit yes. Approval is per action.
-2. **Never push to `main` unless he says so.** Never push anything without being
-   asked. Ask separately before merging to `main`. `main` is production.
+   and wait for his explicit yes. Approval is per action. **Exceptions (24 Nov 2026,
+   team process):** a lane pushes to `dev` and moves its own ticket to In Progress /
+   In Review without asking; the TM creates and routes tickets.
+2. **Never push to `main` or `caterplan` unless he says so** — both are production. His
+   yes is given in the Task Manager session and enforced by the push hook (one-shot
+   approval file). Ask separately before merging to `main`.
 3. **Stage specific files only** — never `git add -A` / `git add .`. Other Claude
    sessions may share the folder; never stage files you didn't change.
 4. **He doesn't do git work** — Claude commits and (when told) pushes. Don't hand him
@@ -25,11 +42,14 @@ the memory: this file = rules + infra + decisions, `PROJECT_LOG.md` = history.
 7. Every schema change is a migration file in `supabase/migrations/` (see Migrations).
 8. Append to `PROJECT_LOG.md` after every major task.
 9. Don't claim something is fixed without a live check (cached bundles have fooled us).
-10. **Collect his to-dos.** Anything only he can do or decide goes into
-    `docs/handoffs/THINGS-FOR-YOU.md` (gitignored), dated; tick off when he says done.
+10. **Collect his decisions and to-dos** on `../FOR-IOUSTINOS.md` (skill
+    `decisions-page`; the TM owns it). Chat points there in one line.
+    (`docs/handoffs/THINGS-FOR-YOU.md` was merged into it on 24 Nov 2026.)
 
-`.claude/settings.json` enforces part of this: denies push to `main`, force-push,
-`git add -A`/`.`, `netlify deploy --prod`; asks before `supabase db push`.
+`.claude/settings.json` enforces part of this: denies plain pushes to `main`/`caterplan`,
+force-push, `git add -A`/`.`, `git commit -a`, `netlify deploy --prod`; asks before
+`supabase db push`; the PreToolUse hook `.claude/hooks/block-main-push.sh` blocks every
+push to `main`/`caterplan` except the one sha in `.claude/main-push-approved`.
 
 ## Stack
 - React 19.2 + **TypeScript ~6.0** + Vite 8, React Router 7 (`BrowserRouter`), Zustand 5
@@ -76,9 +96,10 @@ npm run dev:netlify   # netlify dev → http://localhost:8888, Vite on 5173
 - Default working branch: `dev`. `main` = production.
 - Netlify builds **`main` only** (`allowed_branches: ["main"]`, verified 2026-11-16).
   `dev` has **no branch deploy**; `dev--company-fooding.netlify.app` does not exist.
-  Open decision: enable `dev` branch deploys or retire `dev`.
-- `caterplan` branch = Caterplan, deployed by its own Netlify site (below). Long-lived
-  branch vs merge: open decision.
+  Kept off on purpose (Ioustinos, 24 Nov 2026): QA tests locally, then prod read-only.
+- `caterplan` branch = Caterplan **production**, deployed by its own Netlify site (below).
+  Worked in the git worktree `../company-fooding-caterplan`, never by switching branches
+  in this checkout. Long-lived branch (it has its own lane).
 - Git auth = `gh` (keychain). No PAT files.
 
 ## Infrastructure (verified 2026-11-16)

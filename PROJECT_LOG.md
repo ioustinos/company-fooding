@@ -20,6 +20,34 @@ investigation, or unblocks something else.
 
 ---
 
+## 2026-11-24 — Team process installed (Task Manager, lanes, QA, guarded releases)
+
+**Status:** Done (repo files + local setup; no external system changed)
+**Why:** Same multi-session structure as Matchio (skill `dev-team-process`): one Task Manager that
+Ioustinos talks to, lanes that build, QA that verifies and hunts twin code.
+**What:**
+- `docs/TEAM-PROCESS.md`: sessions Orexxis · Task Manager / Dev App / Dev Engine / Dev Caterplan /
+  Data / QA, lane ownership, shared-code border, pipeline, hard rules. No client channel (no 3port),
+  no dev site (Ioustinos: «Keep it off»), ONE database.
+- `.claude/hooks/block-main-push.sh`: blocks pushes to `main` **and `caterplan`** (both are
+  production) except one approved sha in `.claude/main-push-approved`. 22 test cases pass (skill
+  self-test for main and caterplan, plus worktree / look-alike cases).
+- `.claude/settings.json` (repo) + `../.claude/settings.json` (parent folder, absolute hook path):
+  deny list extended (`git commit -a`, plain caterplan push); the earlier `<sha>:main` deny removed,
+  since the hook now guards that form and it would have blocked approved releases.
+- Git worktree `../company-fooding-caterplan` on branch `caterplan` for the Caterplan lane.
+- Code graph (codebase-memory-mcp 0.12.1) indexed: 1,553 nodes, 4,842 edges; `trace_path` on
+  `splitOrder` = 1 caller (`billingSplit.split`), same as grep.
+- `docs/REUSE-MAP.md` stub (QA builds it), `docs/TM-KICKOFF.md`, `HANDOFF.md` (open work).
+- CLAUDE.md: team block; rules 1–2 amended (lanes push to `dev` and move their own tickets without
+  asking — Ioustinos: «Process wins for dev»); rule 10 now points to `../FOR-IOUSTINOS.md`.
+- `../FOR-IOUSTINOS.md` decisions page created (outside the repo); `THINGS-FOR-YOU.md` merged into it.
+**Notes:** QA sign-in = magic link to `ioustinos+cf-qa-<role>@wecook.gr` via the
+`google-ioustinos-wecook` connector; the test company and users don't exist yet (decisions page
+item 2). Local `netlify dev` routing must be fixed before QA can see screens (item 3).
+
+---
+
 ## 2026-11-16 — Moved from Cowork to Claude Code; handoffs folded in
 
 **Status:** Done (docs + local setup only; no system changed)

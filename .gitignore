@@ -30,3 +30,6 @@ supabase/.branches
 # Raw Cowork handoffs — contain customer PII / business-confidential notes.
 # Kept out of git while the repo is public (see docs/CLAUDE-CODE-SETUP.md).
 docs/handoffs/
+
+# One-shot release approval written by the Task Manager (consumed by the push hook)
+.claude/main-push-approved
